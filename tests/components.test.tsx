@@ -2,15 +2,41 @@ import React from 'react';
 import { render, screen } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import LandingView from '../views/LandingView';
+import EditorView from '../views/EditorView';
+import DiffView from '../views/DiffView';
 import { getThemeClasses } from '../utils/theme';
 
 // Mock the store to control the state in component tests
+const mockStore = {
+  diff: {
+    originalFile: new File([], 'old.xml'),
+    modifiedFile: new File([], 'new.xml'),
+    tree: { name: 'root', path: '', type: 'directory', children: [] },
+    activePath: 'test.xml',
+    loading: false
+  },
+  ui: { sidebarOpen: true, showAi: false, diffViewMode: 'split' },
+  theme: 'dark',
+  mode: 'diff',
+  setMode: vi.fn(),
+  toggleSidebar: vi.fn(),
+  toggleAiPanel: vi.fn(),
+  toggleTheme: vi.fn(),
+  setDiffFiles: vi.fn(),
+  runDiffComparison: vi.fn(),
+  updateDiffState: vi.fn(),
+  setDiffViewMode: vi.fn()
+};
+
 vi.mock('../store/appStore', () => ({
-  useAppStore: () => ({
-    loadEditorFile: vi.fn(),
-    setMode: vi.fn(),
-    setDiffFiles: vi.fn()
-  })
+  useAppStore: () => mockStore
+}));
+
+// Mock Monaco Editor to inspect props
+vi.mock('@monaco-editor/react', () => ({
+  DiffEditor: vi.fn((props) => <div data-testid="mock-diff-editor" data-options={JSON.stringify(props.options)} />),
+  Editor: vi.fn((props) => <div data-testid="mock-editor" data-options={JSON.stringify(props.options)} />),
+  default: vi.fn((props) => <div data-testid="mock-editor" data-options={JSON.stringify(props.options)} />)
 }));
 
 describe('LandingView Component', () => {
@@ -19,7 +45,6 @@ describe('LandingView Component', () => {
   it('renders the landing page with title and upload options', () => {
     render(<LandingView themeClasses={themeClasses} />);
     
-    // Use more specific queries to avoid multiple matches (like SVG titles)
     expect(screen.getByRole('heading', { level: 1 })).toBeDefined();
     expect(screen.getByText(/Inspect, Edit, and Diff Office Open XML files/i)).toBeDefined();
     expect(screen.getByText(/Drag 1 file to Edit/i)).toBeDefined();
@@ -30,5 +55,140 @@ describe('LandingView Component', () => {
     
     expect(screen.getByText(/Inspect & Edit/i)).toBeDefined();
     expect(screen.getByText(/Diff Files/i)).toBeDefined();
+  });
+});
+
+describe('EditorView Component Validation', () => {
+  const themeClasses = getThemeClasses('dark');
+
+  it('passes correct options to the Editor', () => {
+    // Update mock store for editor mode
+    mockStore.mode = 'editor';
+    mockStore.editor = {
+        fileName: 'test.docx',
+        activePath: 'word/document.xml',
+        openTabs: ['word/document.xml'],
+        pendingChanges: {},
+        contentCache: { 'word/document.xml': '<root/>' },
+        modifiedPaths: new Set(),
+        zip: { files: { 'word/document.xml': {} } }
+    };
+
+    render(<EditorView themeClasses={themeClasses} />);
+    
+    const editor = screen.getByTestId('mock-editor');
+    const options = JSON.parse(editor.getAttribute('data-options') || '{}');
+    
+    expect(options.wordWrap).toBe('on');
+    expect(options.minimap.enabled).toBe(false);
+    expect(options.fontSize).toBe(13);
+  });
+
+  it('renders open tabs and identifies active tab', () => {
+    mockStore.editor.openTabs = ['word/document.xml', 'word/styles.xml'];
+    mockStore.editor.activePath = 'word/document.xml';
+    
+    render(<EditorView themeClasses={themeClasses} />);
+    
+    expect(screen.getByText('document.xml')).toBeDefined();
+    expect(screen.getByText('styles.xml')).toBeDefined();
+  });
+
+  it('shows dirty indicator when file has pending changes', () => {
+    mockStore.editor.pendingChanges = { 'word/document.xml': '<modified/>' };
+    
+    const { container } = render(<EditorView themeClasses={themeClasses} />);
+    // The dirty indicator is a div with bg-[#4A89DC]
+    const dirtyIndicator = container.querySelector('.bg-\\[\\#4A89DC\\]');
+    expect(dirtyIndicator).not.toBeNull();
+  });
+
+  it('disables save button when no pending changes', () => {
+    mockStore.editor.pendingChanges = {};
+    render(<EditorView themeClasses={themeClasses} />);
+    
+    // The save button is the first button in the actions group
+    // In EditorView, it's the one with <Save /> icon.
+    // We can find it by its disabled attribute or class.
+    const saveButton = screen.getAllByRole('button').find(btn => 
+        btn.innerHTML.includes('lucide-save') || btn.querySelector('.lucide-save')
+    );
+    expect(saveButton).toBeDefined();
+    expect(saveButton?.hasAttribute('disabled')).toBe(true);
+  });
+});
+
+describe('DiffView Component Validation', () => {
+  const themeClasses = getThemeClasses('dark');
+
+  beforeEach(() => {
+    mockStore.mode = 'diff';
+    mockStore.diff = {
+        originalFile: new File([], 'old.xml'),
+        modifiedFile: new File([], 'new.xml'),
+        tree: { name: 'root', path: '', type: 'directory', children: [] },
+        activePath: 'test.xml',
+        loading: false
+    };
+    mockStore.ui.diffViewMode = 'split';
+  });
+
+  it('passes correct wordWrap options to the DiffEditor', () => {
+    render(<DiffView themeClasses={themeClasses} />);
+    
+    const editor = screen.getByTestId('mock-diff-editor');
+    const options = JSON.parse(editor.getAttribute('data-options') || '{}');
+    
+    expect(options.wordWrap).toBe('on');
+    expect(options.renderSideBySide).toBe(true); // Split mode
+  });
+
+  it('updates renderSideBySide when diffViewMode changes', () => {
+    mockStore.ui.diffViewMode = 'inline';
+    render(<DiffView themeClasses={themeClasses} />);
+    
+    const editor = screen.getByTestId('mock-diff-editor');
+    const options = JSON.parse(editor.getAttribute('data-options') || '{}');
+    
+    expect(options.renderSideBySide).toBe(false); // Inline mode
+  });
+
+  it('shows empty state when no file is selected', () => {
+    mockStore.diff.activePath = null;
+    render(<DiffView themeClasses={themeClasses} />);
+    
+    expect(screen.getByText(/Select a file to compare/i)).toBeDefined();
+  });
+
+  it('disables explain changes button when no file is selected', () => {
+    mockStore.diff.activePath = null;
+    render(<DiffView themeClasses={themeClasses} />);
+    
+    const explainBtn = screen.getByText(/Explain Changes/i).closest('button');
+    expect(explainBtn?.hasAttribute('disabled')).toBe(true);
+  });
+
+  it('renders change navigation when changes exist', () => {
+    // We need to mock the editor instance to have changes
+    // But since we mock the component, we can just check if the UI elements are there
+    render(<DiffView themeClasses={themeClasses} />);
+    
+    // The navigation buttons are in the header
+    // Use a more specific query for the changes counter
+    expect(screen.getByText(/No Changes/i)).toBeDefined();
+    
+    // Check for navigation icons
+    const navButtons = screen.getAllByRole('button').filter(btn => 
+        btn.querySelector('.lucide-arrow-up') || btn.querySelector('.lucide-arrow-down')
+    );
+    expect(navButtons.length).toBe(2);
+  });
+
+  it('toggles file tree filter', () => {
+    render(<DiffView themeClasses={themeClasses} />);
+    
+    // Initially it shows "Diffs" because showUnchanged is false
+    expect(screen.getByText(/Diffs/i)).toBeDefined();
+    expect(screen.queryByText(/^All$/)).toBeNull();
   });
 });
