@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#000000" />
+    <title>OOXML Explorer</title>
+    <link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none"><path d="M14 6H40L52 18V58H14V6Z" fill="%23F0F9FF" stroke="%234A89DC" stroke-width="3" stroke-linejoin="round"/><path d="M40 6V18H52" fill="%23DBEAFE" stroke="%234A89DC" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/><g transform="translate(33, 38) scale(0.8)"><path d="M-8 -6L-14 0L-8 6" stroke="%231F3F70" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 -6L14 0L8 6" stroke="%231F3F70" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M-3 8L3 -8" stroke="%234A89DC" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></g></svg>' />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      /* Custom Scrollbar for dark theme consistency */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #4A89DC; 
+        border-radius: 4px;
+        opacity: 0.5;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #1F3F70; 
+      }
+      
+      /* Light mode scrollbar overrides */
+      .light ::-webkit-scrollbar-thumb {
+        background: #4A89DC; 
+        opacity: 0.7;
+      }
+      .light ::-webkit-scrollbar-thumb:hover {
+        background: #1F3F70; 
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react-dom": "https://aistudiocdn.com/react-dom@^19.2.0",
+    "jszip": "https://aistudiocdn.com/jszip@^3.10.1",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.555.0",
+    "@monaco-editor/react": "https://aistudiocdn.com/@monaco-editor/react@^4.7.0",
+    "vitest": "https://aistudiocdn.com/vitest@^4.0.15",
+    "zustand": "https://aistudiocdn.com/zustand@^5.0.0"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body class="overflow-hidden antialiased selection:bg-[#4A89DC]/30">
+    <div id="root"></div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+</html>

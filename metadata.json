@@ -1,0 +1,5 @@
+{
+  "name": "OOXML Explorer (Website)",
+  "description": "A professional-grade suite for inspecting, editing, and comparing OOXML documents (DOCX, XLSX, PPTX) directly in the browser, powered by Gemini AI.",
+  "requestFramePermissions": []
+}
