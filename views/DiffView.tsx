@@ -171,6 +171,20 @@ const DiffView: React.FC<DiffViewProps> = ({ themeClasses }) => {
     return () => { active = false; };
   }, [activePath]);
 
+  // Ensure word wrap is applied to both sides of the diff editor
+  useEffect(() => {
+    if (diffEditorRef.current) {
+      try {
+        const original = diffEditorRef.current.getOriginalEditor();
+        const modified = diffEditorRef.current.getModifiedEditor();
+        original.updateOptions({ wordWrap: 'on' });
+        modified.updateOptions({ wordWrap: 'on' });
+      } catch (e) {
+        console.error("Failed to update diff editor options:", e);
+      }
+    }
+  }, [activePath, diffViewMode, diffContent]);
+
   const handleFileChange = (type: 'original' | 'modified', file: File | null) => {
     if (type === 'original') setDiffFiles(file, modifiedFile);
     else setDiffFiles(originalFile, file);
@@ -426,7 +440,16 @@ const DiffView: React.FC<DiffViewProps> = ({ themeClasses }) => {
                            original={diffContent.original || ''}
                            modified={diffContent.modified || ''}
                            onMount={handleDiffMount}
-                           options={{ readOnly: true, minimap: { enabled: false }, renderSideBySide: diffViewMode === 'split', fontSize: 13, wordWrap: 'on', scrollBeyondLastLine: false, padding: { top: 16 } }}
+                           options={{ 
+                               readOnly: true, 
+                               minimap: { enabled: false }, 
+                               renderSideBySide: diffViewMode === 'split', 
+                               fontSize: 13, 
+                               wordWrap: 'on', 
+                               scrollBeyondLastLine: false, 
+                               padding: { top: 16 },
+                               automaticLayout: true
+                           }}
                         />
                     </ErrorBoundary>
                 )}
