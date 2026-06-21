@@ -21,6 +21,12 @@ export const loadZipFile = async (file: File): Promise<{ zip: JSZip; tree: FileN
   const flat: Record<string, JSZipObject> = {};
 
   zip.forEach((relativePath, zipEntry) => {
+    // Sanitize and neutralize path traversal attacks
+    if (relativePath.includes('../') || relativePath.includes('..\\') || relativePath.includes('./') || relativePath.includes('.\\')) {
+        console.warn(`[Security] Ignored zip entry with path traversal sequence: ${relativePath}`);
+        return;
+    }
+    
     flat[relativePath] = zipEntry;
     const parts = relativePath.split('/');
     let currentLevel = root;

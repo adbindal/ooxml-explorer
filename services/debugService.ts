@@ -12,8 +12,18 @@ const STORAGE_KEY = 'ooxml_debug_mode';
 // Default to FALSE (off) unless explicitly enabled in storage
 let isCapturing = typeof localStorage !== 'undefined' && localStorage.getItem(STORAGE_KEY) === 'true';
 
+const scrubSensitiveData = (text: string): string => {
+    if (typeof window !== 'undefined' && window.localStorage) {
+        const apiKey = window.localStorage.getItem('ooxml_explorer_api_key');
+        if (apiKey && apiKey.length > 5) {
+            return text.replaceAll(apiKey, "[SCRUBBED_API_KEY]");
+        }
+    }
+    return text;
+};
+
 const formatArgs = (args: unknown[]): string => {
-    return args.map(arg => {
+    const formatted = args.map(arg => {
         try {
             if (arg instanceof Error) return `${arg.name}: ${arg.message}\n${arg.stack}`;
             if (typeof arg === 'object' && arg !== null) return JSON.stringify(arg);
@@ -22,6 +32,7 @@ const formatArgs = (args: unknown[]): string => {
             return '[Circular/Unserializable]';
         }
     }).join(' ');
+    return scrubSensitiveData(formatted);
 };
 
 const addLog = (level: LogEntry['level'], args: unknown[]) => {
@@ -29,11 +40,25 @@ const addLog = (level: LogEntry['level'], args: unknown[]) => {
     if (!isCapturing) return;
 
     const message = formatArgs(args);
+    
+    // Scrub raw data to prevent memory leak of sensitive tokens
+    const cleanData = args.map(arg => {
+        try {
+            if (typeof arg === 'string') return scrubSensitiveData(arg);
+            if (typeof arg === 'object' && arg !== null) {
+                return JSON.parse(scrubSensitiveData(JSON.stringify(arg)));
+            }
+        } catch {
+            return '[Circular/Unscrubbable]';
+        }
+        return arg;
+    });
+
     const entry: LogEntry = {
         timestamp: new Date().toISOString(),
         level,
         message,
-        data: args // Keep raw refs if needed for immediate inspection, though JSON export uses message
+        data: cleanData
     };
     
     logHistory.push(entry);
@@ -190,5 +215,5 @@ export const getLogDump = () => {
 
 export const getLogString = () => {
     const dump = getLogDump();
-    return JSON.stringify(dump, null, 2);
+    return scrubSensitiveData(JSON.stringify(dump, null, 2));
 };

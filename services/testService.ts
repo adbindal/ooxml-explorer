@@ -9,6 +9,8 @@ import '../tests/store.test';
 import '../tests/theme.test';
 import '../tests/zipInvariants.test';
 import '../tests/types.test';
+import '../tests/security.test';
+import '../tests/resilience.test';
 import { generateDiffTree } from './zipService';
 
 export interface LogEntry {
