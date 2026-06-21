@@ -1,4 +1,4 @@
-name: Quality Gates (CI)
+name: Quality Gates (CI/CD)
 
 on:
   push:
@@ -36,3 +36,15 @@ jobs:
         run: npx playwright test
         env:
           CI: true
+
+  deploy:
+    name: Trigger Cloudflare Production Deploy
+    needs: verify
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Deploy Hook
+        run: |
+          echo "🚀 Triggering Cloudflare Pages deployment..."
+          curl -X POST ${{ secrets.CLOUDFLARE_DEPLOY_HOOK }}
+          echo "✅ Deploy hook triggered successfully!"
