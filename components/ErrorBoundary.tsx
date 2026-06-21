@@ -44,7 +44,7 @@ class ErrorBoundary extends React.Component<Props, State> {
                 if (this.state.hasError) {
                     this.setState({ hasError: false, error: null, autoRecovered: true });
                 }
-            } catch (e) {
+            } catch {
                 // Ignore unmount errors
             }
         }, 50);
@@ -64,8 +64,8 @@ class ErrorBoundary extends React.Component<Props, State> {
     try {
         window.location.reload();
     } catch (e) {
-        console.error("Reload failed, attempting href reassignment", e);
-        window.location.href = window.location.href;
+        console.error("Reload failed, attempting path reassignment", e);
+        window.location.href = window.location.pathname + window.location.search + window.location.hash;
     }
   };
 

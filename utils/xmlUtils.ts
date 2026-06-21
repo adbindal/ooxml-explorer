@@ -14,7 +14,7 @@ export const formatXml = (xml: string): string => {
       indent = 0;
     } else if (node.match(/^<\/\w/)) {
       if (pad !== 0) pad -= 1;
-    } else if (node.match(/^<\w[^>]*[^\/]>.*$/)) {
+    } else if (node.match(/^<\w[^>]*[^/]>.*$/)) {
       indent = 1;
     } else {
       indent = 0;

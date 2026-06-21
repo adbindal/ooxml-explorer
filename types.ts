@@ -1,3 +1,6 @@
+import type JSZip from 'jszip';
+import type { JSZipObject } from 'jszip';
+
 export type AppMode = 'landing' | 'editor' | 'diff-setup' | 'diff-view' | 'validator';
 
 export interface FileNode {
@@ -5,7 +8,7 @@ export interface FileNode {
   path: string; // Full path
   isFolder: boolean;
   children: Record<string, FileNode>;
-  zipEntry?: any; // Avoiding JSZip import to prevent runtime module loading issues in types
+  zipEntry?: JSZipObject; // Strictly typed ZIP entry
   status?: 'added' | 'deleted' | 'modified' | 'unchanged'; // For diff mode
 }
 
@@ -15,11 +18,11 @@ export interface DiffNode extends FileNode {
 
 export interface TreeStructure {
   root: FileNode;
-  flat: Record<string, any>;
+  flat: Record<string, JSZipObject>; // Strictly typed flat structure
 }
 
 export interface EditorState {
-  zip: any | null; // JSZip instance
+  zip: JSZip | null; // Strictly typed JSZip instance
   tree: FileNode | null;
   fileName: string;
   activePath: string | null;
@@ -32,8 +35,8 @@ export interface EditorState {
 export interface DiffState {
   originalFile: File | null;
   modifiedFile: File | null;
-  originalZip: any | null;
-  modifiedZip: any | null;
+  originalZip: JSZip | null;
+  modifiedZip: JSZip | null;
   tree: DiffNode | null;
   activePath: string | null;
 }

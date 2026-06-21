@@ -23,6 +23,7 @@ describe('Tree Visibility Logic', () => {
     it('hides unchanged files when showUnchanged is false (Diff Mode)', () => {
         expect(isNodeVisible(mockFileUnchanged, '', true, false)).toBe(false);
         expect(isNodeVisible(mockFileAdded, '', true, false)).toBe(true);
+        expect(isNodeVisible(mockFileModified, '', true, false)).toBe(true);
     });
 
     it('shows unchanged files when showUnchanged is true (Diff Mode)', () => {

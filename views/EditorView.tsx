@@ -36,8 +36,8 @@ const EditorView: React.FC<EditorViewProps> = ({ themeClasses }) => {
   const [filter, setFilter] = useState('');
   const [imageSrc, setImageSrc] = useState<string | null>(null);
 
-  const editorRef = useRef<any>(null);
-  const monacoRef = useRef<any>(null);
+  const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
+  const monacoRef = useRef<Parameters<OnMount>[1] | null>(null);
   const isMounted = useRef(false);
 
   useEffect(() => {
@@ -52,9 +52,12 @@ const EditorView: React.FC<EditorViewProps> = ({ themeClasses }) => {
             try {
                 const model = editorRef.current.getModel();
                 if (model) model.dispose();
-            } catch (e) {}
+            } catch {
+                // Ignore cleanup error
+            }
         }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Update Monaco theme dynamically when app theme changes
@@ -93,7 +96,9 @@ const EditorView: React.FC<EditorViewProps> = ({ themeClasses }) => {
   useEffect(() => {
     let active = true; 
     if (!activePath || !zip) {
-        setImageSrc(null);
+        if (imageSrc !== null) {
+            setImageSrc(null);
+        }
         return;
     }
     if (isImageFile(activePath)) {
@@ -103,12 +108,15 @@ const EditorView: React.FC<EditorViewProps> = ({ themeClasses }) => {
             }
         });
     } else {
-        setImageSrc(null);
+        if (imageSrc !== null) {
+            setImageSrc(null);
+        }
     }
     return () => {
         active = false;
         if (imageSrc) URL.revokeObjectURL(imageSrc);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activePath, zip]);
 
   const handleSelect = async (node: FileNode) => {
@@ -234,6 +242,7 @@ const EditorView: React.FC<EditorViewProps> = ({ themeClasses }) => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activePath, pendingChanges, sidebarOpen]);
 
   const handleEditorMount: OnMount = (editor, monaco) => {

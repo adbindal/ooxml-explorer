@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from '../services/browserTestRunner';
+import { describe, it, expect, beforeEach } from '../services/browserTestRunner';
 import { getApiKey, setApiKey, clearApiKey, analyzeFile, analyzeDiff } from '../services/geminiService';
 
 describe('Gemini AI Service', () => {

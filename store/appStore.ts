@@ -85,7 +85,7 @@ export const appStoreCreator: StateCreator<AppStore> = (set, get) => ({
     return { theme: newTheme };
   }),
 
-  setMode: (mode) => set(state => {
+  setMode: (mode) => set(() => {
     // When returning to landing, reset complex states to ensure fresh start
     if (mode === 'landing') {
         return { 
@@ -113,7 +113,7 @@ export const appStoreCreator: StateCreator<AppStore> = (set, get) => ({
   loadEditorFile: async (file) => {
     console.log(`[Store] Loading Editor File: ${file.name}`);
     try {
-      const { zip, tree, flat } = await loadZipFile(file);
+      const { zip, tree } = await loadZipFile(file);
       set({
         mode: 'editor',
         editor: {

@@ -26,11 +26,15 @@ describe('ZIP Packaging Invariants', () => {
         
         // --- REQUIREMENT B: mimetype MUST BE STORED (UNCOMPRESSED) ---
         const mimeEntry = files["mimetype"];
-        const getCompressionMethod = (entry: any) => {
-            if (entry._data && typeof entry._data.compressionMethod === 'number') {
-                return entry._data.compressionMethod;
+        const getCompressionMethod = (entry: JSZip.JSZipObject) => {
+            const extEntry = entry as JSZip.JSZipObject & { 
+                _data?: { compressionMethod?: number };
+                options?: { compression?: string };
+            };
+            if (extEntry._data && typeof extEntry._data.compressionMethod === 'number') {
+                return extEntry._data.compressionMethod;
             }
-            if (entry.options && entry.options.compression === 'STORE') return 0;
+            if (extEntry.options && extEntry.options.compression === 'STORE') return 0;
             return null;
         };
         

@@ -152,10 +152,9 @@ describe('App Store', () => {
       const f1 = new File(['invalid'], 'a.docx');
       const f2 = new File(['invalid'], 'b.docx');
       useTestStore.getState().setDiffFiles(f1, f2);
-      
       try {
         await useTestStore.getState().runDiffComparison();
-      } catch (e) {
+      } catch {
          // Expected
       } finally {
          console.error = originalError; // Restore even if assertion fails

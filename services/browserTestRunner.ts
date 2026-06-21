@@ -1,4 +1,3 @@
-
 export interface AssertionResult {
     pass: boolean;
     message: string;
@@ -8,6 +7,12 @@ export interface TestDefinition {
     name: string;
     fn: () => void | Promise<void>;
     suiteName: string;
+}
+
+export interface TestLogEntry {
+    msg: string;
+    type: 'info' | 'success' | 'warning' | 'error';
+    timestamp: number;
 }
 
 const registeredTests: TestDefinition[] = [];
@@ -32,23 +37,20 @@ export const it = (name: string, fn: () => void | Promise<void>) => {
 };
 
 export const beforeEach = (fn: () => void) => {
-    // Basic support: run immediately for setup in this simplistic runner
-    // In a full runner, this would run before every test in the suite.
-    // For now, we assume tests are largely independent or setup is safe to run once per suite definition.
     try { fn(); } catch(e) { console.error("beforeEach failed", e); }
 };
 
 // Mocking 'vi' object
 export const vi = {
-    fn: (impl?: Function) => {
-        const mockFn = (...args: any[]) => {
+    fn: <T extends (...args: unknown[]) => unknown>(impl?: T) => {
+        const mockFn = (...args: unknown[]) => {
             mockFn.mock.calls.push(args);
             return impl ? impl(...args) : undefined;
         };
-        mockFn.mock = { calls: [] as any[][] };
+        mockFn.mock = { calls: [] as unknown[][] };
         return mockFn;
     },
-    mock: (moduleName: string, factory: any) => {
+    mock: (moduleName: string) => {
         console.warn(`[BrowserRunner] vi.mock('${moduleName}') ignored. Tests will run against REAL implementations.`);
     },
     clearAllMocks: () => {
@@ -57,32 +59,35 @@ export const vi = {
 };
 
 // Assertion Logic
-export const expect = (actual: any) => ({
-    toBe: (expected: any) => {
+export const expect = (actual: unknown) => ({
+    toBe: (expected: unknown) => {
         if (actual !== expected) throw new Error(`Expected ${expected}, received ${actual}`);
     },
-    toEqual: (expected: any) => {
+    toEqual: (expected: unknown) => {
         const strActual = JSON.stringify(actual);
         const strExpected = JSON.stringify(expected);
         if (strActual !== strExpected) throw new Error(`Expected ${strExpected}, received ${strActual}`);
     },
-    toContain: (expected: any) => {
+    toContain: (expected: unknown) => {
         if (Array.isArray(actual) || typeof actual === 'string') {
-            if (!actual.includes(expected)) throw new Error(`Expected collection to contain ${expected}`);
+            const arr = actual as unknown[];
+            if (!arr.includes(expected)) throw new Error(`Expected collection to contain ${expected}`);
         } else {
             throw new Error(`expect(actual).toContain() expected array or string`);
         }
     },
     toHaveLength: (expected: number) => {
-        if (actual.length !== expected) throw new Error(`Expected length ${expected}, received ${actual.length}`);
+        const arr = actual as { length: number };
+        if (arr.length !== expected) throw new Error(`Expected length ${expected}, received ${arr.length}`);
     },
     not: {
-        toContain: (expected: any) => {
+        toContain: (expected: unknown) => {
             if (Array.isArray(actual) || typeof actual === 'string') {
-                if (actual.includes(expected)) throw new Error(`Expected collection NOT to contain ${expected}`);
+                const arr = actual as unknown[];
+                if (arr.includes(expected)) throw new Error(`Expected collection NOT to contain ${expected}`);
             }
         },
-        toBe: (expected: any) => {
+        toBe: (expected: unknown) => {
             if (actual === expected) throw new Error(`Expected NOT to be ${expected}`);
         }
     },
@@ -98,11 +103,12 @@ export const expect = (actual: any) => ({
     rejects: {
         toThrow: async (msg?: string) => {
             try {
-                await actual;
+                await (actual as Promise<unknown>);
                 throw new Error("Expected promise to reject, but it resolved");
-            } catch (e: any) {
-                if (msg && !e.message.includes(msg)) {
-                    throw new Error(`Expected error containing "${msg}", got "${e.message}"`);
+            } catch (e: unknown) {
+                const err = e as Error;
+                if (msg && !err.message.includes(msg)) {
+                    throw new Error(`Expected error containing "${msg}", got "${err.message}"`);
                 }
             }
         }
@@ -112,8 +118,8 @@ export const expect = (actual: any) => ({
 /**
  * Executes all registered tests and returns logs.
  */
-export const executeBrowserTests = async (): Promise<{ logs: any[], passed: number, failed: number }> => {
-    const logs: any[] = [];
+export const executeBrowserTests = async (): Promise<{ logs: TestLogEntry[], passed: number, failed: number }> => {
+    const logs: TestLogEntry[] = [];
     let passed = 0;
     let failed = 0;
 
@@ -129,14 +135,15 @@ export const executeBrowserTests = async (): Promise<{ logs: any[], passed: numb
                 type: 'success', 
                 timestamp: startTime 
             });
-        } catch (e: any) {
+        } catch (e: unknown) {
+            const err = e as Error;
             failed++;
             logs.push({ 
-                msg: `❌ [${test.suiteName}] ${test.name}: ${e.message}`, 
+                msg: `❌ [${test.suiteName}] ${test.name}: ${err.message}`, 
                 type: 'error', 
                 timestamp: startTime 
             });
-            console.error(e);
+            console.error(err);
         }
     }
 

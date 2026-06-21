@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
-import { ThemeClasses } from '../types';
+import type { Monaco } from '@monaco-editor/react';
+import type { ThemeClasses } from '../types';
 
 export const getThemeClasses = (theme: 'dark' | 'light'): ThemeClasses => {
     const isDark = theme === 'dark';
@@ -46,7 +47,7 @@ export const useThemeClasses = (theme: 'dark' | 'light'): ThemeClasses => {
  * Defines the custom 'ooxml-dark' and 'ooxml-light' themes on the provided Monaco instance.
  * Shared between EditorView and DiffView for consistency.
  */
-export const defineMonacoThemes = (monaco: any) => {
+export const defineMonacoThemes = (monaco: Monaco) => {
     // Detailed Dark Theme to match app "Deep Navy"
     monaco.editor.defineTheme('ooxml-dark', {
         base: 'vs-dark',

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { 
   FileCode, FileImage, File, ChevronRight, ChevronDown 
 } from 'lucide-react';
@@ -39,12 +39,17 @@ const FileTree: React.FC<FileTreeProps> = ({
   const shouldStartOpen = true; 
   const [isOpen, setIsOpen] = useState(shouldStartOpen);
 
-  useEffect(() => {
-      // Auto-expand if searching OR if it's a diff folder with changes
+  // Adjust state when search or diff parameters change (No-Effect Pattern)
+  const [prevSearchQuery, setPrevSearchQuery] = useState(searchQuery);
+  const [prevDiffMode, setPrevDiffMode] = useState(isDiffMode);
+  
+  if (searchQuery !== prevSearchQuery || isDiffMode !== prevDiffMode) {
+      setPrevSearchQuery(searchQuery);
+      setPrevDiffMode(isDiffMode);
       if (searchQuery || (isDiffMode && !showUnchanged && hasChange)) {
           setIsOpen(true);
       }
-  }, [searchQuery, isDiffMode, showUnchanged, hasChange]);
+  }
 
   if (!isVisible) return null;
 

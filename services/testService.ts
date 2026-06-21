@@ -9,7 +9,6 @@ import '../tests/store.test';
 import '../tests/theme.test';
 import '../tests/zipInvariants.test';
 import { generateDiffTree } from './zipService';
-import { isImageFile } from '../utils/xmlUtils';
 
 export interface LogEntry {
   msg: string;
@@ -155,10 +154,10 @@ export const runSystemChecks = async (fileA: File, fileB?: File): Promise<TestRe
             const zipB = await new JSZip().loadAsync(fileB);
             
             // Generate Flat Maps
-            const flatA: Record<string, any> = {};
+            const flatA: Record<string, JSZip.JSZipObject> = {};
             zipA.forEach((path, entry) => flatA[path] = entry);
             
-            const flatB: Record<string, any> = {};
+            const flatB: Record<string, JSZip.JSZipObject> = {};
             zipB.forEach((path, entry) => flatB[path] = entry);
 
             addLog("Running Full Diff Comparison on provided files...", 'info');

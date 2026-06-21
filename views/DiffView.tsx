@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { DiffEditor, DiffOnMount } from '@monaco-editor/react';
-import { DiffNode, ThemeClasses } from '../types';
+import { ThemeClasses } from '../types';
 import FileTree from '../components/FileTree';
 import AIPanel from '../components/AIPanel';
 import ErrorBoundary from '../components/ErrorBoundary';
@@ -47,19 +47,24 @@ const DiffView: React.FC<DiffViewProps> = ({ themeClasses }) => {
   const [imageUrls, setImageUrls] = useState<{ original: string | null; modified: string | null }>({ original: null, modified: null });
   
   // Navigation State
-  const [diffChanges, setDiffChanges] = useState<any[]>([]);
+  interface DiffLineChange {
+      readonly originalStartLineNumber: number;
+      readonly originalEndLineNumber: number;
+      readonly modifiedStartLineNumber: number;
+      readonly modifiedEndLineNumber: number;
+  }
+  const [diffChanges, setDiffChanges] = useState<DiffLineChange[]>([]);
   const [currentDiffIndex, setCurrentDiffIndex] = useState(-1);
 
   const isMounted = useRef(false);
-  const diffEditorRef = useRef<any>(null);
-  const diffListenerRef = useRef<any>(null);
-  const monacoRef = useRef<any>(null);
+  const diffEditorRef = useRef<Parameters<DiffOnMount>[0] | null>(null);
+  const diffListenerRef = useRef<{ dispose(): void } | null>(null);
+  const monacoRef = useRef<Parameters<DiffOnMount>[1] | null>(null);
 
   const modColorClass = theme === 'dark' ? 'text-[#A5B4FC]' : 'text-[#1F3F70]';
   const modBorderClass = theme === 'dark' ? 'border-[#A5B4FC]' : 'border-[#1F3F70]';
   const modBgClass = theme === 'dark' ? 'bg-[#A5B4FC]/10' : 'bg-[#1F3F70]/10';
   const modHoverBorderClass = theme === 'dark' ? 'hover:border-[#A5B4FC]/50' : 'hover:border-[#1F3F70]/50';
-  const modGroupHoverTextClass = theme === 'dark' ? 'group-hover:text-[#A5B4FC]' : 'group-hover:text-[#1F3F70]';
 
   useEffect(() => {
     isMounted.current = true;
@@ -85,9 +90,12 @@ const DiffView: React.FC<DiffViewProps> = ({ themeClasses }) => {
                  const modified = diffEditorRef.current.getModifiedEditor();
                  original?.getModel()?.dispose();
                  modified?.getModel()?.dispose();
-             } catch (e) {}
+             } catch {
+                 // Ignore cleanup error
+             }
         }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Run only on mount
 
   // Update Monaco theme dynamically when app theme changes
@@ -107,13 +115,18 @@ const DiffView: React.FC<DiffViewProps> = ({ themeClasses }) => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Reset navigation when path changes
   useEffect(() => {
-     setCurrentDiffIndex(-1);
-     setDiffChanges([]);
-  }, [activePath]);
+     if (currentDiffIndex !== -1) {
+         setCurrentDiffIndex(-1);
+     }
+     if (diffChanges.length > 0) {
+         setDiffChanges([]);
+     }
+  }, [activePath, currentDiffIndex, diffChanges.length]);
 
   const handleCompare = async () => {
       runDiffComparison().catch(e => alert(e.message));
@@ -169,6 +182,7 @@ const DiffView: React.FC<DiffViewProps> = ({ themeClasses }) => {
     };
     loadContent();
     return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activePath]);
 
   // Ensure word wrap is applied to both sides of the diff editor

@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { 
   ArrowLeft, Play, Loader2, Maximize2, GitCompare, ExternalLink, 
-  CheckSquare, Square, Zap, Download, AlertTriangle, Power, Activity,
-  ShieldCheck, PieChart
+  CheckSquare, Square, Zap, AlertTriangle, Power, Activity,
+  PieChart
 } from 'lucide-react';
 import { ThemeClasses } from '../types';
 import { runSystemChecks, LogEntry, CoverageModule } from '../services/testService';
 import { getApiKey, testConnection } from '../services/geminiService';
-import { loadZipFile, exportModifiedZip } from '../services/zipService';
+
 import { useAppStore } from '../store/appStore';
 import { setDebugMode, getDebugMode } from '../services/debugService';
 
@@ -78,7 +78,7 @@ const ValidatorView: React.FC<ValidatorViewProps> = ({ themeClasses }) => {
 
         try {
             switch (id) {
-                case 'gemini':
+                case 'gemini': {
                     addLog("🤖 Testing Gemini Connection...", 'info');
                     const result = await testConnection();
                     if (result.success) {
@@ -90,6 +90,7 @@ const ValidatorView: React.FC<ValidatorViewProps> = ({ themeClasses }) => {
                         }
                     }
                     break;
+                }
                 case 'theme':
                     addLog("🎨 Toggling theme...", 'info');
                     store.toggleTheme();
@@ -118,8 +119,9 @@ const ValidatorView: React.FC<ValidatorViewProps> = ({ themeClasses }) => {
                     addLog(`Manual check for ${id}`, 'info');
             }
             setChecklist(prev => ({ ...prev, [id]: !prev[id] }));
-        } catch (e: any) {
-            addLog(`❌ Test Failed: ${e.message}`, 'error');
+        } catch (e: unknown) {
+            const err = e as Error;
+            addLog(`❌ Test Failed: ${err.message}`, 'error');
         }
     };
 

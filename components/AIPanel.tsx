@@ -19,7 +19,7 @@ interface AIPanelProps {
     
     // Multi-file context
     relatedFiles?: string[];
-    onLoadContext?: (paths: string[]) => Promise<any[]>; // Returns EditorFileContext[] or DiffFileContext[]
+    onLoadContext?: (paths: string[]) => Promise<EditorFileContext[] | DiffFileContext[]>; // Returns EditorFileContext[] or DiffFileContext[]
   };
   themeClasses: ThemeClasses;
 }
@@ -144,8 +144,9 @@ const AIPanel: React.FC<AIPanelProps> = ({ onClose, context, themeClasses }) => 
 
         const result = await analyzeFile(finalContext, mode);
         setResponse(result);
-    } catch (e: any) {
-        if (e.message === 'API_KEY_MISSING') {
+    } catch (e: unknown) {
+        const err = e as Error;
+        if (err.message === 'API_KEY_MISSING') {
             setNeedsApiKey(true);
         } else {
             setResponse("Error contacting Gemini. Please check your connection.");
@@ -179,11 +180,12 @@ const AIPanel: React.FC<AIPanelProps> = ({ onClose, context, themeClasses }) => 
 
         const result = await analyzeDiff(finalContext, mode);
         setResponse(result);
-    } catch (e: any) {
-        if (e.message === 'API_KEY_MISSING') {
+    } catch (e: unknown) {
+        const err = e as Error;
+        if (err.message === 'API_KEY_MISSING') {
             setNeedsApiKey(true);
         } else {
-            console.error(e);
+            console.error(err);
             setResponse("Error contacting Gemini.");
         }
     } finally {

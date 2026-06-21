@@ -1,5 +1,5 @@
 import { describe, it, expect } from '../services/browserTestRunner';
-import JSZip from 'jszip';
+import JSZip, { JSZipObject } from 'jszip';
 import { loadZipFile, generateDiffTree, createModifiedZip } from '../services/zipService';
 import { DiffNode } from '../types';
 
@@ -40,23 +40,8 @@ describe('Zip Service', () => {
     });
 
     it('detects compression method correctly', async () => {
-        // Mock a zip entry with internal _data structure
-        const mockEntryStore = {
-            _data: { compressionMethod: 0 }
-        };
-        const mockEntryDeflate = {
-            _data: { compressionMethod: 8 }
-        };
-        const mockEntryMagicStore = {
-            _data: { compression: { magic: new Uint8Array([0, 0]) } }
-        };
-        const mockEntryMagicDeflate = {
-            _data: { compression: { magic: new Uint8Array([8, 0]) } }
-        };
-        const mockEntryNull = { _data: null };
-
-        // We need to export detectCompression or test it via createModifiedZip behavior
-        // Since it's private, we test the behavior:
+        // We test detectCompression via createModifiedZip behavior
+        // since it is an internal private function: createModifiedZip should preserve compression.
         // createModifiedZip should preserve compression.
         
         const zip = new JSZip();
@@ -103,8 +88,8 @@ describe('Zip Service', () => {
 
 describe('Diff Tree Generation', () => {
     it('identifies added files in new zip', () => {
-        const flatA: Record<string, any> = {};
-        const flatB: Record<string, any> = { 'new.xml': { name: 'new.xml', dir: false } };
+        const flatA: Record<string, JSZipObject> = {};
+        const flatB: Record<string, JSZipObject> = { 'new.xml': { name: 'new.xml', dir: false } as JSZipObject };
         
         const tree = generateDiffTree(flatA, flatB);
         const node = tree.children['new.xml'];
@@ -115,8 +100,8 @@ describe('Diff Tree Generation', () => {
     });
 
     it('identifies deleted files from original zip', () => {
-        const flatA: Record<string, any> = { 'old.xml': { name: 'old.xml', dir: false } };
-        const flatB: Record<string, any> = {};
+        const flatA: Record<string, JSZipObject> = { 'old.xml': { name: 'old.xml', dir: false } as JSZipObject };
+        const flatB: Record<string, JSZipObject> = {};
         
         const tree = generateDiffTree(flatA, flatB);
         const node = tree.children['old.xml'];
@@ -156,8 +141,8 @@ describe('Diff Tree Generation', () => {
     });
 
     it('propagates "hasChange" status to parent folders', () => {
-        const flatA: Record<string, any> = {};
-        const flatB: Record<string, any> = { 'word/document.xml': { name: 'word/document.xml', dir: false } };
+        const flatA: Record<string, JSZipObject> = {};
+        const flatB: Record<string, JSZipObject> = { 'word/document.xml': { name: 'word/document.xml', dir: false } as JSZipObject };
         
         const tree = generateDiffTree(flatA, flatB);
         

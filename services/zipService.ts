@@ -1,7 +1,16 @@
-import JSZip from 'jszip';
+import JSZip, { JSZipObject } from 'jszip';
 import { FileNode, DiffNode } from '../types';
 
-export const loadZipFile = async (file: File): Promise<{ zip: JSZip; tree: FileNode; flat: Record<string, any> }> => {
+interface ExtendedZipObject extends JSZipObject {
+    crc32?: number;
+    _data?: {
+        crc32?: number;
+        compressionMethod?: number;
+        compression?: { magic?: Uint8Array };
+    };
+}
+
+export const loadZipFile = async (file: File): Promise<{ zip: JSZip; tree: FileNode; flat: Record<string, JSZipObject> }> => {
   const zip = await new JSZip().loadAsync(file);
   
   if (!zip.file("[Content_Types].xml")) {
@@ -9,7 +18,7 @@ export const loadZipFile = async (file: File): Promise<{ zip: JSZip; tree: FileN
   }
 
   const root: FileNode = { name: 'root', path: '', isFolder: true, children: {} };
-  const flat: Record<string, any> = {};
+  const flat: Record<string, JSZipObject> = {};
 
   zip.forEach((relativePath, zipEntry) => {
     flat[relativePath] = zipEntry;
@@ -40,16 +49,16 @@ export const loadZipFile = async (file: File): Promise<{ zip: JSZip; tree: FileN
 };
 
 export const generateDiffTree = (
-  flatA: Record<string, any>, 
-  flatB: Record<string, any>
+  flatA: Record<string, JSZipObject>, 
+  flatB: Record<string, JSZipObject>
 ): DiffNode => {
   const root: DiffNode = { name: 'root', path: '', isFolder: true, children: {}, hasChange: false };
   const allPaths = new Set([...Object.keys(flatA), ...Object.keys(flatB)]);
   const sortedPaths = Array.from(allPaths).sort();
 
   sortedPaths.forEach(path => {
-    const entryA = flatA[path];
-    const entryB = flatB[path];
+    const entryA = flatA[path] as ExtendedZipObject | undefined;
+    const entryB = flatB[path] as ExtendedZipObject | undefined;
 
     let status: 'added' | 'deleted' | 'modified' | 'unchanged' = 'unchanged';
     
@@ -59,7 +68,7 @@ export const generateDiffTree = (
       if (!entryB.dir) status = 'added';
     } else if (entryA && entryB && !entryA.dir && !entryB.dir) {
       // Robust CRC check for JSZip internal structures
-      const getCrc = (entry: any) => {
+      const getCrc = (entry: ExtendedZipObject) => {
           if (entry.crc32 !== undefined) return entry.crc32;
           if (entry._data && entry._data.crc32 !== undefined) return entry._data.crc32;
           return null;
@@ -115,7 +124,7 @@ export const generateDiffTree = (
 };
 
 // Enhanced detection of compression from JSZip internal structures
-const detectCompression = (fileEntry: any): 'STORE' | 'DEFLATE' | null => {
+const detectCompression = (fileEntry: ExtendedZipObject): 'STORE' | 'DEFLATE' | null => {
     if (!fileEntry || !fileEntry._data) return null;
     
     // Check compressionMethod property (0 = STORE, 8 = DEFLATE)
@@ -173,7 +182,7 @@ export const createModifiedZip = async (originalZip: JSZip, pendingChanges: Reco
             continue;
         }
 
-        const hasPendingChange = pendingChanges.hasOwnProperty(path);
+        const hasPendingChange = Object.hasOwn(pendingChanges, path);
         
         if (hasPendingChange) {
             // Write NEW content

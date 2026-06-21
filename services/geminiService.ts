@@ -50,8 +50,9 @@ export const testConnection = async (): Promise<{ success: boolean; message: str
         });
         
         return { success: true, message: "Authenticated successfully." };
-    } catch (e: any) {
-        return { success: false, message: e.message || "Connection failed." };
+    } catch (e: unknown) {
+        const error = e as Error;
+        return { success: false, message: error.message || "Connection failed." };
     }
 };
 
@@ -134,9 +135,10 @@ export const analyzeFile = async (
     });
     
     return response.text || "No analysis generated.";
-  } catch (error: any) {
-    if (error.message === 'API_KEY_MISSING') {
-        throw error;
+  } catch (error: unknown) {
+    const err = error as Error;
+    if (err.message === 'API_KEY_MISSING') {
+        throw err;
     }
     console.error("Gemini Error:", error);
     return "Error analyzing content. Please check your network connection or API quota.";
@@ -221,9 +223,10 @@ export const analyzeDiff = async (
     });
 
     return response.text || "No analysis generated.";
-  } catch (error: any) {
-    if (error.message === 'API_KEY_MISSING') {
-        throw error;
+  } catch (error: unknown) {
+    const err = error as Error;
+    if (err.message === 'API_KEY_MISSING') {
+        throw err;
     }
     console.error("Gemini Error:", error);
     return "Error analyzing diff. Please check your network connection or API quota.";
