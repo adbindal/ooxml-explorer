@@ -309,4 +309,34 @@ describe('DiffView Component Validation', () => {
     // Assert that setDiffFiles was called
     expect(mockStore.setDiffFiles).toHaveBeenCalled();
   });
+
+  it('handles smart fallback when dropping two files onto a specific box', () => {
+    // Override store to trigger Setup Mode
+    mockStore.diff.tree = null;
+    mockStore.diff.originalFile = null;
+    mockStore.diff.modifiedFile = null;
+    mockStore.setDiffFiles.mockClear();
+
+    render(<DiffView themeClasses={themeClasses} />);
+
+    // Find the original file upload box
+    const originalBoxText = screen.getByText(/Click or Drag to upload original/i);
+    const originalBox = originalBoxText.closest('div');
+    expect(originalBox).toBeDefined();
+
+    const file1 = new File(['contentA'], 'fileA.docx', { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+    const file2 = new File(['contentB'], 'fileB.docx', { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+
+    // Simulate drop of 2 files over original box
+    fireEvent.drop(originalBox!, {
+        dataTransfer: {
+            files: [file1, file2],
+            items: [{ kind: 'file', type: file1.type }, { kind: 'file', type: file2.type }],
+            types: ['Files']
+        }
+    });
+
+    // Assert that the smart fallback intercepted it and called setDiffFiles with BOTH files!
+    expect(mockStore.setDiffFiles).toHaveBeenCalledWith(file1, file2);
+  });
 });

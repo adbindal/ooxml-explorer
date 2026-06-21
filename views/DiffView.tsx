@@ -343,7 +343,11 @@ const DiffView: React.FC<DiffViewProps> = ({ themeClasses }) => {
       setBoxDrag(prev => ({ ...prev, [type]: false }));
       
       const droppedFiles = e.dataTransfer.files;
-      if (droppedFiles && droppedFiles.length > 0) {
+      if (droppedFiles && droppedFiles.length >= 2) {
+          // Smart fallback: if they dropped 2+ files on a single box, treat it as a global compare drop!
+          setDiffFiles(droppedFiles[0], droppedFiles[1]);
+      } else if (droppedFiles && droppedFiles.length === 1) {
+          // Standard box-specific single file drop
           handleFileChange(type, droppedFiles[0]);
       }
   };
