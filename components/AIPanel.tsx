@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Sparkles, X, Bot, Loader2, Microscope, FileDiff, Plus, Check, Settings, Key, Save, LogOut } from 'lucide-react';
 import { analyzeFile, analyzeDiff, DiffFileContext, EditorFileContext, getApiKey, setApiKey, clearApiKey } from '../services/geminiService';
 import { ThemeClasses } from '../types';
@@ -96,16 +96,9 @@ const AIPanel: React.FC<AIPanelProps> = ({ onClose, context, themeClasses }) => 
   const [isExpanded, setIsExpanded] = useState(false);
   
   // API Key Configuration State
-  const [needsApiKey, setNeedsApiKey] = useState(false);
+  const [needsApiKey, setNeedsApiKey] = useState(() => !getApiKey());
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [showSettings, setShowSettings] = useState(false);
-
-  useEffect(() => {
-      // Check for API key on mount
-      if (!getApiKey()) {
-          setNeedsApiKey(true);
-      }
-  }, []);
 
   const handleSaveKey = () => {
       if (!apiKeyInput.trim()) return;

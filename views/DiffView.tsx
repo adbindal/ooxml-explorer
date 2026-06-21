@@ -118,16 +118,6 @@ const DiffView: React.FC<DiffViewProps> = ({ themeClasses }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Reset navigation when path changes
-  useEffect(() => {
-     if (currentDiffIndex !== -1) {
-         setCurrentDiffIndex(-1);
-     }
-     if (diffChanges.length > 0) {
-         setDiffChanges([]);
-     }
-  }, [activePath, currentDiffIndex, diffChanges.length]);
-
   const handleCompare = async () => {
       runDiffComparison().catch(e => alert(e.message));
   };
@@ -170,6 +160,8 @@ const DiffView: React.FC<DiffViewProps> = ({ themeClasses }) => {
                  modified: blobB ? URL.createObjectURL(blobB) : null
              });
              setDiffContent({ original: null, modified: null, isImage: true });
+             setCurrentDiffIndex(-1);
+             setDiffChanges([]);
         } else {
              const textA = originalZip.file(activePath) ? await originalZip.file(activePath)!.async('string') : '';
              const textB = modifiedZip.file(activePath) ? await modifiedZip.file(activePath)!.async('string') : '';
@@ -178,6 +170,8 @@ const DiffView: React.FC<DiffViewProps> = ({ themeClasses }) => {
              const fmtB = isXmlFile(activePath) ? formatXml(textB) : textB;
              setDiffContent({ original: fmtA, modified: fmtB, isImage: false });
              setImageUrls({ original: null, modified: null });
+             setCurrentDiffIndex(-1);
+             setDiffChanges([]);
         }
     };
     loadContent();
@@ -255,8 +249,21 @@ const DiffView: React.FC<DiffViewProps> = ({ themeClasses }) => {
 
       if (editor) {
           try {
+            // Initial option application to both sub-editors
             editor.getOriginalEditor().updateOptions({ wordWrap: 'on' });
             editor.getModifiedEditor().updateOptions({ wordWrap: 'on' });
+
+            // Enforce word wrap on both sides whenever a model is updated/loaded (e.g. changing active files)
+            editor.getOriginalEditor().onDidChangeModel(() => {
+                try {
+                    editor.getOriginalEditor().updateOptions({ wordWrap: 'on' });
+                } catch (e) { console.error(e); }
+            });
+            editor.getModifiedEditor().onDidChangeModel(() => {
+                try {
+                    editor.getModifiedEditor().updateOptions({ wordWrap: 'on' });
+                } catch (e) { console.error(e); }
+            });
           } catch (e) { console.error(e); }
       }
   };

@@ -97,6 +97,7 @@ const EditorView: React.FC<EditorViewProps> = ({ themeClasses }) => {
     let active = true; 
     if (!activePath || !zip) {
         if (imageSrc !== null) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setImageSrc(null);
         }
         return;
