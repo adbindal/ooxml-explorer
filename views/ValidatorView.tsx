@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   ArrowLeft, Play, Loader2, Maximize2, GitCompare, ExternalLink, 
   CheckSquare, Square, Zap, AlertTriangle, Power, Activity,
@@ -24,6 +24,14 @@ const ValidatorView: React.FC<ValidatorViewProps> = ({ themeClasses }) => {
     const [shouldCrash, setShouldCrash] = useState(false);
     const [debugEnabled, setDebugEnabled] = useState(getDebugMode());
     const [coverageReport, setCoverageReport] = useState<CoverageModule[]>([]);
+    
+    const consoleEndRef = useRef<HTMLDivElement>(null);
+    
+    useEffect(() => {
+        if (consoleEndRef.current) {
+            consoleEndRef.current.scrollIntoView({ behavior: 'smooth' });
+        }
+    }, [logs]);
     
     const [checklist, setChecklist] = useState<Record<string, boolean>>({
         theme: false, 
@@ -291,6 +299,7 @@ const ValidatorView: React.FC<ValidatorViewProps> = ({ themeClasses }) => {
                                 {l.msg}
                             </div>
                         ))}
+                        <div ref={consoleEndRef} />
                     </div>
                 </div>
             </div>
