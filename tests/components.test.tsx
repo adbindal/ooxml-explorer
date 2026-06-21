@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import LandingView from '../views/LandingView';
 import EditorView from '../views/EditorView';
@@ -230,5 +230,83 @@ describe('DiffView Component Validation', () => {
     // Initially it shows "Diffs" because showUnchanged is false
     expect(screen.getByText(/Diffs/i)).toBeDefined();
     expect(screen.queryByText(/^All$/)).toBeNull();
+  });
+
+  it('handles global drag and drop of two files', () => {
+    // Override store to trigger Setup Mode
+    mockStore.diff.tree = null;
+    mockStore.diff.originalFile = null;
+    mockStore.diff.modifiedFile = null;
+    mockStore.setDiffFiles.mockClear();
+
+    render(<DiffView themeClasses={themeClasses} />);
+    
+    // Find the Compare Documents heading to locate the container
+    const heading = screen.getByRole('heading', { name: /Compare Documents/i });
+    const container = heading.closest('div');
+    expect(container).toBeDefined();
+
+    const file1 = new File(['contentA'], 'fileA.docx', { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+    const file2 = new File(['contentB'], 'fileB.docx', { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+
+    // Simulate dragEnter with 2 files
+    fireEvent.dragEnter(container!, {
+        dataTransfer: {
+            files: [file1, file2],
+            items: [{ kind: 'file', type: file1.type }, { kind: 'file', type: file2.type }],
+            types: ['Files']
+        }
+    });
+
+    // Verify global overlay appears
+    expect(screen.getByText(/Drop both files to Compare/i)).toBeDefined();
+
+    // Simulate drop with 2 files
+    fireEvent.drop(container!, {
+        dataTransfer: {
+            files: [file1, file2],
+            items: [{ kind: 'file', type: file1.type }, { kind: 'file', type: file2.type }],
+            types: ['Files']
+        }
+    });
+
+    // Assert that setDiffFiles was called to set both files in store
+    expect(mockStore.setDiffFiles).toHaveBeenCalledWith(file1, file2);
+  });
+
+  it('handles box-specific drag and drop of a single file', () => {
+    // Override store to trigger Setup Mode
+    mockStore.diff.tree = null;
+    mockStore.diff.originalFile = null;
+    mockStore.diff.modifiedFile = null;
+    mockStore.setDiffFiles.mockClear();
+
+    render(<DiffView themeClasses={themeClasses} />);
+
+    // Find the original file upload box
+    const originalBoxText = screen.getByText(/Click or Drag to upload original/i);
+    const originalBox = originalBoxText.closest('div');
+    expect(originalBox).toBeDefined();
+
+    const mockFile = new File(['content'], 'original.docx', { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+
+    // Simulate dragEnter over original box
+    fireEvent.dragEnter(originalBox!, {
+        dataTransfer: {
+            files: [mockFile],
+            items: [{ kind: 'file', type: mockFile.type }]
+        }
+    });
+
+    // Simulate drop over original box
+    fireEvent.drop(originalBox!, {
+        dataTransfer: {
+            files: [mockFile],
+            items: [{ kind: 'file', type: mockFile.type }]
+        }
+    });
+
+    // Assert that setDiffFiles was called
+    expect(mockStore.setDiffFiles).toHaveBeenCalled();
   });
 });
