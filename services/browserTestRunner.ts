@@ -50,6 +50,26 @@ export const vi = {
         mockFn.mock = { calls: [] as unknown[][] };
         return mockFn;
     },
+    spyOn: <T, K extends keyof T>(obj: T, method: K) => {
+        const original = obj[method];
+        const mockFn = (...args: unknown[]) => {
+            mockFn.mock.calls.push(args);
+            // @ts-expect-error - bypass index signature for dynamic apply
+            return typeof original === 'function' ? original.apply(obj, args) : undefined;
+        };
+        mockFn.mock = { calls: [] as unknown[][] };
+        mockFn.mockRestore = () => {
+            obj[method] = original;
+        };
+        mockFn.mockImplementation = (impl: (...args: unknown[]) => unknown) => {
+            // @ts-expect-error - bypass index signature assignment
+            obj[method] = impl;
+            return mockFn;
+        };
+        // @ts-expect-error - bypass index signature assignment for mock
+        obj[method] = mockFn;
+        return mockFn;
+    },
     mock: (moduleName: string) => {
         console.warn(`[BrowserRunner] vi.mock('${moduleName}') ignored. Tests will run against REAL implementations.`);
     },
@@ -93,6 +113,14 @@ export const expect = (actual: unknown) => ({
     },
     toBeDefined: () => {
         if (actual === undefined) throw new Error(`Expected value to be defined`);
+    },
+    toBeUndefined: () => {
+        if (actual !== undefined) throw new Error(`Expected undefined, received ${actual}`);
+    },
+    toBeGreaterThan: (expected: number) => {
+        if (typeof actual !== 'number' || actual <= expected) {
+            throw new Error(`Expected greater than ${expected}, received ${actual}`);
+        }
     },
     toBeNull: () => {
         if (actual !== null) throw new Error(`Expected null, received ${actual}`);

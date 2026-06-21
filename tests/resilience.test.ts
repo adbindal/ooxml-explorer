@@ -1,7 +1,10 @@
 import { describe, it, expect } from '../services/browserTestRunner';
 import { createModifiedZip } from '../services/zipService';
-import { useAppStore } from '../store/appStore';
+import { appStoreCreator } from '../store/appStore';
+import { create } from 'zustand';
 import JSZip from 'jszip';
+
+const useResilienceStore = create(appStoreCreator);
 
 describe('System Resilience & Self-Healing Audits', () => {
 
@@ -62,14 +65,14 @@ describe('System Resilience & Self-Healing Audits', () => {
     });
 
     it('fully purges all file handles, caches, and states from memory when returning to landing page', async () => {
-        const store = useAppStore.getState();
+        const store = useResilienceStore.getState();
         
         // 1. Simulate an active session by populating editor states
         const mockZip = new JSZip();
         mockZip.file("mimetype", "application/vnd.openxmlformats-package.core-properties+xml");
         const loadedZip = await new JSZip().loadAsync(await mockZip.generateAsync({ type: 'blob' }));
 
-        useAppStore.setState({
+        useResilienceStore.setState({
             mode: 'editor',
             editor: {
                 zip: loadedZip,
@@ -84,15 +87,15 @@ describe('System Resilience & Self-Healing Audits', () => {
         });
 
         // Verify active state before reset
-        expect(useAppStore.getState().mode).toBe('editor');
-        expect(useAppStore.getState().editor.fileName).toBe('test_leak.docx');
-        expect(useAppStore.getState().editor.openTabs).toHaveLength(2);
+        expect(useResilienceStore.getState().mode).toBe('editor');
+        expect(useResilienceStore.getState().editor.fileName).toBe('test_leak.docx');
+        expect(useResilienceStore.getState().editor.openTabs).toHaveLength(2);
 
         // 2. Trigger the self-healing reset action (setMode to landing)
         store.setMode('landing');
 
         // 3. Verify that ALL complex state structures, file descriptors, and caches are completely purged!
-        const resetState = useAppStore.getState();
+        const resetState = useResilienceStore.getState();
         expect(resetState.mode).toBe('landing');
         
         // The editor state must be strictly equal to its initial blank state (purged of all structures)
