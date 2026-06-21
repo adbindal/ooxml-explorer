@@ -29,10 +29,13 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run Linter
-        run: npm run lint
+        run: pnpm run lint
+
+      - name: Run Type Checker (TypeScript)
+        run: pnpm exec tsc --noEmit
 
       - name: Run Unit Tests (Vitest)
-        run: npx vitest run
+        run: pnpm exec vitest run
 
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps chromium

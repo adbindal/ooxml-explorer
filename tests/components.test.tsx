@@ -1,6 +1,6 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import LandingView from '../views/LandingView';
 import EditorView from '../views/EditorView';
 import DiffView from '../views/DiffView';
@@ -15,6 +15,16 @@ const mockStore = {
     activePath: 'test.xml',
     loading: false
   },
+  editor: {
+    fileName: 'test.docx',
+    activePath: 'word/document.xml' as string | null,
+    openTabs: ['word/document.xml'] as string[],
+    pendingChanges: {} as Record<string, string>,
+    contentCache: { 'word/document.xml': '<root/>' } as Record<string, string>,
+    modifiedPaths: new Set<string>(),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    zip: { files: { 'word/document.xml': {} } } as any
+  },
   ui: { sidebarOpen: true, showAi: false, diffViewMode: 'split' },
   theme: 'dark',
   mode: 'diff',
@@ -25,7 +35,9 @@ const mockStore = {
   setDiffFiles: vi.fn(),
   runDiffComparison: vi.fn(),
   updateDiffState: vi.fn(),
-  setDiffViewMode: vi.fn()
+  setDiffViewMode: vi.fn(),
+  loadEditorFile: vi.fn(async () => {}),
+  updateEditorState: vi.fn()
 };
 
 vi.mock('../store/appStore', () => ({

@@ -54,7 +54,6 @@ export const vi = {
         const original = obj[method];
         const mockFn = (...args: unknown[]) => {
             mockFn.mock.calls.push(args);
-            // @ts-expect-error - bypass index signature for dynamic apply
             return typeof original === 'function' ? original.apply(obj, args) : undefined;
         };
         mockFn.mock = { calls: [] as unknown[][] };

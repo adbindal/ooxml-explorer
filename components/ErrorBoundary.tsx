@@ -1,4 +1,4 @@
-import React, { ErrorInfo } from 'react';
+import React, { Component, ErrorInfo } from 'react';
 import { AlertTriangle, RefreshCw, ShieldAlert, Terminal, Copy, Check, Power, Activity } from 'lucide-react';
 import { getLogString, setDebugMode, getDebugMode } from '../services/debugService';
 
@@ -16,18 +16,22 @@ interface State {
   debugMode: boolean;
 }
 
-class ErrorBoundary extends React.Component<Props, State> {
-  constructor(props: Props) {
-    super(props);
-    this.state = {
-        hasError: false,
-        error: null,
-        autoRecovered: false,
-        showLogs: false,
-        copied: false,
-        debugMode: getDebugMode()
-    };
-  }
+class ErrorBoundary extends Component<Props, State> {
+  public state: State = {
+      hasError: false,
+      error: null,
+      autoRecovered: false,
+      showLogs: false,
+      copied: false,
+      debugMode: getDebugMode()
+  };
+
+  // Explicitly declare inherited React.Component properties to satisfy strict type-checking
+  public props!: Props & { children?: React.ReactNode };
+  public setState!: (
+    state: Partial<State> | ((prevState: Readonly<State>, props: Readonly<Props>) => Partial<State> | null),
+    callback?: () => void
+  ) => void;
 
   static getDerivedStateFromError(error: Error): Partial<State> {
     return { hasError: true, error };

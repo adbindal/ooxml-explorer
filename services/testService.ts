@@ -142,7 +142,10 @@ export const runSystemChecks = async (fileA: File, fileB?: File): Promise<TestRe
             'image1.png': { name: 'image1.png', dir: false, _data: { crc32: 22222 } } // Changed CRC
         };
         
-        const mockTree = generateDiffTree(mockFlatA, mockFlatB);
+        const mockTree = generateDiffTree(
+            mockFlatA as unknown as Record<string, JSZip.JSZipObject>, 
+            mockFlatB as unknown as Record<string, JSZip.JSZipObject>
+        );
         const imageNode = mockTree.children['image1.png'];
         
         if (imageNode && imageNode.status === 'modified') {

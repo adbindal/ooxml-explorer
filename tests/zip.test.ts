@@ -119,7 +119,10 @@ describe('Diff Tree Generation', () => {
         const flatA = { 'doc.xml': entryA };
         const flatB = { 'doc.xml': entryB };
         
-        const tree = generateDiffTree(flatA, flatB);
+        const tree = generateDiffTree(
+            flatA as unknown as Record<string, JSZipObject>, 
+            flatB as unknown as Record<string, JSZipObject>
+        );
         const node = tree.children['doc.xml'];
         
         expect(node.status).toBe('modified');
@@ -133,7 +136,10 @@ describe('Diff Tree Generation', () => {
         const flatA = { 'doc.xml': entryA };
         const flatB = { 'doc.xml': entryB };
         
-        const tree = generateDiffTree(flatA, flatB);
+        const tree = generateDiffTree(
+            flatA as unknown as Record<string, JSZipObject>, 
+            flatB as unknown as Record<string, JSZipObject>
+        );
         const node = tree.children['doc.xml'];
         
         expect(node.status).toBe('unchanged');

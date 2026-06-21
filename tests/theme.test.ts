@@ -39,7 +39,8 @@ describe('Theme Utilities', () => {
         expect(themeNames).toContain('ooxml-light');
 
         // Check Dark Theme Configuration
-        const darkDef = calls.find(c => c[0] === 'ooxml-dark')[1];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const darkDef = calls.find(c => c[0] === 'ooxml-dark')[1] as any;
         expect(darkDef.base).toBe('vs-dark');
         expect(darkDef.inherit).toBe(true);
         // Verify a specific brand color override exists
@@ -47,7 +48,8 @@ describe('Theme Utilities', () => {
         expect(darkDef.colors['editorLineNumber.activeForeground']).toBe('#4A89DC');
 
         // Check Light Theme Configuration
-        const lightDef = calls.find(c => c[0] === 'ooxml-light')[1];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const lightDef = calls.find(c => c[0] === 'ooxml-light')[1] as any;
         expect(lightDef.base).toBe('vs');
         expect(lightDef.inherit).toBe(true);
         expect(lightDef.colors['editor.background']).toBe('#FFFFFF');
