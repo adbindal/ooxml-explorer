@@ -34,6 +34,9 @@ jobs:
       - name: Run Type Checker (TypeScript)
         run: pnpm exec tsc --noEmit
 
+      - name: Run Production Build (Vite)
+        run: pnpm run build
+
       - name: Run Unit Tests (Vitest)
         run: pnpm exec vitest run
 
