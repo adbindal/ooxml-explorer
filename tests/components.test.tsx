@@ -32,9 +32,35 @@ vi.mock('../store/appStore', () => ({
   useAppStore: () => mockStore
 }));
 
-// Mock Monaco Editor to inspect props
+// Create mock editor instances that can be inspected in tests
+export const mockSubEditor = {
+  updateOptions: vi.fn(),
+  onDidChangeModel: vi.fn(() => ({ dispose: vi.fn() }))
+};
+
+export const mockDiffEditorInstance = {
+  getOriginalEditor: vi.fn(() => mockSubEditor),
+  getModifiedEditor: vi.fn(() => mockSubEditor),
+  onDidUpdateDiff: vi.fn(() => ({ dispose: vi.fn() })),
+  getLineChanges: vi.fn(() => [])
+};
+
+export const mockMonacoInstance = {
+  editor: {
+    setTheme: vi.fn()
+  }
+};
+
+// Mock Monaco Editor to inspect props and lifecycle
 vi.mock('@monaco-editor/react', () => ({
-  DiffEditor: vi.fn((props) => <div data-testid="mock-diff-editor" data-options={JSON.stringify(props.options)} />),
+  DiffEditor: vi.fn((props) => {
+    React.useEffect(() => {
+      if (props.onMount) {
+        props.onMount(mockDiffEditorInstance, mockMonacoInstance);
+      }
+    }, [props]);
+    return <div data-testid="mock-diff-editor" data-options={JSON.stringify(props.options)} />;
+  }),
   Editor: vi.fn((props) => <div data-testid="mock-editor" data-options={JSON.stringify(props.options)} />),
   default: vi.fn((props) => <div data-testid="mock-editor" data-options={JSON.stringify(props.options)} />)
 }));
@@ -141,6 +167,20 @@ describe('DiffView Component Validation', () => {
     
     expect(options.wordWrap).toBe('on');
     expect(options.renderSideBySide).toBe(true); // Split mode
+  });
+
+  it('registers model change listeners to enforce wordWrap on sub-editors', () => {
+    // Reset our mock spies
+    mockSubEditor.updateOptions.mockClear();
+    mockSubEditor.onDidChangeModel.mockClear();
+
+    render(<DiffView themeClasses={themeClasses} />);
+
+    // Assert that both original and modified editors had updateOptions called with wordWrap: 'on'
+    expect(mockSubEditor.updateOptions).toHaveBeenCalledWith({ wordWrap: 'on' });
+
+    // Assert that model change listeners were registered for both sub-editors
+    expect(mockSubEditor.onDidChangeModel).toHaveBeenCalledTimes(2);
   });
 
   it('updates renderSideBySide when diffViewMode changes', () => {
