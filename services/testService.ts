@@ -7,6 +7,7 @@ import '../tests/tree.test';
 import '../tests/zip.test';
 import '../tests/store.test';
 import '../tests/theme.test';
+import '../tests/zipInvariants.test';
 import { generateDiffTree } from './zipService';
 import { isImageFile } from '../utils/xmlUtils';
 
