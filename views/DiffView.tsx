@@ -56,6 +56,14 @@ const DiffView: React.FC<DiffViewProps> = ({ themeClasses }) => {
   const [diffChanges, setDiffChanges] = useState<DiffLineChange[]>([]);
   const [currentDiffIndex, setCurrentDiffIndex] = useState(-1);
 
+  // Drag and Drop States & Refs
+  const [dragCounter, setDragCounter] = useState(0);
+  const [dragFileCount, setDragFileCount] = useState(0);
+  const [boxDrag, setBoxDrag] = useState<{ original: boolean; modified: boolean }>({ original: false, modified: false });
+
+  const originalInputRef = useRef<HTMLInputElement>(null);
+  const modifiedInputRef = useRef<HTMLInputElement>(null);
+
   const isMounted = useRef(false);
   const diffEditorRef = useRef<Parameters<DiffOnMount>[0] | null>(null);
   const diffListenerRef = useRef<{ dispose(): void } | null>(null);
@@ -279,24 +287,102 @@ const DiffView: React.FC<DiffViewProps> = ({ themeClasses }) => {
       }
   };
 
+  // Drag and Drop Handlers
+  const handleGlobalDragEnter = (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setDragCounter(prev => prev + 1);
+      if (e.dataTransfer.items) {
+          setDragFileCount(e.dataTransfer.items.length);
+      }
+  };
+
+  const handleGlobalDragLeave = (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setDragCounter(prev => prev - 1);
+  };
+
+  const handleGlobalDragOver = (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+  };
+
+  const handleGlobalDrop = (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setDragCounter(0);
+      setDragFileCount(0);
+      
+      const droppedFiles = e.dataTransfer.files;
+      if (droppedFiles && droppedFiles.length >= 2) {
+          setDiffFiles(droppedFiles[0], droppedFiles[1]);
+      }
+  };
+
+  const handleBoxDragEnter = (type: 'original' | 'modified', e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setBoxDrag(prev => ({ ...prev, [type]: true }));
+  };
+
+  const handleBoxDragLeave = (type: 'original' | 'modified', e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setBoxDrag(prev => ({ ...prev, [type]: false }));
+  };
+
+  const handleBoxDragOver = (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+  };
+
+  const handleBoxDrop = (type: 'original' | 'modified', e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setBoxDrag(prev => ({ ...prev, [type]: false }));
+      
+      const droppedFiles = e.dataTransfer.files;
+      if (droppedFiles && droppedFiles.length > 0) {
+          handleFileChange(type, droppedFiles[0]);
+      }
+  };
+
   const renderUploadBox = (type: 'original' | 'modified', file: File | null) => {
       const isOriginal = type === 'original';
       const iconColor = isOriginal ? 'text-[#4A89DC]' : modColorClass;
-      const borderColor = file 
-        ? (isOriginal ? 'border-[#4A89DC]' : modBorderClass) 
-        : `${themeClasses.border} ${isOriginal ? 'hover:border-[#4A89DC]/50' : modHoverBorderClass}`;
+      
+      const isDragging = boxDrag[type];
+      const borderColor = isDragging
+        ? (isOriginal ? 'border-[#4A89DC] bg-[#4A89DC]/10 scale-[1.01]' : `${modBorderClass} bg-[#A5B4FC]/10 scale-[1.01]`)
+        : (file 
+            ? (isOriginal ? 'border-[#4A89DC]' : modBorderClass) 
+            : `${themeClasses.border} ${isOriginal ? 'hover:border-[#4A89DC]/50' : modHoverBorderClass}`);
+            
       const bgColor = file ? (isOriginal ? 'bg-[#4A89DC]/10' : modBgClass) : '';
+      const inputRef = isOriginal ? originalInputRef : modifiedInputRef;
 
       return (
         <div className="space-y-4 w-full">
             <label className={`block text-sm font-medium uppercase tracking-wider ${themeClasses.fgMuted}`}>
                 {type} File {file && <span className={`ml-2 text-xs normal-case ${iconColor}`}>Ready</span>}
             </label>
-            <div className={`
-                min-h-[8rem] md:min-h-[10rem] p-4 border-2 border-dashed rounded-xl flex flex-col items-center justify-center relative transition-colors cursor-pointer
-                ${borderColor} ${bgColor}
-            `}>
-                <input type="file" className="absolute inset-0 opacity-0 cursor-pointer z-10" accept=".docx,.xlsx,.pptx"
+            <div 
+                onClick={() => inputRef.current?.click()}
+                onDragEnter={(e) => handleBoxDragEnter(type, e)}
+                onDragLeave={(e) => handleBoxDragLeave(type, e)}
+                onDragOver={handleBoxDragOver}
+                onDrop={(e) => handleBoxDrop(type, e)}
+                className={`
+                    min-h-[8rem] md:min-h-[10rem] p-4 border-2 border-dashed rounded-xl flex flex-col items-center justify-center relative transition-all duration-200 cursor-pointer
+                    ${borderColor} ${bgColor}
+                `}
+            >
+                <input 
+                    ref={inputRef}
+                    type="file" 
+                    className="hidden" 
+                    accept=".docx,.xlsx,.pptx"
                     onChange={(e) => handleFileChange(type, e.target.files?.[0] || null)} 
                 />
                 {file ? (
@@ -308,7 +394,7 @@ const DiffView: React.FC<DiffViewProps> = ({ themeClasses }) => {
                 ) : (
                     <div className={`text-center pointer-events-none ${themeClasses.fgMuted}`}>
                         <Upload className={`mx-auto mb-3 opacity-50`} size={24} />
-                        <p className="text-sm font-medium">Click to upload {type}</p>
+                        <p className="text-sm font-medium">Click or Drag to upload {type}</p>
                     </div>
                 )}
             </div>
@@ -317,8 +403,35 @@ const DiffView: React.FC<DiffViewProps> = ({ themeClasses }) => {
   };
 
   if (!tree) {
+    const showGlobalOverlay = dragCounter > 0 && dragFileCount >= 2;
+
     return (
-        <div className={`min-h-screen w-full flex flex-col items-center justify-center p-4 md:p-6 transition-colors duration-300 ${themeClasses.bg} ${themeClasses.fg}`}>
+        <div 
+            onDragEnter={handleGlobalDragEnter}
+            onDragLeave={handleGlobalDragLeave}
+            onDragOver={handleGlobalDragOver}
+            onDrop={handleGlobalDrop}
+            className={`min-h-screen w-full flex flex-col items-center justify-center p-4 md:p-6 transition-colors duration-300 relative ${themeClasses.bg} ${themeClasses.fg}`}
+        >
+             {/* Global Drag & Drop Overlay */}
+             {showGlobalOverlay && (
+                <div className="absolute inset-0 z-50 bg-[#4A89DC]/20 backdrop-blur-md m-4 rounded-3xl flex flex-col items-center justify-center pointer-events-none overflow-hidden">
+                    <div className="absolute inset-0 border-4 border-[#4A89DC] border-dashed rounded-3xl opacity-50"></div>
+                    <div className={`
+                        relative z-10 p-12 rounded-3xl shadow-2xl flex flex-col items-center gap-6 text-center
+                        ${theme === 'dark' ? 'bg-[#0B1221] border border-[#1F3F70]' : 'bg-white border border-blue-100'}
+                    `}>
+                        <GitCompare size={80} className="text-[#4A89DC] drop-shadow-lg animate-pulse" />
+                        <div className="space-y-2">
+                            <span className="block text-2xl font-bold text-[#4A89DC]">Drop both files to Compare</span>
+                            <p className={`text-sm ${theme === 'dark' ? 'text-blue-200' : 'text-blue-600'} opacity-80`}>
+                                Release to automatically load both documents and run the comparison!
+                            </p>
+                        </div>
+                    </div>
+                </div>
+             )}
+
              <div className={`max-w-4xl w-full border rounded-2xl p-4 md:p-8 shadow-2xl ${themeClasses.card}`}>
                 <div className="flex items-center justify-between mb-4 md:mb-8">
                     <div className="flex items-center gap-4">
