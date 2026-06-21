@@ -58,6 +58,22 @@ export const isImageFile = (path: string): boolean => {
 };
 
 /**
+ * Checks if a file path represents a binary asset (not text, not XML, not a web image).
+ */
+export const isBinaryFile = (path: string): boolean => {
+  if (!path) return false;
+  const lower = path.toLowerCase();
+  // Image files are technically binary, but we support visual previews for them.
+  // This function returns true for other binary files where editing/preview is not supported.
+  return lower.endsWith('.bin') || 
+         lower.endsWith('.otf') || 
+         lower.endsWith('.ttf') || 
+         lower.endsWith('.woff') || 
+         lower.endsWith('.woff2') || 
+         lower.endsWith('.zip');
+};
+
+/**
  * Minifies XML by removing unnecessary whitespaces.
  */
 export const minifyXml = (xml: string): string => {

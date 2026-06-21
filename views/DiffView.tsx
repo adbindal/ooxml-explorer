@@ -98,6 +98,17 @@ const DiffView: React.FC<DiffViewProps> = ({ themeClasses }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Run only on mount
 
+  // Clean up any remaining image object URLs on unmount to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      setImageUrls(prev => {
+        if (prev.original) URL.revokeObjectURL(prev.original);
+        if (prev.modified) URL.revokeObjectURL(prev.modified);
+        return { original: null, modified: null };
+      });
+    };
+  }, []);
+
   // Update Monaco theme dynamically when app theme changes
   useEffect(() => {
       if (monacoRef.current) {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from '../services/browserTestRunner';
-import { formatXml, minifyXml, isXmlFile, isImageFile } from '../utils/xmlUtils';
+import { formatXml, minifyXml, isXmlFile, isImageFile, isBinaryFile } from '../utils/xmlUtils';
 import { calculateMatches, cycleIndex, replaceContent } from '../utils/searchUtils';
 import { isSaveHotkey, isFindHotkey, isSaveAllHotkey, isSidebarHotkey } from '../utils/hotkeyUtils';
 import { parseInlineStyles, parseMarkdownSegments } from '../utils/markdownUtils';
@@ -75,6 +75,17 @@ describe('File Extension Helpers', () => {
     
     it('isImageFile returns false for non-image files', () => {
         expect(isImageFile('doc.xml')).toBe(false);
+    });
+
+    it('isBinaryFile returns true for binary assets', () => {
+        expect(isBinaryFile('word/embeddings/oleObject1.bin')).toBe(true);
+        expect(isBinaryFile('word/media/image.bin')).toBe(true);
+        expect(isBinaryFile('word/fonts/font.otf')).toBe(true);
+    });
+
+    it('isBinaryFile returns false for xml or images', () => {
+        expect(isBinaryFile('word/document.xml')).toBe(false);
+        expect(isBinaryFile('word/media/image.png')).toBe(false);
     });
 });
 

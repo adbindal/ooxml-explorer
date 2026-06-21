@@ -5,7 +5,7 @@ import FileTree from '../components/FileTree';
 import AIPanel from '../components/AIPanel';
 import ErrorBoundary from '../components/ErrorBoundary';
 import Logo from '../components/Logo';
-import { formatXml, minifyXml, isXmlFile, isImageFile } from '../utils/xmlUtils';
+import { formatXml, minifyXml, isXmlFile, isImageFile, isBinaryFile } from '../utils/xmlUtils';
 import { exportModifiedZip } from '../services/zipService';
 import { isSaveHotkey, isSaveAllHotkey, isFindHotkey, isSidebarHotkey } from '../utils/hotkeyUtils';
 import { EditorFileContext } from '../services/geminiService';
@@ -129,14 +129,24 @@ const EditorView: React.FC<EditorViewProps> = ({ themeClasses }) => {
         updateEditorState(prev => ({ ...prev, openTabs: [...prev.openTabs, node.path] }));
     }
 
-    if (!contentCache[node.path] && isXmlFile(node.name)) {
+    if (!contentCache[node.path]) {
+        // If it's a binary file, we don't load content as text and prevent editing
+        if (isBinaryFile(node.path)) {
+            updateEditorState({ activePath: node.path });
+            return;
+        }
+        
+        // Read the file as a string
         const text = await zip.file(node.path)?.async('string');
         if (!isMounted.current) return;
-        const formatted = formatXml(text || '');
+        
+        // Format if XML, otherwise store raw text content
+        const finalContent = isXmlFile(node.name) ? formatXml(text || '') : (text || '');
+        
         updateEditorState(prev => ({
             ...prev,
             activePath: node.path,
-            contentCache: { ...prev.contentCache, [node.path]: formatted }
+            contentCache: { ...prev.contentCache, [node.path]: finalContent }
         }));
     } else {
         updateEditorState({ activePath: node.path });
@@ -200,6 +210,13 @@ const EditorView: React.FC<EditorViewProps> = ({ themeClasses }) => {
 
   const closeTab = (e: React.MouseEvent, path: string) => {
     e.stopPropagation();
+    
+    // Warn if closing a file with unsaved/pending changes
+    if (pendingChanges[path]) {
+        const confirmClose = window.confirm(`"${path.split('/').pop()}" has unsaved changes. Are you sure you want to close it and discard your edits?`);
+        if (!confirmClose) return;
+    }
+
     updateEditorState(prev => {
         const newTabs = prev.openTabs.filter(t => t !== path);
         let newActive = prev.activePath;
@@ -389,6 +406,15 @@ const EditorView: React.FC<EditorViewProps> = ({ themeClasses }) => {
                         <div className={`mt-4 flex items-center gap-2 text-xs ${themeClasses.fgMuted}`}>
                             <ImageIcon size={14} /> Image Preview (Read Only)
                         </div>
+                    </div>
+                ) : isBinaryFile(activePath) ? (
+                    <div className={`absolute inset-0 flex flex-col items-center justify-center p-4 md:p-8 ${themeClasses.bgPanel} bg-opacity-50 text-center`}>
+                        <FileCode size={48} className="mb-4 text-yellow-500/80 opacity-80 animate-pulse" />
+                        <h3 className="font-bold text-sm mb-2">Binary File Format</h3>
+                        <p className={`max-w-sm text-xs leading-relaxed ${themeClasses.fgMuted}`}>
+                            This file format contains binary encoded content (e.g. OLE embeddings, font data, or activeX modules). 
+                            Visual previews and text editing are disabled to protect package integrity and prevent data corruption.
+                        </p>
                     </div>
                 ) : (
                     <ErrorBoundary variant="minimal">
