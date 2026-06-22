@@ -29,6 +29,9 @@ importers:
       vitest:
         specifier: ^4.0.15
         version: 4.1.9(@types/node@22.20.0)(@vitest/coverage-v8@4.1.9)(jsdom@27.4.0)(vite@6.4.3(@types/node@22.20.0))
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
       zustand:
         specifier: ^5.0.0
         version: 5.0.14(react@19.2.7)

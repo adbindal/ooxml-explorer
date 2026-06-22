@@ -1,4 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
+import { z } from "zod";
 
 const STORAGE_KEY = 'ooxml_explorer_api_key';
 
@@ -56,18 +57,106 @@ export const testConnection = async (): Promise<{ success: boolean; message: str
     }
 };
 
-// --- EDITOR MODE TYPES ---
+// --- EDITOR MODE TYPES & SCHEMAS ---
 export interface EditorFileContext {
     fileName: string;
     content: string;
 }
 
-// --- DIFF MODE TYPES ---
+export const AIAnalysisSchema = z.object({
+  summary: z.string(),
+  criticalIssues: z.array(z.object({
+    issue: z.string(),
+    impact: z.string(),
+    remediation: z.string()
+  })),
+  keyElements: z.array(z.object({
+    tag: z.string(),
+    purpose: z.string()
+  }))
+});
+
+export type AIAnalysis = z.infer<typeof AIAnalysisSchema>;
+
+const AI_ANALYSIS_RESPONSE_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    summary: {
+      type: 'STRING',
+      description: 'A concise explanation of the file\'s purpose and role in the OOXML package.'
+    },
+    criticalIssues: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          issue: { type: 'STRING', description: 'The problem or warning found in the XML structure.' },
+          impact: { type: 'STRING', description: 'The functional impact on Microsoft Office (e.g. file corruption, formatting loss).' },
+          remediation: { type: 'STRING', description: 'How to fix this issue in the XML.' }
+        },
+        required: ['issue', 'impact', 'remediation']
+      },
+      description: 'List of critical compliance, namespace, or structural issues found. Empty array if none.'
+    },
+    keyElements: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          tag: { type: 'STRING', description: 'The XML tag name.' },
+          purpose: { type: 'STRING', description: 'What this specific element configures in plain English.' }
+        },
+        required: ['tag', 'purpose']
+      },
+      description: 'Key OOXML elements found in this file with their purpose.'
+    }
+  },
+  required: ['summary', 'criticalIssues', 'keyElements']
+};
+
+// --- DIFF MODE TYPES & SCHEMAS ---
 export interface DiffFileContext {
     fileName: string;
     original: string | null;
     modified: string | null;
 }
+
+export const AIDiffSchema = z.object({
+  summary: z.string(),
+  changesList: z.array(z.object({
+    element: z.string(),
+    changeType: z.enum(['added', 'modified', 'deleted']),
+    description: z.string(),
+    visualImpact: z.string()
+  }))
+});
+
+export type AIDiffAnalysis = z.infer<typeof AIDiffSchema>;
+
+const AI_DIFF_RESPONSE_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    summary: {
+      type: 'STRING',
+      description: 'A user-friendly plain English summary of the functional impact of the changes.'
+    },
+    changesList: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          element: { type: 'STRING', description: 'The XML element or setting that was modified.' },
+          changeType: { type: 'STRING', enum: ['added', 'modified', 'deleted'], description: 'The type of modification.' },
+          description: { type: 'STRING', description: 'A clear description of what changed and its technical role.' },
+          visualImpact: { type: 'STRING', description: 'What the user will see differently in Word/Excel/PowerPoint.' }
+        },
+        required: ['element', 'changeType', 'description', 'visualImpact']
+      },
+      description: 'Structured list of key modifications.'
+    }
+  },
+  required: ['summary', 'changesList']
+};
 
 /**
  * Analyzes a single file (with optional context files) in Editor Mode.
@@ -75,9 +164,9 @@ export interface DiffFileContext {
 export const analyzeFile = async (
     files: EditorFileContext[],
     mode: 'explain' | 'technical'
-): Promise<string> => {
+): Promise<AIAnalysis> => {
   if (!files || files.length === 0) {
-    return "No files provided for analysis.";
+    throw new Error("No files provided for analysis.");
   }
   try {
     const ai = getAI();
@@ -105,28 +194,29 @@ export const analyzeFile = async (
         prompt = `
         Analyze the provided OOXML file(s). The primary file being viewed is "${mainFileName}"${relatedCount > 0 ? `, with ${relatedCount} related file(s) for context` : ''}.
         
-        1. **Purpose**: What is this file responsible for in the OOXML package? (Reference ECMA-376 concepts but keep it accessible).
-        2. **Key Data**: Summarize the important configuration or data it holds.
-        3. **Context**: If related files are provided, explain how this file interacts with them.
-        
-        Return the response in concise Markdown. Use bullet points.
+        1. **Purpose/Summary**: Explain the role of this file in the OOXML package in clear, accessible language.
+        2. **Critical Issues**: Audit the XML structure. Identify if there are any invalid tags, missing required namespaces, broken schema references, or elements that could cause file corruption or formatting loss.
+        3. **Key Elements**: Identify the most important XML tags in the file and explain their functional purpose.
         `;
     } else if (mode === 'technical') {
         systemInstruction = "You are a Senior OOXML Engineer with mastery of the ECMA-376 specification. Your goal is to debug, validate, and explain XML structures technically.";
         prompt = `
-        Perform a **technical deep dive** on "${mainFileName}"${relatedCount > 0 ? ` using ${relatedCount} related file(s) for reference` : ''}.
+        Perform a technical deep dive audit on "${mainFileName}"${relatedCount > 0 ? ` using ${relatedCount} related file(s) for reference` : ''}.
         
-        1. **Structure Analysis**: Analyze the XML tags and attributes. Are they standard ECMA-376 elements?
-        2. **Validation**: Check for common issues (namespaces, required attributes, nesting).
-        3. **Relationships**: If referencing IDs (rId), do they look consistent?
-        
-        Provide a detailed technical breakdown suitable for a developer.
+        1. **Summary/Purpose**: Explain the technical role of this file in the package schema.
+        2. **Critical Issues**: Run a strict validation check for ECMA-376 compliance (namespaces, required attributes, nesting rules, relationship consistency). Citing exact issues.
+        3. **Key Elements**: Extract the main structural elements, listing their tag names and technical configurations.
         `;
     }
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3.1-pro-preview',
-      config: { systemInstruction },
+      model: 'gemini-2.5-flash',
+      config: { 
+          systemInstruction,
+          responseMimeType: 'application/json',
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          responseSchema: AI_ANALYSIS_RESPONSE_SCHEMA as any
+      },
       contents: `
       ${prompt}
 
@@ -134,14 +224,18 @@ export const analyzeFile = async (
       `
     });
     
-    return response.text || "No analysis generated.";
+    const text = response.text || "{}";
+    const rawData = JSON.parse(text);
+    
+    // Validate with Zod to guarantee runtime type safety
+    return AIAnalysisSchema.parse(rawData);
   } catch (error: unknown) {
     const err = error as Error;
     if (err.message === 'API_KEY_MISSING') {
         throw err;
     }
-    console.error("Gemini Error:", error);
-    return "Error analyzing content. Please check your network connection or API quota.";
+    console.error("Gemini Error in analyzeFile:", error);
+    throw new Error(err.message || "Failed to analyze file.");
   }
 };
 
@@ -151,9 +245,9 @@ export const analyzeFile = async (
 export const analyzeDiff = async (
     files: DiffFileContext[], 
     mode: 'summary' | 'technical'
-): Promise<string> => {
+): Promise<AIDiffAnalysis> => {
   if (!files || files.length === 0) {
-    return "No files provided for diff analysis.";
+    throw new Error("No files provided for diff analysis.");
   }
   try {
     const ai = getAI();
@@ -189,32 +283,27 @@ export const analyzeDiff = async (
         prompt = `
         Compare the provided versions of the OOXML file(s). The primary file being viewed is "${mainFileName}"${relatedCount > 0 ? `, with ${relatedCount} related file(s) for context` : ''}.
         
-        Use your knowledge of ECMA-376 to understand the structure, but focus the output on **functional impact** for a non-technical user:
-        - What would the user see differently in Word/Excel/PowerPoint?
-        - Filter out minor XML noise (like random ID updates) unless they affect document behavior.
-        - Correlate changes across files if provided (e.g. a style change in styles.xml affecting document.xml).
-        - Summarize the intent of the change in plain English.
-
-        Keep it concise and easy to read. Use bullet points.
+        1. **Summary**: Provide a plain English summary of the functional impact of these changes on a non-technical user.
+        2. **Changes List**: Identify each key modified XML element. List the element tag, describe the modification (added/modified/deleted), explain what it technically configures, and detail the visual/functional impact.
         `;
     } else if (mode === 'technical') {
         systemInstruction = "You are a Senior OOXML Engineer with mastery of the ECMA-376 specification. Your goal is to debug and validate XML changes against the standard.";
         prompt = `
-        Perform a **technical deep dive** on the diff for "${mainFileName}"${relatedCount > 0 ? ` and ${relatedCount} related files` : ''}.
+        Perform a technical deep dive audit on the diff for "${mainFileName}"${relatedCount > 0 ? ` and ${relatedCount} related files` : ''}.
         
-        Analyze the specific XML mechanics citing ECMA-376 concepts where relevant:
-        - Which attributes or tags were modified and what is their role in the standard?
-        - Check for cross-file integrity (e.g. if a Relationship ID is used in document.xml, does it exist in .rels?).
-        - Are there potential side effects?
-        - Does this change look safe and compliant?
-        
-        Provide a detailed technical breakdown suitable for a developer.
+        1. **Summary**: Summarize the technical purpose of these modifications.
+        2. **Changes List**: Extract all key attribute or tag modifications. For each, describe the change type, provide the exact technical explanation, and check for schema compliance and side effects.
         `;
     }
 
     const response = await ai.models.generateContent({
-        model: 'gemini-3.1-pro-preview', 
-        config: { systemInstruction },
+        model: 'gemini-2.5-flash', 
+        config: { 
+            systemInstruction,
+            responseMimeType: 'application/json',
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            responseSchema: AI_DIFF_RESPONSE_SCHEMA as any
+        },
         contents: `
         ${prompt}
 
@@ -222,13 +311,17 @@ export const analyzeDiff = async (
         `
     });
 
-    return response.text || "No analysis generated.";
+    const text = response.text || "{}";
+    const rawData = JSON.parse(text);
+    
+    // Validate with Zod to guarantee runtime type safety
+    return AIDiffSchema.parse(rawData);
   } catch (error: unknown) {
     const err = error as Error;
     if (err.message === 'API_KEY_MISSING') {
         throw err;
     }
-    console.error("Gemini Error:", error);
-    return "Error analyzing diff. Please check your network connection or API quota.";
+    console.error("Gemini Error in analyzeDiff:", error);
+    throw new Error(err.message || "Failed to analyze diff.");
   }
-}
+};

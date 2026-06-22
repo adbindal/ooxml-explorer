@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import LandingView from '../views/LandingView';
 import EditorView from '../views/EditorView';
 import DiffView from '../views/DiffView';
+import AIPanel from '../components/AIPanel';
 import { getThemeClasses } from '../utils/theme';
 
 // Mock the store to control the state in component tests
@@ -44,6 +45,20 @@ vi.mock('../store/appStore', () => ({
   useAppStore: () => mockStore
 }));
 
+const mockGetApiKey = vi.fn(() => 'mock-api-key');
+const mockAnalyzeFile = vi.fn();
+const mockAnalyzeDiff = vi.fn();
+
+vi.mock('../services/geminiService', () => ({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  analyzeFile: (...args: any[]) => mockAnalyzeFile(...args),
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  analyzeDiff: (...args: any[]) => mockAnalyzeDiff(...args),
+  getApiKey: () => mockGetApiKey(),
+  setApiKey: vi.fn(),
+  clearApiKey: vi.fn()
+}));
+
 // Create mock editor instances that can be inspected in tests
 export const mockSubEditor = {
   updateOptions: vi.fn(),
@@ -59,7 +74,8 @@ export const mockDiffEditorInstance = {
 
 export const mockMonacoInstance = {
   editor: {
-    setTheme: vi.fn()
+    setTheme: vi.fn(),
+    defineTheme: vi.fn()
   }
 };
 
@@ -350,5 +366,96 @@ describe('DiffView Component Validation', () => {
 
     // Assert that the smart fallback intercepted it and called setDiffFiles with BOTH files!
     expect(mockStore.setDiffFiles).toHaveBeenCalledWith(file1, file2);
+  });
+});
+
+describe('AIPanel Component', () => {
+  const themeClasses = getThemeClasses('dark');
+
+  const contextEditor = {
+    mode: 'editor' as const,
+    fileName: 'document.xml',
+    content: '<w:document><w:body><w:p><w:r><w:t>Hello</w:t></w:r></w:p></w:body></w:document>'
+  };
+
+  const contextDiff = {
+    mode: 'diff' as const,
+    fileName: 'styles.xml',
+    diffOriginal: '<w:styles></w:styles>',
+    diffModified: '<w:styles><w:style w:type="paragraph" w:default="1"></w:style></w:styles>'
+  };
+
+  it('renders setup view when API key is missing', () => {
+    mockGetApiKey.mockReturnValueOnce(undefined);
+    render(<AIPanel onClose={vi.fn()} context={contextEditor} themeClasses={themeClasses} />);
+    
+    expect(screen.getByText('Setup Gemini AI')).toBeDefined();
+    expect(screen.getByPlaceholderText('Paste API Key here...')).toBeDefined();
+  });
+
+  it('renders editor actions and displays structured analysis on click', async () => {
+    mockGetApiKey.mockReturnValue('mock-api-key');
+    const mockAnalysis = {
+      summary: 'This file contains the main document text and structural layout.',
+      criticalIssues: [
+        { issue: 'Missing namespace', impact: 'File may fail to open in MS Word', remediation: 'Add standard namespace' }
+      ],
+      keyElements: [
+        { tag: 'w:body', purpose: 'Container for the main document content' }
+      ]
+    };
+    mockAnalyzeFile.mockResolvedValue(mockAnalysis);
+
+    render(<AIPanel onClose={vi.fn()} context={contextEditor} themeClasses={themeClasses} />);
+
+    // Renders the action buttons
+    const explainButton = screen.getByText('Explain Purpose');
+    expect(explainButton).toBeDefined();
+
+    // Trigger analysis
+    fireEvent.click(explainButton.closest('button')!);
+
+    // Loading indicator should appear
+    expect(screen.getByText('Consulting Gemini...')).toBeDefined();
+
+    // Wait for the mock response to resolve and render the dashboard
+    const summaryText = await screen.findByText('This file contains the main document text and structural layout.');
+    expect(summaryText).toBeDefined();
+
+    // Verify critical issue is rendered in the dashboard
+    expect(screen.getByText('Issue: Missing namespace')).toBeDefined();
+    expect(screen.getByText(/File may fail to open in MS Word/)).toBeDefined();
+
+    // Verify key element tag is rendered
+    expect(screen.getByText('<w:body>')).toBeDefined();
+    expect(screen.getByText('Container for the main document content')).toBeDefined();
+  });
+
+  it('renders diff actions and displays structured diff on click', async () => {
+    mockGetApiKey.mockReturnValue('mock-api-key');
+    const mockDiffAnalysis = {
+      summary: 'Paragraph styles were modified to add a new default style.',
+      changesList: [
+        { element: 'w:style', changeType: 'added' as const, description: 'Added a new paragraph style', visualImpact: 'Changes default paragraph margins' }
+      ]
+    };
+    mockAnalyzeDiff.mockResolvedValue(mockDiffAnalysis);
+
+    render(<AIPanel onClose={vi.fn()} context={contextDiff} themeClasses={themeClasses} />);
+
+    const changeSummaryButton = screen.getByText('Change Summary');
+    expect(changeSummaryButton).toBeDefined();
+
+    fireEvent.click(changeSummaryButton.closest('button')!);
+
+    // Wait for the mock response to resolve
+    const summaryText = await screen.findByText('Paragraph styles were modified to add a new default style.');
+    expect(summaryText).toBeDefined();
+
+    // Verify changes are rendered in the dashboard
+    expect(screen.getByText('<w:style>')).toBeDefined();
+    expect(screen.getByText('added')).toBeDefined();
+    expect(screen.getByText(/Added a new paragraph style/)).toBeDefined();
+    expect(screen.getByText(/Changes default paragraph margins/)).toBeDefined();
   });
 });

@@ -1,8 +1,17 @@
 import React, { useState } from 'react';
 import { Sparkles, X, Bot, Loader2, Microscope, FileDiff, Plus, Check, Settings, Key, Save, LogOut } from 'lucide-react';
-import { analyzeFile, analyzeDiff, DiffFileContext, EditorFileContext, getApiKey, setApiKey, clearApiKey } from '../services/geminiService';
+import { 
+  analyzeFile, 
+  analyzeDiff, 
+  DiffFileContext, 
+  EditorFileContext, 
+  getApiKey, 
+  setApiKey, 
+  clearApiKey,
+  AIAnalysis,
+  AIDiffAnalysis
+} from '../services/geminiService';
 import { ThemeClasses } from '../types';
-import { parseMarkdownSegments, parseInlineStyles } from '../utils/markdownUtils';
 
 interface AIPanelProps {
   onClose: () => void;
@@ -24,73 +33,12 @@ interface AIPanelProps {
   themeClasses: ThemeClasses;
 }
 
-// Simple Markdown Renderer component
-const SimpleMarkdown: React.FC<{ content: string; themeClasses: ThemeClasses }> = ({ content, themeClasses }) => {
-  if (!content) return null;
-
-  const segments = parseMarkdownSegments(content);
-
-  return (
-    <div className="space-y-3 font-sans">
-      {segments.map((segment, index) => {
-        if (segment.type === 'code') {
-          return (
-            <div key={index} className={`rounded-md overflow-hidden text-xs border ${themeClasses.border} my-3`}>
-               {segment.language && <div className={`px-3 py-1 text-[10px] uppercase font-bold opacity-50 ${themeClasses.bgSec} border-b ${themeClasses.border}`}>{segment.language}</div>}
-               <pre className={`p-3 overflow-x-auto ${themeClasses.bgPanel} font-mono leading-relaxed`}>
-                 {segment.content}
-               </pre>
-            </div>
-          );
-        } else {
-          // Render Text Block (Headers, Lists, Paragraphs)
-          return (
-            <div key={index}>
-              {segment.content.split('\n').map((line, lineIdx) => {
-                 const trimmed = line.trim();
-                 if (!trimmed) return <div key={lineIdx} className="h-2"></div>;
-
-                 // Headers
-                 if (trimmed.startsWith('### ')) return <h3 key={lineIdx} className={`text-sm font-bold mt-4 mb-2 ${themeClasses.fg}`}>{trimmed.slice(4)}</h3>;
-                 if (trimmed.startsWith('## ')) return <h2 key={lineIdx} className={`text-base font-bold mt-5 mb-3 border-b pb-1 ${themeClasses.border} ${themeClasses.fg}`}>{trimmed.slice(3)}</h2>;
-                 if (trimmed.startsWith('# ')) return <h1 key={lineIdx} className={`text-lg font-bold mt-6 mb-4 ${themeClasses.fg}`}>{trimmed.slice(2)}</h1>;
-                 
-                 // List Items
-                 if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
-                     const content = trimmed.slice(2);
-                     return (
-                        <div key={lineIdx} className={`flex gap-2 ml-1 mb-1.5 ${themeClasses.fgMuted}`}>
-                            <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0"></span>
-                            <span className="leading-relaxed" dangerouslySetInnerHTML={{ __html: parseInlineStyles(content) }}></span>
-                        </div>
-                     );
-                 }
-                 
-                 // Numbered Lists
-                 const numMatch = trimmed.match(/^(\d+)\.\s+(.*)/);
-                 if (numMatch) {
-                      return (
-                        <div key={lineIdx} className={`flex gap-2 ml-1 mb-1.5 ${themeClasses.fgMuted}`}>
-                            <span className="font-mono font-bold text-xs opacity-70 mt-0.5">{numMatch[1]}.</span>
-                            <span className="leading-relaxed" dangerouslySetInnerHTML={{ __html: parseInlineStyles(numMatch[2]) }}></span>
-                        </div>
-                     );
-                 }
-
-                 // Paragraphs
-                 return <p key={lineIdx} className={`leading-relaxed mb-1.5 ${themeClasses.fgMuted}`} dangerouslySetInnerHTML={{ __html: parseInlineStyles(trimmed) }}></p>;
-              })}
-            </div>
-          );
-        }
-      })}
-    </div>
-  );
-};
-
 const AIPanel: React.FC<AIPanelProps> = ({ onClose, context, themeClasses }) => {
   const [loading, setLoading] = useState(false);
-  const [response, setResponse] = useState<string>('');
+  const [editorResponse, setEditorResponse] = useState<AIAnalysis | null>(null);
+  const [diffResponse, setDiffResponse] = useState<AIDiffAnalysis | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  
   const [activeAction, setActiveAction] = useState<string | null>(null);
   const [selectedRelated, setSelectedRelated] = useState<Set<string>>(new Set());
   const [isExpanded, setIsExpanded] = useState(false);
@@ -118,7 +66,9 @@ const AIPanel: React.FC<AIPanelProps> = ({ onClose, context, themeClasses }) => 
     if (!context.fileName || !context.content) return;
     setLoading(true);
     setActiveAction(mode);
-    setResponse('');
+    setEditorResponse(null);
+    setDiffResponse(null);
+    setErrorMessage(null);
     
     try {
         // 1. Prepare Primary Context
@@ -136,13 +86,13 @@ const AIPanel: React.FC<AIPanelProps> = ({ onClose, context, themeClasses }) => 
         }
 
         const result = await analyzeFile(finalContext, mode);
-        setResponse(result);
+        setEditorResponse(result);
     } catch (e: unknown) {
         const err = e as Error;
         if (err.message === 'API_KEY_MISSING') {
             setNeedsApiKey(true);
         } else {
-            setResponse("Error contacting Gemini. Please check your connection.");
+            setErrorMessage(err.message || "Error contacting Gemini. Please check your connection.");
         }
     } finally {
         setLoading(false);
@@ -153,7 +103,9 @@ const AIPanel: React.FC<AIPanelProps> = ({ onClose, context, themeClasses }) => 
     if (!context.fileName || !context.diffOriginal || !context.diffModified) return;
     setLoading(true);
     setActiveAction(mode);
-    setResponse('');
+    setEditorResponse(null);
+    setDiffResponse(null);
+    setErrorMessage(null);
     
     try {
         // 1. Prepare Primary Context
@@ -172,14 +124,14 @@ const AIPanel: React.FC<AIPanelProps> = ({ onClose, context, themeClasses }) => 
         }
 
         const result = await analyzeDiff(finalContext, mode);
-        setResponse(result);
+        setDiffResponse(result);
     } catch (e: unknown) {
         const err = e as Error;
         if (err.message === 'API_KEY_MISSING') {
             setNeedsApiKey(true);
         } else {
             console.error(err);
-            setResponse("Error contacting Gemini.");
+            setErrorMessage(err.message || "Error contacting Gemini.");
         }
     } finally {
         setLoading(false);
@@ -193,7 +145,124 @@ const AIPanel: React.FC<AIPanelProps> = ({ onClose, context, themeClasses }) => 
       setSelectedRelated(next);
   };
 
-  // --- RENDER HELPERS ---
+  // --- RENDER DASHBOARDS ---
+
+  const renderEditorDashboard = (data: AIAnalysis) => {
+      const hasIssues = data.criticalIssues.length > 0;
+      return (
+          <div className="space-y-5 animate-in fade-in duration-300 text-xs text-left">
+              {/* Summary Card */}
+              <div className={`p-4 rounded-xl border ${themeClasses.bg} ${themeClasses.border} shadow-sm space-y-2`}>
+                  <div className="flex items-center gap-2 text-blue-500 font-bold text-[10px] uppercase tracking-wider">
+                      <Bot size={13} />
+                      <span>File Purpose</span>
+                  </div>
+                  <p className={`text-xs leading-relaxed ${themeClasses.fgMuted}`}>{data.summary}</p>
+              </div>
+
+              {/* Critical Issues Panel */}
+              <div className="space-y-2.5">
+                  <div className="text-[10px] font-bold uppercase tracking-wider">
+                      <span className={hasIssues ? "text-amber-500" : "text-green-500"}>
+                          {hasIssues ? `⚠️ Compliance Warnings (${data.criticalIssues.length})` : "✅ Compliance Check"}
+                      </span>
+                  </div>
+                  {!hasIssues ? (
+                      <div className={`p-3.5 rounded-xl border border-green-500/10 bg-green-500/5 text-green-500/90 leading-relaxed`}>
+                          This file complies with standard ECMA-376 specifications. No critical issues or malformations were detected.
+                      </div>
+                  ) : (
+                      <div className="space-y-2.5">
+                          {data.criticalIssues.map((issue, idx) => (
+                              <div key={idx} className={`p-3.5 rounded-xl border border-amber-500/20 bg-amber-500/5 space-y-2`}>
+                                  <div className="font-bold text-amber-500">Issue: {issue.issue}</div>
+                                  <div className={themeClasses.fgMuted}>
+                                      <span className="font-bold text-[9px] uppercase text-amber-600/70 block mb-0.5">Impact:</span> 
+                                      {issue.impact}
+                                  </div>
+                                  <div className={themeClasses.fgMuted}>
+                                      <span className="font-bold text-[9px] uppercase text-green-600/70 block mb-0.5">Remediation:</span> 
+                                      {issue.remediation}
+                                  </div>
+                              </div>
+                          ))}
+                      </div>
+                  )}
+              </div>
+
+              {/* Key Elements List */}
+              <div className="space-y-2.5">
+                  <div className={`text-[10px] font-bold uppercase tracking-wider ${themeClasses.fgMuted}`}>
+                      <span>Key XML Tags</span>
+                  </div>
+                  <div className={`border rounded-xl divide-y ${themeClasses.border} ${themeClasses.bg} overflow-hidden shadow-sm`}>
+                      {data.keyElements.map((elem, idx) => (
+                          <div key={idx} className="p-3 flex flex-col gap-1.5">
+                              <code className="px-2 py-0.5 rounded bg-blue-500/10 text-[#4A89DC] font-mono text-[10px] font-bold shrink-0 self-start border border-blue-500/10">&lt;{elem.tag}&gt;</code>
+                              <span className={`${themeClasses.fgMuted} leading-relaxed`}>{elem.purpose}</span>
+                          </div>
+                      ))}
+                  </div>
+              </div>
+          </div>
+      );
+  };
+
+  const renderDiffDashboard = (data: AIDiffAnalysis) => {
+      return (
+          <div className="space-y-5 animate-in fade-in duration-300 text-xs text-left">
+              {/* Summary Card */}
+              <div className={`p-4 rounded-xl border ${themeClasses.bg} ${themeClasses.border} shadow-sm space-y-2`}>
+                  <div className="flex items-center gap-2 text-blue-500 font-bold text-[10px] uppercase tracking-wider">
+                      <FileDiff size={13} />
+                      <span>Functional Impact</span>
+                  </div>
+                  <p className={`text-xs leading-relaxed ${themeClasses.fgMuted}`}>{data.summary}</p>
+              </div>
+
+              {/* Changes List Panel */}
+              <div className="space-y-2.5">
+                  <div className={`text-[10px] font-bold uppercase tracking-wider ${themeClasses.fgMuted}`}>
+                      <span>Modifications Breakdown</span>
+                  </div>
+                  <div className="space-y-2.5">
+                      {data.changesList.map((change, idx) => {
+                          const isAdded = change.changeType === 'added';
+                          const isDeleted = change.changeType === 'deleted';
+                          const badgeColor = isAdded 
+                              ? 'bg-green-500/10 border-green-500/20 text-green-500' 
+                              : isDeleted 
+                                  ? 'bg-red-500/10 border-red-500/20 text-red-500'
+                                  : 'bg-amber-500/10 border-amber-500/20 text-amber-500';
+                                  
+                          return (
+                              <div key={idx} className={`p-3.5 rounded-xl border ${themeClasses.bg} ${themeClasses.border} shadow-sm space-y-2.5`}>
+                                  <div className="flex items-center justify-between gap-2">
+                                      <code className="px-2 py-0.5 rounded bg-blue-500/5 text-[#4A89DC] font-mono text-[10px] font-bold border border-blue-500/5 truncate max-w-[70%]">&lt;{change.element}&gt;</code>
+                                      <span className={`px-1.5 py-0.5 rounded-full text-[8px] font-bold uppercase border tracking-wider ${badgeColor}`}>
+                                          {change.changeType}
+                                      </span>
+                                  </div>
+                                  <div className="space-y-2">
+                                      <div className={themeClasses.fgMuted}>
+                                          <span className="font-bold text-[9px] uppercase block opacity-60 mb-0.5">Description:</span> 
+                                          {change.description}
+                                      </div>
+                                      <div className={themeClasses.fgMuted}>
+                                          <span className="font-bold text-[9px] uppercase block opacity-60 mb-0.5">Visual Impact:</span> 
+                                          {change.visualImpact}
+                                      </div>
+                                  </div>
+                              </div>
+                          );
+                      })}
+                  </div>
+              </div>
+          </div>
+      );
+  };
+
+  // --- RENDER CONFIGURATION ---
 
   const renderConfiguration = () => (
       <div className="flex-1 flex flex-col p-6 gap-6 items-center justify-center text-center animate-in fade-in">
@@ -411,15 +480,22 @@ const AIPanel: React.FC<AIPanelProps> = ({ onClose, context, themeClasses }) => 
                 )}
             </div>
 
-            {/* Output Area - Using SimpleMarkdown */}
+            {/* Output Area - Structured Dashboards */}
             <div className={`flex-1 rounded-lg border p-4 overflow-y-auto relative min-h-0 shadow-inner ${themeClasses.input}`}>
                 {loading ? (
                     <div className={`absolute inset-0 flex flex-col items-center justify-center gap-3 backdrop-blur-sm z-10 ${themeClasses.bg}/80`}>
                         <Loader2 className="animate-spin text-blue-500" size={24} />
                         <span className={`text-xs ${themeClasses.fgMuted} animate-pulse`}>Consulting Gemini...</span>
                     </div>
-                ) : response ? (
-                    <SimpleMarkdown content={response} themeClasses={themeClasses} />
+                ) : errorMessage ? (
+                    <div className="h-full flex flex-col items-center justify-center text-center p-4 gap-3 text-red-500">
+                        <span className="text-sm font-semibold">Analysis Failed</span>
+                        <p className={`text-xs ${themeClasses.fgMuted} max-w-[240px]`}>{errorMessage}</p>
+                    </div>
+                ) : editorResponse ? (
+                    renderEditorDashboard(editorResponse)
+                ) : diffResponse ? (
+                    renderDiffDashboard(diffResponse)
                 ) : (
                     <div className={`h-full flex flex-col items-center justify-center text-center gap-2 ${themeClasses.fgMuted}`}>
                         <Sparkles size={32} className="opacity-20" />

@@ -419,12 +419,12 @@ const DiffView: React.FC<DiffViewProps> = ({ themeClasses }) => {
                     <div className="absolute inset-0 border-4 border-[#4A89DC] border-dashed rounded-3xl opacity-50"></div>
                     <div className={`
                         relative z-10 p-12 rounded-3xl shadow-2xl flex flex-col items-center gap-6 text-center
-                        ${theme === 'dark' ? 'bg-[#0B1221] border border-[#1F3F70]' : 'bg-white border border-blue-100'}
+                        ${theme === 'dark' ? 'bg-[#0B1221] border border-[#1F3F70]' : 'bg-white border border-[#4A89DC]/20'}
                     `}>
                         <GitCompare size={80} className="text-[#4A89DC] drop-shadow-lg animate-pulse" />
                         <div className="space-y-2">
                             <span className="block text-2xl font-bold text-[#4A89DC]">Drop both files to Compare</span>
-                            <p className={`text-sm ${theme === 'dark' ? 'text-blue-200' : 'text-blue-600'} opacity-80`}>
+                            <p className={`text-sm ${theme === 'dark' ? 'text-slate-300' : 'text-[#4A89DC]/80'} opacity-80`}>
                                 Release to automatically load both documents and run the comparison!
                             </p>
                         </div>

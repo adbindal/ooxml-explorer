@@ -20,6 +20,7 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "vitest": "^4.0.15",
+    "zod": "^4.4.3",
     "zustand": "^5.0.0"
   },
   "devDependencies": {
