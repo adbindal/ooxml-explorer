@@ -3,6 +3,7 @@ import { GitCompare, FileArchive, Beaker, Sun, Moon, UploadCloud, FilePlus } fro
 import { ThemeClasses } from '../types';
 import Logo from '../components/Logo';
 import { useAppStore } from '../store/appStore';
+import { selectFileWithPicker } from '../utils/filePicker';
 
 interface LandingViewProps {
   themeClasses: ThemeClasses;
@@ -150,8 +151,15 @@ const LandingView: React.FC<LandingViewProps> = ({ themeClasses }) => {
           <div className={`flex flex-col gap-6 transition-opacity duration-500 opacity-100`}>
             
             {/* Primary Action Card */}
-            <div className={`group relative border-2 border-dashed rounded-2xl p-10 transition-all cursor-pointer shadow-lg hover:shadow-xl ${themeClasses.card} ${themeClasses.hover} border-[#4A89DC]/30 hover:border-[#4A89DC]`}>
-              <input type="file" className="absolute inset-0 opacity-0 cursor-pointer z-10" onChange={(e) => e.target.files?.[0] && handleEditorUpload(e.target.files[0])} accept=".docx,.xlsx,.pptx" />
+            <div 
+              onClick={async () => {
+                  const file = await selectFileWithPicker(['.docx', '.xlsx', '.pptx']);
+                  if (file) {
+                      handleEditorUpload(file);
+                  }
+              }}
+              className={`group relative border-2 border-dashed rounded-2xl p-10 transition-all cursor-pointer shadow-lg hover:shadow-xl ${themeClasses.card} ${themeClasses.hover} border-[#4A89DC]/30 hover:border-[#4A89DC]`}
+            >
               <div className="flex flex-col items-center gap-6 pointer-events-none">
                 <div className="w-20 h-20 rounded-full bg-[#4A89DC]/10 flex items-center justify-center text-[#4A89DC] group-hover:scale-110 transition-transform shadow-sm">
                     <FileArchive size={40} />

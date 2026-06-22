@@ -1,6 +1,7 @@
 import { describe, it, expect } from '../services/browserTestRunner';
 import { formatXml, minifyXml, isXmlFile, isImageFile, isBinaryFile } from '../utils/xmlUtils';
 import { calculateMatches, cycleIndex, replaceContent } from '../utils/searchUtils';
+import { selectFileWithPicker } from '../utils/filePicker';
 import { isSaveHotkey, isFindHotkey, isSaveAllHotkey, isSidebarHotkey } from '../utils/hotkeyUtils';
 import { parseInlineStyles, parseMarkdownSegments } from '../utils/markdownUtils';
 import { getModifiedPaths } from '../utils/treeUtils';
@@ -217,5 +218,25 @@ describe('Tree Traversal Utilities', () => {
         expect(paths).toContain('mod.xml');
         expect(paths).not.toContain('same.xml');
         expect(paths).toHaveLength(2);
+    });
+});
+
+describe('File Picker Utility', () => {
+    it('uses showOpenFilePicker when available and returns the file', async () => {
+        const mockFile = new File(['content'], 'test.docx');
+        const mockHandle = { getFile: async () => mockFile };
+        
+        // Mock showOpenFilePicker on window
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const originalShowOpenFilePicker = (window as any).showOpenFilePicker;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (window as any).showOpenFilePicker = async () => [mockHandle];
+        
+        const result = await selectFileWithPicker(['.docx']);
+        expect(result).toBe(mockFile);
+        
+        // Restore
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (window as any).showOpenFilePicker = originalShowOpenFilePicker;
     });
 });

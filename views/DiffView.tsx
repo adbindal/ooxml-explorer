@@ -10,6 +10,7 @@ import { getModifiedPaths } from '../utils/treeUtils';
 import { shouldAutoRunDiff } from '../utils/diffUtils';
 import Logo from '../components/Logo';
 import { useAppStore } from '../store/appStore';
+import { selectFileWithPicker } from '../utils/filePicker';
 import { defineMonacoThemes } from '../utils/theme';
 import { 
   ArrowLeft, PanelLeftClose, PanelLeftOpen, Sparkles, 
@@ -61,8 +62,7 @@ const DiffView: React.FC<DiffViewProps> = ({ themeClasses }) => {
   const [dragFileCount, setDragFileCount] = useState(0);
   const [boxDrag, setBoxDrag] = useState<{ original: boolean; modified: boolean }>({ original: false, modified: false });
 
-  const originalInputRef = useRef<HTMLInputElement>(null);
-  const modifiedInputRef = useRef<HTMLInputElement>(null);
+
 
   const isMounted = useRef(false);
   const diffEditorRef = useRef<Parameters<DiffOnMount>[0] | null>(null);
@@ -364,15 +364,18 @@ const DiffView: React.FC<DiffViewProps> = ({ themeClasses }) => {
             : `${themeClasses.border} ${isOriginal ? 'hover:border-[#4A89DC]/50' : modHoverBorderClass}`);
             
       const bgColor = file ? (isOriginal ? 'bg-[#4A89DC]/10' : modBgClass) : '';
-      const inputRef = isOriginal ? originalInputRef : modifiedInputRef;
-
       return (
         <div className="space-y-4 w-full">
             <label className={`block text-sm font-medium uppercase tracking-wider ${themeClasses.fgMuted}`}>
                 {type} File {file && <span className={`ml-2 text-xs normal-case ${iconColor}`}>Ready</span>}
             </label>
             <div 
-                onClick={() => inputRef.current?.click()}
+                onClick={async () => {
+                    const chosenFile = await selectFileWithPicker(['.docx', '.xlsx', '.pptx']);
+                    if (chosenFile) {
+                        handleFileChange(type, chosenFile);
+                    }
+                }}
                 onDragEnter={(e) => handleBoxDragEnter(type, e)}
                 onDragLeave={(e) => handleBoxDragLeave(type, e)}
                 onDragOver={handleBoxDragOver}
@@ -382,13 +385,6 @@ const DiffView: React.FC<DiffViewProps> = ({ themeClasses }) => {
                     ${borderColor} ${bgColor}
                 `}
             >
-                <input 
-                    ref={inputRef}
-                    type="file" 
-                    className="hidden" 
-                    accept=".docx,.xlsx,.pptx"
-                    onChange={(e) => handleFileChange(type, e.target.files?.[0] || null)} 
-                />
                 {file ? (
                     <div className="text-center pointer-events-none w-full">
                         <FileDiff className={`mx-auto mb-3 ${iconColor}`} size={32} />
