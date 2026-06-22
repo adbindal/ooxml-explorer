@@ -397,6 +397,17 @@ const DiffView: React.FC<DiffViewProps> = ({ themeClasses }) => {
                     </div>
                 )}
             </div>
+            <input
+                type="file"
+                accept=".docx,.xlsx,.pptx"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                    const chosenFile = e.target.files?.[0];
+                    if (chosenFile) {
+                        handleFileChange(type, chosenFile);
+                    }
+                }}
+            />
         </div>
       );
   };

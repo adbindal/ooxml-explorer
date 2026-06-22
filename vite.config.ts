@@ -14,13 +14,16 @@ export default defineConfig(({ mode }) => {
       },
       plugins: [
         react(),
-        ...(process.env.VITEST ? [] : [cloudflare()])
+        ...(process.env.VITEST || process.env.PLAYWRIGHT_TEST ? [] : [cloudflare()])
       ],
       test: {
         globals: true,
         environment: 'jsdom',
         setupFiles: './tests/setup.ts',
         exclude: ['node_modules', 'dist', '.idea', '.git', '.cache', 'tests/e2e/**'],
+        pool: 'forks',
+        fileParallelism: false,
+        maxWorkers: 1,
         coverage: {
           provider: 'v8',
           reporter: ['text', 'json', 'html'],

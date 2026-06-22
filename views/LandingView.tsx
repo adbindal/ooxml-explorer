@@ -170,6 +170,17 @@ const LandingView: React.FC<LandingViewProps> = ({ themeClasses }) => {
                 </div>
               </div>
             </div>
+            <input
+                type="file"
+                accept=".docx,.xlsx,.pptx"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                        handleEditorUpload(file);
+                    }
+                }}
+            />
 
             {/* Secondary Action Card */}
             <div onClick={() => setMode('diff-setup')} className={`group border rounded-xl p-6 transition-all cursor-pointer flex items-center justify-center gap-4 hover:shadow-md ${themeClasses.card} ${themeClasses.hover}`}>

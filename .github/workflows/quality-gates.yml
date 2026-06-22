@@ -39,6 +39,8 @@ jobs:
 
       - name: Run Unit Tests (Vitest)
         run: pnpm exec vitest run
+        env:
+          NODE_OPTIONS: "--max-old-space-size=4096"
 
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps chromium

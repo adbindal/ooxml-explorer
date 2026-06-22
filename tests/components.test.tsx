@@ -86,7 +86,8 @@ vi.mock('@monaco-editor/react', () => ({
       if (props.onMount) {
         props.onMount(mockDiffEditorInstance, mockMonacoInstance);
       }
-    }, [props]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
     return <div data-testid="mock-diff-editor" data-options={JSON.stringify(props.options)} />;
   }),
   Editor: vi.fn((props) => <div data-testid="mock-editor" data-options={JSON.stringify(props.options)} />),
