@@ -409,7 +409,7 @@ const EditorView: React.FC<EditorViewProps> = ({ themeClasses }) => {
                     </div>
                 ) : isBinaryFile(activePath) ? (
                     <div className={`absolute inset-0 flex flex-col items-center justify-center p-4 md:p-8 ${themeClasses.bgPanel} bg-opacity-50 text-center`}>
-                        <FileCode size={48} className="mb-4 text-yellow-500/80 opacity-80 animate-pulse" />
+                        <FileCode size={48} className="mb-4 text-[#EAB308]/80 opacity-80 animate-pulse" />
                         <h3 className="font-bold text-sm mb-2">Binary File Format</h3>
                         <p className={`max-w-sm text-xs leading-relaxed ${themeClasses.fgMuted}`}>
                             This file format contains binary encoded content (e.g. OLE embeddings, font data, or activeX modules). 

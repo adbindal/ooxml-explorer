@@ -243,7 +243,6 @@ const DiffView: React.FC<DiffViewProps> = ({ themeClasses }) => {
   };
 
   const handleDiffMount: DiffOnMount = (editor, monaco) => {
-      if (!isMounted.current) return;
       diffEditorRef.current = editor;
       monacoRef.current = monaco;
 
@@ -424,7 +423,7 @@ const DiffView: React.FC<DiffViewProps> = ({ themeClasses }) => {
                         <GitCompare size={80} className="text-[#4A89DC] drop-shadow-lg animate-pulse" />
                         <div className="space-y-2">
                             <span className="block text-2xl font-bold text-[#4A89DC]">Drop both files to Compare</span>
-                            <p className={`text-sm ${theme === 'dark' ? 'text-slate-300' : 'text-[#4A89DC]/80'} opacity-80`}>
+                            <p className={`text-sm ${themeClasses.fgMuted} opacity-80`}>
                                 Release to automatically load both documents and run the comparison!
                             </p>
                         </div>

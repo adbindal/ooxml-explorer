@@ -12,7 +12,10 @@ export default defineConfig(({ mode }) => {
         port: 3000,
         host: '0.0.0.0',
       },
-      plugins: [react(), cloudflare()],
+      plugins: [
+        react(),
+        ...(process.env.VITEST ? [] : [cloudflare()])
+      ],
       test: {
         globals: true,
         environment: 'jsdom',
