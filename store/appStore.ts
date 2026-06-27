@@ -7,6 +7,7 @@ interface UiState {
   showAi: boolean;
   diffViewMode: 'split' | 'inline';
   aiProvider: 'gemini-cloud' | 'chrome-local';
+  dlpMode: boolean;
 }
 
 export interface AppStore {
@@ -32,6 +33,7 @@ export interface AppStore {
   toggleAiPanel: (force?: boolean) => void;
   setDiffViewMode: (mode: 'split' | 'inline') => void;
   setAiProvider: (provider: 'gemini-cloud' | 'chrome-local') => void;
+  setDlpMode: (enabled: boolean) => void;
 
   // Editor Actions
   loadEditorFile: (file: File) => Promise<void>;
@@ -73,7 +75,8 @@ export const appStoreCreator: StateCreator<AppStore> = (set, get) => ({
     sidebarOpen: true,
     showAi: false,
     diffViewMode: 'split',
-    aiProvider: 'gemini-cloud'
+    aiProvider: 'gemini-cloud',
+    dlpMode: true
   },
   editor: initialEditorState,
   diff: { ...initialDiffState, loading: false },
@@ -114,6 +117,10 @@ export const appStoreCreator: StateCreator<AppStore> = (set, get) => ({
 
   setAiProvider: (provider) => set(state => ({
     ui: { ...state.ui, aiProvider: provider }
+  })),
+
+  setDlpMode: (enabled) => set(state => ({
+    ui: { ...state.ui, dlpMode: enabled }
   })),
 
   // Editor Logic

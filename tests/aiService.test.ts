@@ -11,7 +11,8 @@ describe('AI Service Layer 1', () => {
     useAppStore.setState({
       ui: {
         ...useAppStore.getState().ui,
-        aiProvider: 'gemini-cloud'
+        aiProvider: 'gemini-cloud',
+        dlpMode: false
       }
     });
 
@@ -226,6 +227,32 @@ describe('AI Service Layer 1', () => {
         expect(storedFeedback).toBe('Please mention page breaks explicitly.');
         
         localStorage.removeItem(feedbackKey);
+      });
+    });
+
+    describe('DLP Mode Security Shield', () => {
+      it('blocks cloud fallback and throws DLP_BLOCK when local AI is unavailable', async () => {
+        useAppStore.setState(state => ({
+          ui: { ...state.ui, dlpMode: true }
+        }));
+        window.LanguageModel = undefined;
+
+        await expect(getActiveAIProvider()).rejects.toThrow('DLP_BLOCK');
+        await expect(explainElement('tcW', '<w:tcW />', 'docx')).rejects.toThrow('DLP_BLOCK');
+      });
+
+      it('allows local AI and returns local when local AI is available', async () => {
+        useAppStore.setState(state => ({
+          ui: { ...state.ui, dlpMode: true }
+        }));
+        window.LanguageModel = {
+          availability: async () => 'available',
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          create: async () => ({} as any)
+        };
+
+        const provider = await getActiveAIProvider();
+        expect(provider).toBe('local');
       });
     });
   });

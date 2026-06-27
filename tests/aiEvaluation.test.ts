@@ -39,7 +39,8 @@ describe('AI EVAL Pipeline (Layer 5)', () => {
     useAppStore.setState({
       ui: {
         ...useAppStore.getState().ui,
-        aiProvider: 'gemini-cloud'
+        aiProvider: 'gemini-cloud',
+        dlpMode: false
       }
     });
     localStorage.setItem('ooxml_explorer_api_key', 'mock-eval-key');
