@@ -57,7 +57,7 @@ test.describe('OOXML Explorer E2E Local AI & Fallback Flow', () => {
     test('should show Local AI active pill when Prompt API is available in browser', async ({ page }) => {
         // 1. Inject mock LanguageModel before page loads
         await page.addInitScript(() => {
-            (window as any).LanguageModel = {
+            window.LanguageModel = {
                 availability: async () => 'available',
                 create: async () => ({
                     prompt: async () => JSON.stringify({
