@@ -1,4 +1,4 @@
-import { ReferenceDoc } from './ragDb';
+import { ReferenceDoc } from './staticKnowledgeBase';
 import { querySchemaFromStorage, searchSchemasInStorage } from './storageService';
 
 /**
