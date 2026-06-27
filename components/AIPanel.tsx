@@ -40,11 +40,11 @@ const AIPanel: React.FC<AIPanelProps> = ({ onClose, context, themeClasses }) => 
   
   useEffect(() => {
     const checkLocalAi = async () => {
-      if (typeof window !== 'undefined' && 'LanguageModel' in window && (window as any).LanguageModel) {
+      if (typeof window !== 'undefined' && window.LanguageModel) {
         try {
-          const status = await (window as any).LanguageModel.availability();
+          const status = await window.LanguageModel.availability();
           setLocalAiStatus(status);
-        } catch (e) {
+        } catch {
           setLocalAiStatus('unavailable');
         }
       } else {

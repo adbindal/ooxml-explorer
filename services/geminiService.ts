@@ -6,9 +6,9 @@ export const getActiveAIProvider = async (): Promise<'chrome-local' | 'gemini-cl
   const preferredProvider = useAppStore.getState().ui.aiProvider;
   
   if (preferredProvider === 'chrome-local') {
-    if (typeof window !== 'undefined' && 'LanguageModel' in window && (window as any).LanguageModel) {
+    if (typeof window !== 'undefined' && window.LanguageModel) {
       try {
-        const availability = await (window as any).LanguageModel.availability();
+        const availability = await window.LanguageModel.availability();
         if (availability === 'available') {
           return 'chrome-local';
         }
@@ -250,7 +250,7 @@ export const analyzeFile = async (
       ${filesContext}
       `;
 
-      const session = await (window as any).LanguageModel.create({
+      const session = await window.LanguageModel!.create({
         systemPrompt: systemInstruction
       });
       try {
@@ -364,7 +364,7 @@ export const analyzeDiff = async (
       ${filesContext}
       `;
 
-      const session = await (window as any).LanguageModel.create({
+      const session = await window.LanguageModel!.create({
         systemPrompt: systemInstruction
       });
       try {
