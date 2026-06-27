@@ -104,7 +104,7 @@ Return ONLY the raw JSON block. No markdown wrapper, no explanations.
         const stdout = execSync(command, { 
           encoding: 'utf8', 
           stdio: ['ignore', 'pipe', 'ignore'],
-          timeout: 60000 // 60 seconds timeout
+          timeout: 1 * 60 * 1000 // 1 minute timeout
         });
         
         // Extract JSON block from output
@@ -262,7 +262,7 @@ Return ONLY the raw JSON block. No markdown wrapper, no explanations.
         const stdout = execSync(command, { 
           encoding: 'utf8', 
           stdio: ['ignore', 'pipe', 'ignore'],
-          timeout: 60000 // 60 seconds timeout
+          timeout: 1 * 60 * 1000 // 1 minute timeout
         });
         const jsonMatch = stdout.match(/\{[\s\S]*\}/);
         if (!jsonMatch) {
@@ -310,7 +310,7 @@ Return ONLY the raw JSON block. No markdown wrapper, no explanations.
               const genStdout = execSync(genCommand, { 
                 encoding: 'utf8', 
                 stdio: ['ignore', 'pipe', 'ignore'],
-                timeout: 60000 // 60 seconds timeout
+                timeout: 10 * 60 * 1000 // 10 minutes timeout
               });
               const genJsonMatch = genStdout.match(/\{[\s\S]*\}/);
               if (genJsonMatch) {
@@ -325,7 +325,7 @@ Return ONLY the raw JSON block. No markdown wrapper, no explanations.
                 const reJudgeStdout = execSync(reJudgeCommand, { 
                   encoding: 'utf8', 
                   stdio: ['ignore', 'pipe', 'ignore'],
-                  timeout: 60000 // 60 seconds timeout
+                  timeout: 2 * 60 * 1000 // 2 minutes timeout
                 });
                 const reJudgeJsonMatch = reJudgeStdout.match(/\{[\s\S]*\}/);
                 
