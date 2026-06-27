@@ -36,8 +36,10 @@ export const it = (name: string, fn: () => void | Promise<void>) => {
     });
 };
 
-export const beforeEach = (fn: () => void) => {
-    try { fn(); } catch(e) { console.error("beforeEach failed", e); }
+const beforeEachCallbacks: (() => void | Promise<void>)[] = [];
+
+export const beforeEach = (fn: () => void | Promise<void>) => {
+    beforeEachCallbacks.push(fn);
 };
 
 // Mocking 'vi' object
@@ -153,6 +155,15 @@ export const executeBrowserTests = async (): Promise<{ logs: TestLogEntry[], pas
     console.log(`[BrowserRunner] Starting execution of ${registeredTests.length} tests...`);
 
     for (const test of registeredTests) {
+        // Run all registered beforeEach callbacks
+        for (const cb of beforeEachCallbacks) {
+            try {
+                await cb();
+            } catch (e) {
+                console.error("[BrowserRunner] beforeEach failed:", e);
+            }
+        }
+
         const startTime = Date.now();
         try {
             await test.fn();

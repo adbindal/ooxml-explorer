@@ -109,6 +109,7 @@ describe('AI Service Layer 1', () => {
       const mockPrompt = vi.fn(async () => 'Mocked local tag explanation');
       const mockDestroy = vi.fn();
       
+      /* eslint-disable @typescript-eslint/no-explicit-any */
       window.LanguageModel = {
         availability: async () => 'available',
         create: async (options?: { systemPrompt?: string }) => {
@@ -116,9 +117,10 @@ describe('AI Service Layer 1', () => {
           return {
             prompt: mockPrompt,
             destroy: mockDestroy
-          };
+          } as any;
         }
-      };
+      } as any;
+      /* eslint-enable @typescript-eslint/no-explicit-any */
 
       const explanation = await explainElement('tcW', '<w:tcW w:w="120" />', 'docx');
       expect(explanation).toBe('Mocked local tag explanation');
@@ -164,7 +166,7 @@ describe('AI Service Layer 1', () => {
 
       await explainElement('cantSplit', '<w:cantSplit />', 'docx', ['w:tbl', 'w:tr', 'w:trPr']);
 
-      expect(spy).toHaveBeenCalled();
+      expect(spy.mock.calls.length).toBe(1);
       spy.mockRestore();
       localStorage.removeItem('ooxml_explorer_api_key');
     });
