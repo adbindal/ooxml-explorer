@@ -38,3 +38,6 @@ playwright-/.cache
 
 # Mastra
 .mastra
+
+# Generated RAG output
+public/generated-rag.json
