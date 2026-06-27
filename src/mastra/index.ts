@@ -20,7 +20,7 @@ function getProjectRoot(): string {
 
   const startDir = currentDir;
   while (currentDir && currentDir !== '/') {
-    if (fs.existsSync(path.join(currentDir, 'package.json'))) {
+    if (!currentDir.includes('.mastra') && fs.existsSync(path.join(currentDir, 'package.json'))) {
       console.log(`[ProjectRoot] Resolved to: ${currentDir} (from startDir: ${startDir}, cwd: ${process.cwd()}, metaUrl: ${metaUrl})`);
       return currentDir;
     }
