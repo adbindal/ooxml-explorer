@@ -7,6 +7,33 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { ReferenceDoc } from '../../services/staticKnowledgeBase';
 
+// Helper to log calibration defects to a markdown backlog
+function logCalibrationDefect(
+  tag: string,
+  domain: string,
+  golden: ReferenceDoc,
+  generated: ReferenceDoc,
+  reasoning: string
+) {
+  const feedbackPath = path.join(process.cwd(), 'services/CALIBRATION_FEEDBACK.md');
+  const timestamp = new Date().toISOString().split('T')[0];
+  
+  const entry = `
+## [${timestamp}] Ingestion Defect: <${golden.namespace}:${tag}> (${domain})
+- **Judge Analysis**: ${reasoning}
+- **Golden Citation**: \`${golden.citation || 'N/A'}\`
+- **Generated Citation**: \`${generated.citation || 'N/A'}\`
+- **Golden Definition**: ${golden.definition}
+- **Generated Definition**: ${generated.definition}
+- **Golden Attributes**: \`${JSON.stringify(golden.attributes)}\`
+- **Generated Attributes**: \`${JSON.stringify(generated.attributes)}\`
+---
+`;
+
+  fs.appendFileSync(feedbackPath, entry, 'utf8');
+  console.log(`[Workflow] Logged calibration defect to: ${feedbackPath}`);
+}
+
 // 1. Generate Schema Step (Ingestion)
 const generateSchemaStep = createStep({
   id: 'generateSchema',
@@ -143,7 +170,7 @@ const evaluateAndDiffStep = createStep({
 
       if (!goldDoc) {
         // New tag - auto approve
-        approved.push(genDoc);
+        approved.push(genDoc as ReferenceDoc);
         continue;
       }
 
@@ -172,17 +199,17 @@ const evaluateAndDiffStep = createStep({
       // If there are differences, query the LLM Judge to evaluate
       console.log(`[Workflow] Differences found for <${genDoc.namespace}:${genDoc.tag}>. Invoking LLM Judge...`);
 
-      const judgePrompt = `
+      const getJudgePrompt = (gold: ReferenceDoc, gen: typeof genDoc) => `
 You are an expert auditor of the ECMA-376 Office Open XML (OOXML) specification.
 Your task is to act as a Judge and compare a newly GENERATED schema reference document against the existing GOLDEN schema reference document for the XML tag:
-- Tag Name: "${genDoc.tag}"
-- Domain: "${genDoc.domain}"
+- Tag Name: "${gen.tag}"
+- Domain: "${gen.domain}"
 
 GOLDEN DOCUMENT:
-${JSON.stringify(goldDoc, null, 2)}
+${JSON.stringify(gold, null, 2)}
 
 GENERATED DOCUMENT:
-${JSON.stringify(genDoc, null, 2)}
+${JSON.stringify(gen, null, 2)}
 
 VALIDATION REPORT:
 ${JSON.stringify(validationReport, null, 2)}
@@ -227,7 +254,7 @@ Guidelines for your Decision:
 Return ONLY the raw JSON block. No markdown wrapper, no explanations.
 `;
 
-      const escapedJudgePrompt = judgePrompt.replace(/"/g, '\\"').replace(/`/g, '\\`');
+      const escapedJudgePrompt = getJudgePrompt(goldDoc, genDoc).replace(/"/g, '\\"').replace(/`/g, '\\`');
       const command = `jetski --print "${escapedJudgePrompt}"`;
 
       try {
@@ -241,9 +268,82 @@ Return ONLY the raw JSON block. No markdown wrapper, no explanations.
         console.log(`[Workflow] Judge Decision for <${genDoc.namespace}:${genDoc.tag}>: ${judgeResult.decision}. Reasoning: ${judgeResult.reasoning}`);
 
         if (judgeResult.decision === 'UPGRADE_GOLDEN') {
-          approved.push(judgeResult.resolvedDoc);
+          approved.push(judgeResult.resolvedDoc as ReferenceDoc);
         } else if (judgeResult.decision === 'KEEP_GOLDEN') {
-          approved.push(goldDoc); // Keep the original golden
+          // --- AUTONOMOUS RETRY LOOP (Phase 2) ---
+          let attempts = 1;
+          let currentGenDoc = genDoc;
+          let currentJudgeResult = judgeResult;
+          let healed = false;
+
+          while (attempts <= 3) {
+            console.log(`[Workflow] 🔄 Self-Correction Attempt ${attempts}/3 for <${genDoc.namespace}:${genDoc.tag}>...`);
+            
+            const feedbackPrompt = `
+You are an expert in the ECMA-376 Office Open XML (OOXML) specification.
+Your previous generated schema reference document for the tag "${genDoc.tag}" was REJECTED by the auditor.
+
+REJECTION REASON:
+"${currentJudgeResult.reasoning}"
+
+PREVIOUS INCORRECT OUTPUT:
+${JSON.stringify(currentGenDoc, null, 2)}
+
+GOLDEN REFERENCE DOCUMENT (Correct Standard):
+${JSON.stringify(goldDoc, null, 2)}
+
+Please review the rejection reason, compare it with the Golden reference document, and regenerate a corrected schema reference document.
+Conform exactly to the same JSON schema.
+
+Return ONLY the raw JSON block. No markdown wrapper, no explanations.
+`;
+
+            const escapedFeedbackPrompt = feedbackPrompt.replace(/"/g, '\\"').replace(/`/g, '\\`');
+            const genCommand = `jetski --print "${escapedFeedbackPrompt}"`;
+            
+            try {
+              const genStdout = execSync(genCommand, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+              const genJsonMatch = genStdout.match(/\{[\s\S]*\}/);
+              if (genJsonMatch) {
+                currentGenDoc = JSON.parse(genJsonMatch[0].trim());
+                
+                // Re-evaluate with Judge
+                console.log(`[Workflow] Re-evaluating retry attempt ${attempts} with Judge...`);
+                const reJudgePrompt = getJudgePrompt(goldDoc, currentGenDoc);
+                const escapedReJudgePrompt = reJudgePrompt.replace(/"/g, '\\"').replace(/`/g, '\\`');
+                const reJudgeCommand = `jetski --print "${escapedReJudgePrompt}"`;
+                
+                const reJudgeStdout = execSync(reJudgeCommand, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+                const reJudgeJsonMatch = reJudgeStdout.match(/\{[\s\S]*\}/);
+                
+                if (reJudgeJsonMatch) {
+                  const newJudgeResult = JSON.parse(reJudgeJsonMatch[0].trim());
+                  console.log(`[Workflow] Retry ${attempts} Judge Decision: ${newJudgeResult.decision}. Reasoning: ${newJudgeResult.reasoning}`);
+                  
+                  if (newJudgeResult.decision === 'UPGRADE_GOLDEN') {
+                    approved.push(newJudgeResult.resolvedDoc as ReferenceDoc);
+                    healed = true;
+                    console.log(`[Workflow] ✅ Self-correction succeeded on attempt ${attempts}!`);
+                    break;
+                  }
+                  currentJudgeResult = newJudgeResult;
+                }
+              }
+            } catch (err) {
+              console.error(`[Workflow] Retry attempt ${attempts} failed:`, err);
+            }
+            
+            attempts++;
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          }
+
+          if (!healed) {
+            console.log(`[Workflow] ❌ Retries exhausted for <${genDoc.namespace}:${genDoc.tag}>. Keeping golden and logging defect.`);
+            approved.push(goldDoc);
+            
+            // Log defect to CALIBRATION_FEEDBACK.md
+            logCalibrationDefect(genDoc.tag, genDoc.domain, goldDoc, currentGenDoc as unknown as ReferenceDoc, currentJudgeResult.reasoning);
+          }
         } else {
           // Suspend for review
           conflicts.push({
