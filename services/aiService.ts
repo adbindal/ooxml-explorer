@@ -9,8 +9,25 @@ import { getRagContext } from "./ragRouter";
  * Falls back to cloud if unavailable, unsupported, or still downloading.
  */
 export const getActiveAIProvider = async (): Promise<'local' | 'cloud'> => {
-  const preferredProvider = useAppStore.getState().ui.aiProvider;
+  const uiState = useAppStore.getState().ui;
+  const preferredProvider = uiState.aiProvider;
+  const dlpMode = uiState.dlpMode;
   
+  if (dlpMode) {
+    // Under DLP mode, ONLY local AI is allowed.
+    if (typeof window !== 'undefined' && window.LanguageModel) {
+      try {
+        const availability = await window.LanguageModel.availability();
+        if (availability === 'available') {
+          return 'local';
+        }
+      } catch (e) {
+        console.warn("[AI Service] Error checking local AI in DLP mode:", e);
+      }
+    }
+    throw new Error("DLP_BLOCK: Cloud AI is disabled under DLP mode, and Local AI is unavailable.");
+  }
+
   if (preferredProvider === 'chrome-local') {
     if (typeof window !== 'undefined' && window.LanguageModel) {
       try {
