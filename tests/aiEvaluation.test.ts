@@ -2,6 +2,9 @@ import { describe, it, expect, beforeEach } from '../services/browserTestRunner'
 import { explainElement, getAiClient } from '../services/aiService';
 import { useAppStore } from '../store/appStore';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+declare const vi: any;
+
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const { mockKnowledgeBase } = vi.hoisted(() => {
   return {

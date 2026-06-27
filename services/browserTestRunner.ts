@@ -65,14 +65,16 @@ export const vi = {
             obj[method] = original;
         };
         mockFn.mockImplementation = (impl: (...args: unknown[]) => unknown) => {
-            currentImpl = impl;
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            currentImpl = impl as any;
             return mockFn;
         };
         // @ts-expect-error - bypass index signature assignment
         obj[method] = mockFn;
         return mockFn;
     },
-    mock: (moduleName: string) => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    mock: (moduleName: string, factory?: () => unknown) => {
         console.warn(`[BrowserRunner] vi.mock('${moduleName}') ignored. Tests will run against REAL implementations.`);
     },
     hoisted: <T>(factory: () => T): T => {
