@@ -9,19 +9,24 @@ import { ReferenceDoc } from '../../services/staticKnowledgeBase';
 
 function getProjectRoot(): string {
   let currentDir = process.cwd();
+  let metaUrl = '';
   try {
+    metaUrl = import.meta.url;
     const filePath = new URL(import.meta.url).pathname;
     currentDir = path.dirname(filePath);
   } catch {
     // Ignore URL parsing errors
   }
 
+  const startDir = currentDir;
   while (currentDir && currentDir !== '/') {
     if (fs.existsSync(path.join(currentDir, 'package.json'))) {
+      console.log(`[ProjectRoot] Resolved to: ${currentDir} (from startDir: ${startDir}, cwd: ${process.cwd()}, metaUrl: ${metaUrl})`);
       return currentDir;
     }
     currentDir = path.dirname(currentDir);
   }
+  console.log(`[ProjectRoot] Fallback to cwd: ${process.cwd()} (startDir: ${startDir}, metaUrl: ${metaUrl})`);
   return process.cwd();
 }
 
