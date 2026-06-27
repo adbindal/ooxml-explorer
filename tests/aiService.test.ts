@@ -4,6 +4,9 @@ import { getRagContext, logRagFeedback } from '../services/ragRouter';
 import { findXmlPathAtOffset } from '../utils/xmlUtils';
 import { useAppStore } from '../store/appStore';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+declare const vi: any;
+
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const { mockKnowledgeBase } = vi.hoisted(() => {
   return {
