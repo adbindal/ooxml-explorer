@@ -97,7 +97,7 @@ Return ONLY the raw JSON block. No markdown wrapper, no explanations.
   }
 });
 
-// 2. Evaluate and Diff Step (Decision Engine & HITL Suspension)
+// 2. Evaluate and Diff Step (LLM-as-a-Judge & HITL Suspension)
 const evaluateAndDiffStep = createStep({
   id: 'evaluateAndDiff',
   inputSchema: z.object({
@@ -134,8 +134,9 @@ const evaluateAndDiffStep = createStep({
       golden = JSON.parse(fs.readFileSync(goldenPath, 'utf8'));
     }
 
-    const approved = [];
-    const conflicts = [];
+    const approved: ReferenceDoc[] = [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const conflicts: any[] = [];
 
     for (const genDoc of results) {
       const goldDoc = golden.find(g => g.tag === genDoc.tag && g.domain === genDoc.domain);
@@ -146,46 +147,133 @@ const evaluateAndDiffStep = createStep({
         continue;
       }
 
-      // Compare citations
-      const citationMatch = goldDoc.citation === genDoc.citation;
+      // Basic deterministic validation
+      const validationReport = {
+        namespaceIsValid: ['w', 'r', 'p', 'rel', 'contentTypes'].includes(genDoc.namespace),
+        citationIsValidFormat: /^ECMA-376 Part \d+, Section \d+(\.\d+)*$/.test(genDoc.citation),
+        attributesAreArrays: Array.isArray(genDoc.attributes),
+        parentsAreArrays: Array.isArray(genDoc.parents)
+      };
 
-      if (citationMatch) {
-        // Citations match, we can auto-merge attributes and parents
-        const mergedAttributes = Array.from(new Set([...goldDoc.attributes, ...genDoc.attributes]));
-        const mergedParents = Array.from(new Set([...goldDoc.parents, ...genDoc.parents]));
-        
-        approved.push({
-          ...genDoc,
-          namespace: goldDoc.namespace, // Prefer golden prefix
-          attributes: mergedAttributes,
-          parents: mergedParents
-        });
-      } else {
-        // Citation mismatch - needs human review
+      // Check if there are any differences at all
+      const hasDifferences = 
+        goldDoc.citation !== genDoc.citation ||
+        goldDoc.namespace !== genDoc.namespace ||
+        goldDoc.definition !== genDoc.definition ||
+        JSON.stringify(goldDoc.attributes.sort()) !== JSON.stringify(genDoc.attributes.sort()) ||
+        JSON.stringify(goldDoc.parents.sort()) !== JSON.stringify(genDoc.parents.sort());
+
+      if (!hasDifferences) {
+        // No differences - keep golden
+        approved.push(goldDoc);
+        continue;
+      }
+
+      // If there are differences, query the LLM Judge to evaluate
+      console.log(`[Workflow] Differences found for <${genDoc.namespace}:${genDoc.tag}>. Invoking LLM Judge...`);
+
+      const judgePrompt = `
+You are an expert auditor of the ECMA-376 Office Open XML (OOXML) specification.
+Your task is to act as a Judge and compare a newly GENERATED schema reference document against the existing GOLDEN schema reference document for the XML tag:
+- Tag Name: "${genDoc.tag}"
+- Domain: "${genDoc.domain}"
+
+GOLDEN DOCUMENT:
+${JSON.stringify(goldDoc, null, 2)}
+
+GENERATED DOCUMENT:
+${JSON.stringify(genDoc, null, 2)}
+
+VALIDATION REPORT:
+${JSON.stringify(validationReport, null, 2)}
+
+You must evaluate the differences and make an authoritative decision.
+Return a JSON object conforming exactly to this JSON schema:
+{
+  "type": "object",
+  "properties": {
+    "decision": { "type": "string", "enum": ["UPGRADE_GOLDEN", "KEEP_GOLDEN", "SUSPEND_FOR_REVIEW"] },
+    "reasoning": { "type": "string" },
+    "resolvedDoc": {
+      "type": "object",
+      "properties": {
+        "tag": { "type": "string" },
+        "namespace": { "type": "string" },
+        "domain": { "type": "string" },
+        "definition": { "type": "string" },
+        "attributes": { "type": "array", "items": { "type": "string" } },
+        "parents": { "type": "array", "items": { "type": "string" } },
+        "citation": { "type": "string" },
+        "sdkClass": { "type": "string" }
+      },
+      "required": ["tag", "namespace", "domain", "definition", "attributes", "parents", "citation", "sdkClass"]
+    }
+  },
+  "required": ["decision", "reasoning", "resolvedDoc"]
+}
+
+Guidelines for your Decision:
+1. "UPGRADE_GOLDEN": Choose this if the GENERATED document is more accurate or complete than the GOLDEN document. 
+   - Example: The GENERATED citation is more specific or correct (e.g., '17.2.3' instead of '17.3.1.10' for w:document).
+   - Example: The GENERATED document contains valid attributes or parents that were missing in the GOLDEN document.
+   - If you choose UPGRADE_GOLDEN, the "resolvedDoc" should be the GENERATED document.
+
+2. "KEEP_GOLDEN": Choose this if the GENERATED document contains hallucinations, incorrect citations, or is less accurate than the GOLDEN document.
+   - If you choose KEEP_GOLDEN, the "resolvedDoc" should be the GOLDEN document.
+
+3. "SUSPEND_FOR_REVIEW": Choose this if there is a major conflict, or if you are unsure which citation or definition is correct and require a human expert to decide.
+   - If you choose SUSPEND_FOR_REVIEW, the "resolvedDoc" can be your best-effort merge, but the workflow will pause for human review.
+
+Return ONLY the raw JSON block. No markdown wrapper, no explanations.
+`;
+
+      const escapedJudgePrompt = judgePrompt.replace(/"/g, '\\"').replace(/`/g, '\\`');
+      const command = `jetski --print "${escapedJudgePrompt}"`;
+
+      try {
+        const stdout = execSync(command, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+        const jsonMatch = stdout.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) {
+          throw new Error(`Could not find JSON in Judge output: ${stdout}`);
+        }
+
+        const judgeResult = JSON.parse(jsonMatch[0].trim());
+        console.log(`[Workflow] Judge Decision for <${genDoc.namespace}:${genDoc.tag}>: ${judgeResult.decision}. Reasoning: ${judgeResult.reasoning}`);
+
+        if (judgeResult.decision === 'UPGRADE_GOLDEN') {
+          approved.push(judgeResult.resolvedDoc);
+        } else if (judgeResult.decision === 'KEEP_GOLDEN') {
+          approved.push(goldDoc); // Keep the original golden
+        } else {
+          // Suspend for review
+          conflicts.push({
+            tag: genDoc.tag,
+            domain: genDoc.domain,
+            namespace: goldDoc.namespace,
+            reasoning: judgeResult.reasoning,
+            golden: goldDoc,
+            generated: genDoc,
+            resolvedDoc: judgeResult.resolvedDoc
+          });
+        }
+      } catch (error) {
+        console.error(`[Workflow] Judge failed for <${genDoc.namespace}:${genDoc.tag}>, falling back to suspension:`, error);
         conflicts.push({
           tag: genDoc.tag,
           domain: genDoc.domain,
           namespace: goldDoc.namespace,
-          golden: {
-            definition: goldDoc.definition,
-            citation: goldDoc.citation,
-            sdkClass: goldDoc.sdkClass,
-            attributes: goldDoc.attributes,
-            parents: goldDoc.parents
-          },
-          generated: {
-            definition: genDoc.definition,
-            citation: genDoc.citation,
-            sdkClass: genDoc.sdkClass,
-            attributes: genDoc.attributes,
-            parents: genDoc.parents
-          }
+          reasoning: 'Judge execution failed.',
+          golden: goldDoc,
+          generated: genDoc
         });
       }
+
+      // Avoid rate limits
+      await new Promise(resolve => setTimeout(resolve, 1000));
     }
 
     if (conflicts.length > 0 && !resumeData) {
-      console.log(`[Workflow] Found ${conflicts.length} citation conflicts. Suspending workflow for review...`);
+      console.log(`[Workflow] Found ${conflicts.length} conflicts requiring human review. Suspending workflow...`);
       return suspend({ conflicts });
     }
 
