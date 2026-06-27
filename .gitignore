@@ -35,3 +35,6 @@ playwright-/.cache
 !.dev.vars.example
 .env*
 !.env.example
+
+# Mastra
+.mastra
