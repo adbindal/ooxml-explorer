@@ -1,5 +1,6 @@
 import { Mastra } from '@mastra/core';
 import { Workflow, createStep } from '@mastra/core/workflows';
+import { LibSQLStore } from '@mastra/libsql';
 import { execSync } from 'child_process';
 import { z } from 'zod';
 import * as fs from 'fs';
@@ -229,9 +230,9 @@ const commitApprovedDataStep = createStep({
     for (const appDoc of approved) {
       const idx = golden.findIndex(g => g.tag === appDoc.tag && g.domain === appDoc.domain);
       if (idx > -1) {
-        golden[idx] = appDoc;
+        golden[idx] = appDoc as ReferenceDoc;
       } else {
-        golden.push(appDoc);
+        golden.push(appDoc as ReferenceDoc);
       }
     }
 
@@ -289,6 +290,10 @@ ingestionWorkflow
 
 // Initialize Mastra and export it
 export const mastra = new Mastra({
+  storage: new LibSQLStore({
+    id: 'ooxml-explorer-store',
+    url: 'file:.mastra/mastra.db'
+  }),
   workflows: {
     'ooxml-rag-ingestion': ingestionWorkflow
   }

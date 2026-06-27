@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@google/genai": "^1.30.0",
+    "@mastra/libsql": "^1.14.2",
     "@monaco-editor/react": "^4.7.0",
     "jszip": "^3.10.1",
     "lucide-react": "^0.555.0",
