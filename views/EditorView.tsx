@@ -5,7 +5,7 @@ import FileTree from '../components/FileTree';
 import AIPanel from '../components/AIPanel';
 import ErrorBoundary from '../components/ErrorBoundary';
 import Logo from '../components/Logo';
-import { formatXml, minifyXml, isXmlFile, isImageFile, isBinaryFile } from '../utils/xmlUtils';
+import { formatXml, minifyXml, isXmlFile, isImageFile, isBinaryFile, extractTagAtSelection } from '../utils/xmlUtils';
 import { exportModifiedZip } from '../services/zipService';
 import { isSaveHotkey, isSaveAllHotkey, isFindHotkey, isSidebarHotkey } from '../utils/hotkeyUtils';
 import { EditorFileContext } from '../services/geminiService';
@@ -35,6 +35,7 @@ const EditorView: React.FC<EditorViewProps> = ({ themeClasses }) => {
 
   const [filter, setFilter] = useState('');
   const [imageSrc, setImageSrc] = useState<string | null>(null);
+  const [selectedTagInfo, setSelectedTagInfo] = useState<{ tagName: string; rawXml: string } | null>(null);
 
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
   const monacoRef = useRef<Parameters<OnMount>[1] | null>(null);
@@ -292,6 +293,20 @@ const EditorView: React.FC<EditorViewProps> = ({ themeClasses }) => {
 
       // Set initial theme
       monaco.editor.setTheme(theme === 'dark' ? 'ooxml-dark' : 'ooxml-light');
+
+      // Listen to selection changes to update the selected XML tag context
+      editor.onDidChangeCursorSelection(() => {
+          const selection = editor.getSelection();
+          if (selection && !selection.isEmpty()) {
+              const selectedText = editor.getModel()?.getValueInRange(selection);
+              if (selectedText) {
+                  const tagInfo = extractTagAtSelection(editor.getValue(), selectedText);
+                  setSelectedTagInfo(tagInfo);
+              }
+          } else {
+              setSelectedTagInfo(null);
+          }
+      });
   };
 
   return (
@@ -468,6 +483,7 @@ const EditorView: React.FC<EditorViewProps> = ({ themeClasses }) => {
                         mode: 'editor',
                         fileName: activePath || undefined,
                         content: currentContent,
+                        selectedTag: selectedTagInfo || undefined,
                         relatedFiles: allPaths,
                         onLoadContext: handleFetchContext
                     }}
