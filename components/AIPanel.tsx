@@ -38,6 +38,7 @@ interface AIPanelProps {
 
 const AIPanel: React.FC<AIPanelProps> = ({ onClose, context, themeClasses }) => {
   const aiProvider = useAppStore(state => state.ui.aiProvider);
+  const dlpMode = useAppStore(state => state.ui.dlpMode);
   const [localAiStatus, setLocalAiStatus] = useState<'available' | 'downloadable' | 'downloading' | 'unavailable'>('unavailable');
   
   useEffect(() => {
@@ -370,7 +371,11 @@ const AIPanel: React.FC<AIPanelProps> = ({ onClose, context, themeClasses }) => 
         <div className="flex items-center gap-2 text-blue-500 font-medium">
             <Sparkles size={16} className="shrink-0" />
             <span className="truncate">Gemini Assistant</span>
-            {aiProvider === 'chrome-local' ? (
+            {dlpMode ? (
+                <span className="px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider border bg-green-500/10 border-green-500/20 text-green-500 shrink-0" title="Data Loss Prevention Active: All cloud traffic blocked. Only local models allowed.">
+                    🔒 DLP Shield
+                </span>
+            ) : aiProvider === 'chrome-local' ? (
                 localAiStatus === 'available' ? (
                     <span className="px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider border bg-blue-500/10 border-blue-500/20 text-blue-500 shrink-0" title="Running 100% locally in your browser">
                         ⚡ Local

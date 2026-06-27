@@ -18,7 +18,7 @@ export default defineConfig({
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
     /* Base URL to use in actions like `await page.goto('/')`. */
-    baseURL: 'http://127.0.0.1:5173',
+    baseURL: 'http://127.0.0.1:5199',
 
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry',
@@ -35,7 +35,7 @@ export default defineConfig({
         ...devices['Desktop Chrome'],
         channel: 'chrome',
         launchOptions: {
-          args: ['--disable-gpu', '--single-process', '--disable-dev-shm-usage']
+          args: ['--disable-gpu', '--single-process', '--disable-dev-shm-usage', '--disable-http-cache']
         }
       },
     },
@@ -43,9 +43,9 @@ export default defineConfig({
 
   /* Run your local dev server before starting the tests */
   webServer: {
-    command: 'PLAYWRIGHT_TEST=true npx vite --port 5173 --host 127.0.0.1',
-    url: 'http://127.0.0.1:5173',
-    reuseExistingServer: !process.env.CI,
+    command: 'PLAYWRIGHT_TEST=true npx vite --port 5199 --host 127.0.0.1',
+    url: 'http://127.0.0.1:5199',
+    reuseExistingServer: false,
     stdout: 'ignore',
     stderr: 'pipe',
     timeout: 30000,
