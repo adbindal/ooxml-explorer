@@ -505,3 +505,5 @@ export const mastra = new Mastra({
     'ooxml-rag-ingestion': ingestionWorkflow
   }
 });
+
+export default mastra;
