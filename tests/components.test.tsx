@@ -26,9 +26,9 @@ const mockStore = {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     zip: { files: { 'word/document.xml': {} } } as any
   },
-  ui: { sidebarOpen: true, showAi: false, diffViewMode: 'split' },
-  theme: 'dark',
-  mode: 'diff',
+  ui: { sidebarOpen: true, showAi: false, diffViewMode: 'split', aiProvider: 'gemini-cloud' as 'gemini-cloud' | 'chrome-local' },
+  theme: 'dark' as 'dark' | 'light',
+  mode: 'diff' as 'landing' | 'editor' | 'diff',
   setMode: vi.fn(),
   toggleSidebar: vi.fn(),
   toggleAiPanel: vi.fn(),
@@ -42,7 +42,7 @@ const mockStore = {
 };
 
 vi.mock('../store/appStore', () => ({
-  useAppStore: () => mockStore
+  useAppStore: vi.fn((selector) => selector ? selector(mockStore) : mockStore)
 }));
 
 const mockGetApiKey = vi.fn(() => 'mock-api-key');
@@ -532,4 +532,71 @@ describe('AIPanel Component', () => {
     expect(screen.getByText(/Added a new paragraph style/)).toBeDefined();
     expect(screen.getByText(/Changes default paragraph margins/)).toBeDefined();
   });
+
+  describe('Chrome Local AI Integration & Fallback', () => {
+    beforeEach(() => {
+      // Clear global stubs after each run
+      vi.stubGlobal('window', {
+        ...window,
+        LanguageModel: undefined
+      });
+      mockStore.ui.aiProvider = 'gemini-cloud'; // reset
+    });
+
+    it('renders Local AI active pill when provider is local and ready', async () => {
+      // Mock window.LanguageModel
+      vi.stubGlobal('window', {
+        ...window,
+        LanguageModel: {
+          availability: vi.fn(async () => 'available'),
+          create: vi.fn(async () => ({
+            prompt: vi.fn(async () => JSON.stringify({
+              summary: 'Local AI explanation text',
+              criticalIssues: [],
+              keyElements: []
+            })),
+            destroy: vi.fn()
+          }))
+        }
+      });
+      
+      // Toggle to local AI
+      mockStore.ui.aiProvider = 'chrome-local';
+      
+      render(<AIPanel onClose={vi.fn()} context={contextEditor} themeClasses={themeClasses} />);
+      
+      // Verify that the Local AI pill is visible (awaiting async resolution)
+      expect(await screen.findByTitle('Running 100% locally in your browser')).toBeDefined();
+      expect(await screen.findByText('⚡ Local')).toBeDefined();
+    });
+
+    it('renders Cloud Fallback pill when local AI is unsupported', async () => {
+      // window.LanguageModel is undefined (Firefox/Safari simulation)
+      mockStore.ui.aiProvider = 'chrome-local';
+      
+      render(<AIPanel onClose={vi.fn()} context={contextEditor} themeClasses={themeClasses} />);
+      
+      // Verify that it degrades to cloud fallback pill (awaiting async resolution)
+      expect(await screen.findByTitle('Local AI is not supported on this browser/device. Automatically falling back to Cloud Gemini.')).toBeDefined();
+      expect(await screen.findByText('☁️ Cloud Fallback')).toBeDefined();
+    });
+
+    it('renders Cloud Fallback pill when local model is not yet downloaded', async () => {
+      vi.stubGlobal('window', {
+        ...window,
+        LanguageModel: {
+          availability: vi.fn(async () => 'downloadable'),
+          create: vi.fn()
+        }
+      });
+      mockStore.ui.aiProvider = 'chrome-local';
+      
+      render(<AIPanel onClose={vi.fn()} context={contextEditor} themeClasses={themeClasses} />);
+      
+      // Verify that it renders "⏳ Install Ready" in the header status indicator (awaiting async resolution)
+      expect(await screen.findByTitle('Local AI is supported but model is not downloaded. Run the setup in settings.')).toBeDefined();
+      expect(await screen.findByText('⏳ Install Ready')).toBeDefined();
+    });
+  });
 });
+

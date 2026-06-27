@@ -341,6 +341,7 @@ const EditorView: React.FC<EditorViewProps> = ({ themeClasses }) => {
 
            <button 
                onClick={() => toggleAiPanel()} 
+               title="AI Assistant"
                className={`p-2 rounded transition-colors ${showAi ? 'bg-[#4A89DC]/20 text-[#4A89DC]' : `${themeClasses.icon} ${themeClasses.hoverText}`}`} 
            >
                <Sparkles size={18} />
