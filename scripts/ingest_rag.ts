@@ -37,6 +37,13 @@ const main = async () => {
   console.log(`[Ingest] Starting Mastra RAG Ingestion Workflow for ${REFERENCE_TAGS.length} calibration tags...`);
 
   try {
+    // Explicitly initialize storage to ensure SQLite tables exist in script context
+    const storage = mastra.getStorage();
+    if (storage) {
+      console.log('[Ingest] Initializing persistent storage...');
+      await storage.init();
+    }
+
     const workflow = mastra.getWorkflow('ooxml-rag-ingestion');
     const run = await workflow.createRun();
     const response = await run.start({ inputData: { tags: REFERENCE_TAGS } });
