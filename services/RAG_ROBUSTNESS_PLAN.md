@@ -1,4 +1,4 @@
-# 1-Pager: OOXML RAG Pipeline Robustness & Accuracy Plan
+# OOXML RAG Pipeline Robustness & Accuracy Plan
 
 ## 1. The Problem Statement
 Our current evaluation strategy assumes that the manually-created "Golden" dataset (`public/rag-data.json`) is the absolute source of truth. However, recent diff analyses revealed that:
