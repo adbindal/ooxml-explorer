@@ -10,37 +10,45 @@ If the baseline contains errors, we cannot reliably use it for automated calibra
 
 ---
 
-## 2. Proposed Architecture: LLM-as-a-Judge with Hybrid Verification
+## 2. Proposed Architecture: Self-Healing Feedback Loop
 
-To solve this, we introduce an **LLM-as-a-Judge** layer that acts as the intelligent orchestrator. It evaluates the generated data, validates it against deterministic rules, and decides whether to automatically upgrade the Golden dataset, keep it, or suspend for human review.
+To solve this, we introduce an **LLM-as-a-Judge** layer coupled with an **Autonomous Self-Correction Loop** and a **Systemic Feedback Backlog**. 
+
+This architecture handles differences at two distinct timescales:
+1.  **Short-Term (Autonomous)**: If the generator produces an output that the Judge deems worse than the Golden reference (`KEEP_GOLDEN`), the pipeline automatically retries the generator (up to 3 times) by feeding it the Judge's exact error analysis.
+2.  **Long-Term (Systemic)**: If the generator fails to correct itself after 3 retries, the pipeline logs the failure and the Judge's reasoning to a local markdown file (`services/CALIBRATION_FEEDBACK.md`), creating a structured backlog for developer prompt engineering.
 
 ```
                       ┌──────────────────────────────┐
-                      │   1. generateSchemaStep      │
-                      │   (Generator LLM / Consensus)│
-                      └──────────────┬───────────────┘
-                                     │
-                                     ▼
-                      ┌──────────────────────────────┐
-                      │   2. xsdValidationStep       │
-                      │   (Deterministic Schema Check) │
-                      └──────────────┬───────────────┘
-                                     │ (Passes Validation Report)
-                                     ▼
-                      ┌──────────────────────────────┐
-                      │   3. llmJudgeStep            │
-                      │   (LLM-as-a-Judge - Pro Model)│
-                      └──────────────┬───────────────┘
-                                     │
-         ┌───────────────────────────┼───────────────────────────┐
-         │ (UPGRADE_GOLDEN)          │ (KEEP_GOLDEN)             │ (SUSPEND_FOR_REVIEW)
-         ▼                           ▼                           ▼
-┌──────────────────┐        ┌──────────────────┐        ┌──────────────────┐
-│ Auto-Approve &   │        │ Reject Generator │        │ Pauses Workflow  │
-│ Update Golden    │        │ Keep Golden      │        │ Awaits Human     │
-└────────┬─────────┘        └────────┬─────────┘        └────────┬─────────┘
-         │                           │                           │
-         └───────────────────────────┼───────────────────────────┘
+                      │   1. generateSchemaStep      │ ◄──────────────────────────┐
+                      │   (Generator LLM / Consensus)│                            │
+                      └──────────────┬───────────────┘                            │
+                                     │                                            │ (Retry with
+                                     ▼                                            │  Feedback)
+                      ┌──────────────────────────────┐                            │
+                      │   2. xsdValidationStep       │                            │
+                      │   (Deterministic Schema Check) │                            │
+                      └──────────────┬───────────────┘                            │
+                                     │ (Passes Validation Report)                 │
+                                     ▼                                            │
+                      ┌──────────────────────────────┐                            │
+                      │   3. llmJudgeStep            │                            │
+                      │   (LLM-as-a-Judge - Pro Model)│                            │
+                      └──────────────┬───────────────┘                            │
+                                     │                                            │
+         ┌───────────────────────────┼───────────────────────────┐                │
+         │ (UPGRADE_GOLDEN)          │ (KEEP_GOLDEN)             │ (SUSPEND)      │
+         ▼                           ▼                           ▼                │
+┌──────────────────┐        ┌──────────────────┐        ┌──────────────────┐      │
+│ Auto-Approve &   │        │   Retry < 3?     ├────────┼──────────────────┼──────┘
+│ Update Golden    │        └──┬─────────────┬─┘        │ Pauses Workflow  │
+└────────┬─────────┘           │ (Yes)       │ (No)     │ Awaits Human     │
+         │                     │             │          └────────┬─────────┘
+         │                     ▼             ▼                   │
+         │              [Auto-Correct]  [Log Defect to           │
+         │                              CALIBRATION_FEEDBACK.md] │
+         │                                   │                   │
+         └───────────────────────────┬───────┴───────────────────┘
                                      │
                                      ▼
                       ┌──────────────────────────────┐
@@ -60,17 +68,19 @@ To solve this, we introduce an **LLM-as-a-Judge** layer that acts as the intelli
     2.  Hardened the Mastra workflow prompt to strictly return short prefixes (`w`, `r`, `p`).
 *   **Outcome**: Resolves all namespace mismatches and ensures consistency.
 
-### Phase 2: LLM-as-a-Judge & Self-Healing (Immediate)
-*   **Action**: Implement the `llmJudgeStep` to automate Golden dataset correction and conflict resolution.
+### Phase 2: LLM-as-a-Judge & Autonomous Self-Healing (Immediate)
+*   **Action**: Implement the `llmJudgeStep` and the self-correction retry loop.
 *   **Implementation**:
     1.  **Define the Judge Prompt**: Instruct a high-capacity model (Gemini Pro) to act as a pedantic OOXML specification auditor.
     2.  **Judge Input**: Receives the `generated` schema, the `golden` schema, and a `validationReport`.
     3.  **Judge Output**: Returns a JSON object with:
         *   `decision`: `'UPGRADE_GOLDEN' | 'KEEP_GOLDEN' | 'SUSPEND_FOR_REVIEW'`
-        *   `reasoning`: The exact reason for the decision (e.g., *"Upgraded Golden because 17.2.3 is the correct citation for w:document, while the old golden's 17.3.1.10 was for w:divId."*).
+        *   `reasoning`: The exact reason for the decision (e.g., why the generated version was worse or what was incorrect).
         *   `resolvedDoc`: The final corrected reference document.
-    4.  **Suspension**: If the Judge returns `SUSPEND_FOR_REVIEW` for any tag, the workflow suspends, displaying the Judge's reasoning and the conflict in Mastra Studio.
-*   **Outcome**: The Golden dataset automatically heals and upgrades itself without human bottlenecks for obvious improvements.
+    4.  **Autonomous Retry Loop**: If the Judge returns `KEEP_GOLDEN`, re-run `generateSchemaStep` for that tag up to 3 times, appending the Judge's `reasoning` as feedback in the prompt.
+    5.  **Defect Logging**: If retries are exhausted and the output is still rejected, append the failure details and Judge's reasoning to `services/CALIBRATION_FEEDBACK.md`.
+    6.  **Suspension**: If the Judge returns `SUSPEND_FOR_REVIEW`, the workflow suspends, displaying the Judge's reasoning and the conflict in Mastra Studio.
+*   **Outcome**: Simple errors are resolved autonomously; systemic prompt/model gaps are logged as actionable developer tasks.
 
 ### Phase 3: XSD-Backed Schema Grounding (Medium-Term)
 *   **Action**: Remove LLM dependency for deterministic schema fields (attributes, parents, namespaces).
