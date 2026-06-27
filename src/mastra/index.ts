@@ -288,11 +288,17 @@ ingestionWorkflow
   .then(commitApprovedDataStep)
   .commit();
 
+// Ensure the .mastra directory exists before initializing LibSQL
+const dbDir = path.join(process.cwd(), '.mastra');
+if (!fs.existsSync(dbDir)) {
+  fs.mkdirSync(dbDir, { recursive: true });
+}
+
 // Initialize Mastra and export it
 export const mastra = new Mastra({
   storage: new LibSQLStore({
     id: 'ooxml-explorer-store',
-    url: 'file:.mastra/mastra.db'
+    url: `file:${path.join(dbDir, 'mastra.db')}`
   }),
   workflows: {
     'ooxml-rag-ingestion': ingestionWorkflow
