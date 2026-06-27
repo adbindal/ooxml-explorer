@@ -10,67 +10,80 @@ If the baseline contains errors, we cannot reliably use it for automated calibra
 
 ---
 
-## 2. Proposed Architecture: Hybrid Verification
+## 2. Proposed Architecture: LLM-as-a-Judge with Hybrid Verification
 
-We will split the RAG data generation into three distinct layers of responsibility:
+To solve this, we introduce an **LLM-as-a-Judge** layer that acts as the intelligent orchestrator. It evaluates the generated data, validates it against deterministic rules, and decides whether to automatically upgrade the Golden dataset, keep it, or suspend for human review.
 
 ```
-                  ┌──────────────────────────────┐
-                  │   Core Ingestion Pipeline    │
-                  └──────────────┬───────────────┘
-                                 │
-         ┌───────────────────────┴───────────────────────┐
-         ▼                                               ▼
-┌────────────────────────────────┐             ┌────────────────────────────────┐
-│   Deterministic Layer (XSD)    │             │    Generative Layer (LLM)      │
-├────────────────────────────────┤             ├────────────────────────────────┤
-│ • Namespaces                   │             │ • Natural Language Definitions │
-│ • Valid Attributes             │             │ • ECMA-376 Section Citations   │
-│ • Valid Parent Elements        │             │ • Open XML SDK Class Mappings  │
-└────────────────┬───────────────┘             └────────────────┬───────────────┘
-                 │                                              │
-                 └───────────────────────┬──────────────────────┘
-                                         │
-                                         ▼
-                        ┌────────────────────────────────┐
-                        │   Verification Layer (HITL)    │
-                        ├────────────────────────────────┤
-                        │ • Compare against Golden       │
-                        │ • Ingestion-Driven Correction  │
-                        └────────────────────────────────┘
+                      ┌──────────────────────────────┐
+                      │   1. generateSchemaStep      │
+                      │   (Generator LLM / Consensus)│
+                      └──────────────┬───────────────┘
+                                     │
+                                     ▼
+                      ┌──────────────────────────────┐
+                      │   2. xsdValidationStep       │
+                      │   (Deterministic Schema Check) │
+                      └──────────────┬───────────────┘
+                                     │ (Passes Validation Report)
+                                     ▼
+                      ┌──────────────────────────────┐
+                      │   3. llmJudgeStep            │
+                      │   (LLM-as-a-Judge - Pro Model)│
+                      └──────────────┬───────────────┘
+                                     │
+         ┌───────────────────────────┼───────────────────────────┐
+         │ (UPGRADE_GOLDEN)          │ (KEEP_GOLDEN)             │ (SUSPEND_FOR_REVIEW)
+         ▼                           ▼                           ▼
+┌──────────────────┐        ┌──────────────────┐        ┌──────────────────┐
+│ Auto-Approve &   │        │ Reject Generator │        │ Pauses Workflow  │
+│ Update Golden    │        │ Keep Golden      │        │ Awaits Human     │
+└────────┬─────────┘        └────────┬─────────┘        └────────┬─────────┘
+         │                           │                           │
+         └───────────────────────────┼───────────────────────────┘
+                                     │
+                                     ▼
+                      ┌──────────────────────────────┐
+                      │   4. commitApprovedDataStep  │
+                      │   (Write & Compile KB)       │
+                      └──────────────────────────────┘
 ```
 
 ---
 
 ## 3. Step-by-Step Execution Plan
 
-### Phase 1: Namespace Decoupling & Prompt Hardening (Immediate)
+### Phase 1: Namespace Decoupling & Prompt Hardening (Completed)
 *   **Action**: Decouple short prefixes from full XML URIs at the application layer.
 *   **Implementation**:
-    1.  Add a `NAMESPACE_MAP` lookup table in the codebase.
-    2.  Harden the Mastra workflow prompt to strictly return short prefixes (`w`, `r`, `p`).
+    1.  Added a `NAMESPACE_MAP` lookup table and helper in the codebase.
+    2.  Hardened the Mastra workflow prompt to strictly return short prefixes (`w`, `r`, `p`).
 *   **Outcome**: Resolves all namespace mismatches and ensures consistency.
 
-### Phase 2: Ingestion-Driven Golden Dataset Correction (Immediate)
-*   **Action**: Shift from a "match-the-golden-file" mindset to an "ingestion-driven correction" workflow.
+### Phase 2: LLM-as-a-Judge & Self-Healing (Immediate)
+*   **Action**: Implement the `llmJudgeStep` to automate Golden dataset correction and conflict resolution.
 *   **Implementation**:
-    1.  Run the ingestion pipeline to generate `generated-rag.json`.
-    2.  Run `diff_rag.ts` to identify mismatches.
-    3.  Perform a quick human-in-the-loop review of the mismatches. 
-    4.  If the LLM output is correct (e.g., `17.2.3` for `w:document`), merge/promote the LLM output into `public/rag-data.json`.
-*   **Outcome**: The Golden dataset becomes a living, high-quality, verified dataset.
+    1.  **Define the Judge Prompt**: Instruct a high-capacity model (Gemini Pro) to act as a pedantic OOXML specification auditor.
+    2.  **Judge Input**: Receives the `generated` schema, the `golden` schema, and a `validationReport`.
+    3.  **Judge Output**: Returns a JSON object with:
+        *   `decision`: `'UPGRADE_GOLDEN' | 'KEEP_GOLDEN' | 'SUSPEND_FOR_REVIEW'`
+        *   `reasoning`: The exact reason for the decision (e.g., *"Upgraded Golden because 17.2.3 is the correct citation for w:document, while the old golden's 17.3.1.10 was for w:divId."*).
+        *   `resolvedDoc`: The final corrected reference document.
+    4.  **Suspension**: If the Judge returns `SUSPEND_FOR_REVIEW` for any tag, the workflow suspends, displaying the Judge's reasoning and the conflict in Mastra Studio.
+*   **Outcome**: The Golden dataset automatically heals and upgrades itself without human bottlenecks for obvious improvements.
 
 ### Phase 3: XSD-Backed Schema Grounding (Medium-Term)
 *   **Action**: Remove LLM dependency for deterministic schema fields (attributes, parents, namespaces).
 *   **Implementation**:
     1.  Download the official ECMA-376 XML Schema Definition (`.xsd`) files.
-    2.  Create a script that parses these `.xsd` files to extract the exact schema structure.
-    3.  Integrate this script as a step in the Mastra pipeline to automatically populate the `attributes`, `parents`, and `namespace` fields.
+    2.  Write a script to parse these files and generate a local schema catalog.
+    3.  Integrate this catalog into the `xsdValidationStep` to automatically populate and validate the `attributes`, `parents`, and `namespace` fields before the Judge step.
 *   **Outcome**: 100% accuracy for structural metadata. The LLM is only responsible for writing the human-readable definition and finding the citation.
 
-### Phase 4: Cross-Model Consensus Verification (Long-Term)
+### Phase 4: Multi-Model Consensus (Long-Term)
 *   **Action**: Automate citation verification.
 *   **Implementation**:
-    1.  Add a step in the Mastra workflow that queries two independent LLM providers (e.g., Gemini and Claude).
-    2.  Compare their generated citations. If they agree but differ from the Golden dataset, flag the tag for developer review.
-*   **Outcome**: Automated detection of potential errors in both the LLM outputs and the Golden dataset.
+    1.  Modify `generateSchemaStep` to query two independent LLM providers (e.g., Gemini and Claude).
+    2.  Pass both outputs to the `llmJudgeStep`.
+    3.  The Judge compares both outputs against the Golden dataset, resolving minor differences and flagging major ones.
+*   **Outcome**: Extremely high confidence in natural-language definitions and citations.
