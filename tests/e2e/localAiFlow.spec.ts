@@ -72,6 +72,10 @@ test.describe('OOXML Explorer E2E Local AI & Fallback Flow', () => {
 
         // 2. Navigate and Upload
         await page.goto('/');
+        await page.evaluate(() => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (window as any).__store__.getState().setDlpMode(false);
+        });
         const fileInput = page.locator('input[type="file"]');
         await fileInput.setInputFiles(tempDocxPath);
 
@@ -105,6 +109,10 @@ test.describe('OOXML Explorer E2E Local AI & Fallback Flow', () => {
     test('should show Cloud Fallback pill in E2E when Prompt API is unsupported', async ({ page }) => {
         // Simulating Safari/Firefox by not injecting window.LanguageModel
         await page.goto('/');
+        await page.evaluate(() => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (window as any).__store__.getState().setDlpMode(false);
+        });
         const fileInput = page.locator('input[type="file"]');
         await fileInput.setInputFiles(tempDocxPath);
 

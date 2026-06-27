@@ -193,3 +193,8 @@ export const appStoreCreator: StateCreator<AppStore> = (set, get) => ({
 });
 
 export const useAppStore = create<AppStore>(appStoreCreator);
+
+if (typeof window !== 'undefined') {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (window as any).__store__ = useAppStore;
+}
