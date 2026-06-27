@@ -101,7 +101,11 @@ Return ONLY the raw JSON block. No markdown wrapper, no explanations.
       const command = `jetski --print "${escapedPrompt}"`;
       
       try {
-        const stdout = execSync(command, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+        const stdout = execSync(command, { 
+          encoding: 'utf8', 
+          stdio: ['ignore', 'pipe', 'ignore'],
+          timeout: 60000 // 60 seconds timeout
+        });
         
         // Extract JSON block from output
         const jsonMatch = stdout.match(/\{[\s\S]*\}/);
@@ -241,15 +245,12 @@ Return a JSON object conforming exactly to this JSON schema:
 
 Guidelines for your Decision:
 1. "UPGRADE_GOLDEN": Choose this if the GENERATED document is more accurate or complete than the GOLDEN document. 
-   - Example: The GENERATED citation is more specific or correct (e.g., '17.2.3' instead of '17.3.1.10' for w:document).
-   - Example: The GENERATED document contains valid attributes or parents that were missing in the GOLDEN document.
    - If you choose UPGRADE_GOLDEN, the "resolvedDoc" should be the GENERATED document.
 
 2. "KEEP_GOLDEN": Choose this if the GENERATED document contains hallucinations, incorrect citations, or is less accurate than the GOLDEN document.
    - If you choose KEEP_GOLDEN, the "resolvedDoc" should be the GOLDEN document.
 
 3. "SUSPEND_FOR_REVIEW": Choose this if there is a major conflict, or if you are unsure which citation or definition is correct and require a human expert to decide.
-   - If you choose SUSPEND_FOR_REVIEW, the "resolvedDoc" can be your best-effort merge, but the workflow will pause for human review.
 
 Return ONLY the raw JSON block. No markdown wrapper, no explanations.
 `;
@@ -258,7 +259,11 @@ Return ONLY the raw JSON block. No markdown wrapper, no explanations.
       const command = `jetski --print "${escapedJudgePrompt}"`;
 
       try {
-        const stdout = execSync(command, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+        const stdout = execSync(command, { 
+          encoding: 'utf8', 
+          stdio: ['ignore', 'pipe', 'ignore'],
+          timeout: 60000 // 60 seconds timeout
+        });
         const jsonMatch = stdout.match(/\{[\s\S]*\}/);
         if (!jsonMatch) {
           throw new Error(`Could not find JSON in Judge output: ${stdout}`);
@@ -302,7 +307,11 @@ Return ONLY the raw JSON block. No markdown wrapper, no explanations.
             const genCommand = `jetski --print "${escapedFeedbackPrompt}"`;
             
             try {
-              const genStdout = execSync(genCommand, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+              const genStdout = execSync(genCommand, { 
+                encoding: 'utf8', 
+                stdio: ['ignore', 'pipe', 'ignore'],
+                timeout: 60000 // 60 seconds timeout
+              });
               const genJsonMatch = genStdout.match(/\{[\s\S]*\}/);
               if (genJsonMatch) {
                 currentGenDoc = JSON.parse(genJsonMatch[0].trim());
@@ -313,7 +322,11 @@ Return ONLY the raw JSON block. No markdown wrapper, no explanations.
                 const escapedReJudgePrompt = reJudgePrompt.replace(/"/g, '\\"').replace(/`/g, '\\`');
                 const reJudgeCommand = `jetski --print "${escapedReJudgePrompt}"`;
                 
-                const reJudgeStdout = execSync(reJudgeCommand, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+                const reJudgeStdout = execSync(reJudgeCommand, { 
+                  encoding: 'utf8', 
+                  stdio: ['ignore', 'pipe', 'ignore'],
+                  timeout: 60000 // 60 seconds timeout
+                });
                 const reJudgeJsonMatch = reJudgeStdout.match(/\{[\s\S]*\}/);
                 
                 if (reJudgeJsonMatch) {
