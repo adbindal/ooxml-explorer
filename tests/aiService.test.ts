@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from '../services/browserTestRunner';
 import { getActiveAIProvider, explainElement, getAiClient } from '../services/aiService';
+import { getRagContext } from '../services/ragRouter';
 import { useAppStore } from '../store/appStore';
 
 describe('AI Service Layer 1', () => {
@@ -173,6 +174,30 @@ describe('AI Service Layer 1', () => {
 
         const explanation = await explainElement('tcW', '<w:tcW />', 'docx');
         expect(explanation).toBe('This tag configures the cell width.');
+      });
+    });
+
+    describe('Layer 3 Local RAG & Contextual Router', () => {
+      it('retrieves the correct ECMA-376 context for a valid tag within its domain', async () => {
+        const context = await getRagContext('cantSplit', { fileType: 'docx', namespace: 'w' });
+        expect(context).toContain('[ECMA-376 Specification Context]');
+        expect(context).toContain('Table Row Cannot Split');
+        expect(context).toContain('DOCX');
+      });
+
+      it('routes and filters out tags from other domains (preventing cross-domain leakage)', async () => {
+        // cantSplit is a DOCX tag. Querying it in XLSX context should not return the DOCX definition.
+        const context = await getRagContext('cantSplit', { fileType: 'xlsx', namespace: 'w' });
+        expect(context).toContain('No official ECMA-376 definitions found locally');
+        expect(context).not.toContain('Table Row Cannot Split');
+      });
+
+      it('allows shared domain tags to resolve across all file types', async () => {
+        const contextDocx = await getRagContext('Relationship', { fileType: 'docx', namespace: 'r' });
+        const contextXlsx = await getRagContext('Relationship', { fileType: 'xlsx', namespace: 'r' });
+        
+        expect(contextDocx).toContain('Relationship Definition');
+        expect(contextXlsx).toContain('Relationship Definition');
       });
     });
   });
