@@ -21,19 +21,19 @@ This architecture handles differences at two distinct timescales:
 ```
                       ┌──────────────────────────────┐
                       │   1. generateSchemaStep      │ ◄──────────────────────────┐
-                      │   (Generator LLM / Consensus)│                            │
+                      │  (Generator LLM / Consensus) │                            │
                       └──────────────┬───────────────┘                            │
                                      │                                            │ (Retry with
                                      ▼                                            │  Feedback)
                       ┌──────────────────────────────┐                            │
                       │   2. xsdValidationStep       │                            │
-                      │   (Deterministic Schema Check) │                            │
+                      │ (Deterministic Schema Check) │                            │
                       └──────────────┬───────────────┘                            │
                                      │ (Passes Validation Report)                 │
                                      ▼                                            │
                       ┌──────────────────────────────┐                            │
                       │   3. llmJudgeStep            │                            │
-                      │   (LLM-as-a-Judge - Pro Model)│                            │
+                      │ (LLM-as-a-Judge - Pro Model) │                            │
                       └──────────────┬───────────────┘                            │
                                      │                                            │
          ┌───────────────────────────┼───────────────────────────┐                │
