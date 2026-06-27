@@ -40,6 +40,7 @@ const EditorView: React.FC<EditorViewProps> = ({ themeClasses }) => {
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
   const monacoRef = useRef<Parameters<OnMount>[1] | null>(null);
   const isMounted = useRef(false);
+  const selectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     isMounted.current = true;
@@ -49,6 +50,9 @@ const EditorView: React.FC<EditorViewProps> = ({ themeClasses }) => {
     }
     return () => { 
         isMounted.current = false; 
+        if (selectionTimeoutRef.current) {
+            clearTimeout(selectionTimeoutRef.current);
+        }
         if (editorRef.current) {
             try {
                 const model = editorRef.current.getModel();
@@ -294,18 +298,23 @@ const EditorView: React.FC<EditorViewProps> = ({ themeClasses }) => {
       // Set initial theme
       monaco.editor.setTheme(theme === 'dark' ? 'ooxml-dark' : 'ooxml-light');
 
-      // Listen to selection changes to update the selected XML tag context
+      // Listen to selection changes to update the selected XML tag context (debounced by 300ms)
       editor.onDidChangeCursorSelection(() => {
-          const selection = editor.getSelection();
-          if (selection && !selection.isEmpty()) {
-              const selectedText = editor.getModel()?.getValueInRange(selection);
-              if (selectedText) {
-                  const tagInfo = extractTagAtSelection(editor.getValue(), selectedText);
-                  setSelectedTagInfo(tagInfo);
-              }
-          } else {
-              setSelectedTagInfo(null);
+          if (selectionTimeoutRef.current) {
+              clearTimeout(selectionTimeoutRef.current);
           }
+          selectionTimeoutRef.current = setTimeout(() => {
+              const selection = editor.getSelection();
+              if (selection && !selection.isEmpty()) {
+                  const selectedText = editor.getModel()?.getValueInRange(selection);
+                  if (selectedText) {
+                      const tagInfo = extractTagAtSelection(editor.getValue(), selectedText);
+                      setSelectedTagInfo(tagInfo);
+                  }
+              } else {
+                  setSelectedTagInfo(null);
+              }
+          }, 300);
       });
   };
 
