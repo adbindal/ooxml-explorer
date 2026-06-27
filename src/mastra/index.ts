@@ -32,6 +32,49 @@ function getProjectRoot(): string {
 
 const PROJECT_ROOT = getProjectRoot();
 
+function extractJson(text: string): string {
+  const firstBrace = text.indexOf('{');
+  if (firstBrace === -1) {
+    throw new Error('No JSON object found in text');
+  }
+
+  let depth = 0;
+  let inString = false;
+  let escapeNext = false;
+
+  for (let i = firstBrace; i < text.length; i++) {
+    const char = text[i];
+
+    if (escapeNext) {
+      escapeNext = false;
+      continue;
+    }
+
+    if (char === '\\') {
+      escapeNext = true;
+      continue;
+    }
+
+    if (char === '"') {
+      inString = !inString;
+      continue;
+    }
+
+    if (!inString) {
+      if (char === '{') {
+        depth++;
+      } else if (char === '}') {
+        depth--;
+        if (depth === 0) {
+          return text.substring(firstBrace, i + 1);
+        }
+      }
+    }
+  }
+  throw new Error('Unbalanced braces in JSON text');
+}
+
+
 
 // Helper to log calibration defects to a markdown backlog
 function logCalibrationDefect(
@@ -133,13 +176,7 @@ Return ONLY the raw JSON block. No markdown wrapper, no explanations.
           timeout: 5 * 60 * 1000 // 5 minutes timeout
         });
         
-        // Extract JSON block from output
-        const jsonMatch = stdout.match(/\{[\s\S]*\}/);
-        if (!jsonMatch) {
-          throw new Error(`Could not find JSON in jetski output: ${stdout}`);
-        }
-        
-        const doc = JSON.parse(jsonMatch[0].trim());
+        const doc = JSON.parse(extractJson(stdout));
         results.push(doc);
         console.log(`[Workflow] Successfully processed <${namespace}:${tag}>`);
       } catch (error) {
@@ -290,12 +327,7 @@ Return ONLY the raw JSON block. No markdown wrapper, no explanations.
           stdio: ['ignore', 'pipe', 'ignore'],
           timeout: 5 * 60 * 1000 // 5 minutes timeout
         });
-        const jsonMatch = stdout.match(/\{[\s\S]*\}/);
-        if (!jsonMatch) {
-          throw new Error(`Could not find JSON in Judge output: ${stdout}`);
-        }
-
-        const judgeResult = JSON.parse(jsonMatch[0].trim());
+        const judgeResult = JSON.parse(extractJson(stdout));
         console.log(`[Workflow] Judge Decision for <${genDoc.namespace}:${genDoc.tag}>: ${judgeResult.decision}. Reasoning: ${judgeResult.reasoning}`);
 
         if (judgeResult.decision === 'UPGRADE_GOLDEN') {
@@ -338,26 +370,23 @@ Return ONLY the raw JSON block. No markdown wrapper, no explanations.
                 stdio: ['ignore', 'pipe', 'ignore'],
                 timeout: 10 * 60 * 1000 // 10 minutes timeout
               });
-              const genJsonMatch = genStdout.match(/\{[\s\S]*\}/);
-              if (genJsonMatch) {
-                currentGenDoc = JSON.parse(genJsonMatch[0].trim());
-                
-                // Re-evaluate with Judge
-                console.log(`[Workflow] Re-evaluating retry attempt ${attempts} with Judge...`);
-                const reJudgePrompt = getJudgePrompt(goldDoc, currentGenDoc);
-                const escapedReJudgePrompt = reJudgePrompt.replace(/"/g, '\\"').replace(/`/g, '\\`');
-                const reJudgeCommand = `jetski --print "${escapedReJudgePrompt}"`;
-                
-                const reJudgeStdout = execSync(reJudgeCommand, { 
-                  encoding: 'utf8', 
-                  stdio: ['ignore', 'pipe', 'ignore'],
-                  timeout: 5 * 60 * 1000 // 5 minutes timeout
-                });
-                const reJudgeJsonMatch = reJudgeStdout.match(/\{[\s\S]*\}/);
-                
-                if (reJudgeJsonMatch) {
-                  const newJudgeResult = JSON.parse(reJudgeJsonMatch[0].trim());
-                  console.log(`[Workflow] Retry ${attempts} Judge Decision: ${newJudgeResult.decision}. Reasoning: ${newJudgeResult.reasoning}`);
+              const parsedGen = JSON.parse(extractJson(genStdout));
+              currentGenDoc = parsedGen;
+              
+              // Re-evaluate with Judge
+              console.log(`[Workflow] Re-evaluating retry attempt ${attempts} with Judge...`);
+              const reJudgePrompt = getJudgePrompt(goldDoc, currentGenDoc);
+              const escapedReJudgePrompt = reJudgePrompt.replace(/"/g, '\\"').replace(/`/g, '\\`');
+              const reJudgeCommand = `jetski --print "${escapedReJudgePrompt}"`;
+              
+              const reJudgeStdout = execSync(reJudgeCommand, { 
+                encoding: 'utf8', 
+                stdio: ['ignore', 'pipe', 'ignore'],
+                timeout: 5 * 60 * 1000 // 5 minutes timeout
+              });
+              
+              const newJudgeResult = JSON.parse(extractJson(reJudgeStdout));
+              console.log(`[Workflow] Retry ${attempts} Judge Decision: ${newJudgeResult.decision}. Reasoning: ${newJudgeResult.reasoning}`);
                   
                   if (newJudgeResult.decision === 'UPGRADE_GOLDEN') {
                     approved.push(newJudgeResult.resolvedDoc as ReferenceDoc);
@@ -366,8 +395,6 @@ Return ONLY the raw JSON block. No markdown wrapper, no explanations.
                     break;
                   }
                   currentJudgeResult = newJudgeResult;
-                }
-              }
             } catch (err) {
               console.error(`[Workflow] Retry attempt ${attempts} failed:`, err);
             }
