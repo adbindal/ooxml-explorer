@@ -103,7 +103,7 @@ export const KNOWLEDGE_BASE: ReferenceDoc[] = [
     tag: 'sheetData',
     namespace: 'r',
     domain: 'xlsx',
-    definition: 'Sheet Data. The container for all rows and cells in the worksheet.',
+    definition: 'Sheet Data. The grid container for all rows and cells in the worksheet.',
     attributes: [],
     parents: ['worksheet']
   },
