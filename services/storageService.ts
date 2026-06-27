@@ -1,4 +1,4 @@
-import { ReferenceDoc } from './ragDb';
+import { ReferenceDoc } from './staticKnowledgeBase';
 
 const DB_NAME = 'ooxml_explorer_db';
 const DB_VERSION = 1;
