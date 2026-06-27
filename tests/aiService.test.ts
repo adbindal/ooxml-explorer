@@ -1,10 +1,39 @@
 import { describe, it, expect, beforeEach, vi } from '../services/browserTestRunner';
 import { getActiveAIProvider, explainElement, getAiClient } from '../services/aiService';
 import { getRagContext, logRagFeedback } from '../services/ragRouter';
+import { findXmlPathAtOffset } from '../utils/xmlUtils';
 import { useAppStore } from '../store/appStore';
 
 describe('AI Service Layer 1', () => {
   // Test suite setup
+
+  describe('findXmlPathAtOffset helper', () => {
+    it('returns empty path for root elements or plain text', () => {
+      const xml = `plain text here`;
+      expect(findXmlPathAtOffset(xml, 10)).toEqual([]);
+    });
+
+    it('correctly builds the parent path stack for nested XML tags', () => {
+      const xml = `<w:tbl><w:tr><w:trPr><w:cantSplit /></w:trPr></w:tr></w:tbl>`;
+      // Cursor is right before <w:cantSplit />
+      const offset = xml.indexOf('<w:cantSplit />');
+      expect(findXmlPathAtOffset(xml, offset)).toEqual(['w:tbl', 'w:tr', 'w:trPr']);
+    });
+
+    it('ignores self-closing tags in the ancestor hierarchy', () => {
+      const xml = `<w:tbl><w:tblPr><w:tblW w:w="5000" w:type="dxa" /></w:tblPr><w:tr><w:cantSplit />`;
+      // Cursor is right before <w:cantSplit />
+      const offset = xml.indexOf('<w:cantSplit />');
+      expect(findXmlPathAtOffset(xml, offset)).toEqual(['w:tbl', 'w:tr']);
+    });
+
+    it('pops tags from stack when close tags are encountered', () => {
+      const xml = `<w:tbl><w:tr><w:trPr></w:trPr><w:tc><w:p>`;
+      // Cursor is right before <w:p>
+      const offset = xml.indexOf('<w:p>');
+      expect(findXmlPathAtOffset(xml, offset)).toEqual(['w:tbl', 'w:tr', 'w:tc']);
+    });
+  });
 
   beforeEach(() => {
     // Reset store state
@@ -118,6 +147,25 @@ describe('AI Service Layer 1', () => {
       const explanation = await explainElement('tcW', '<w:tcW w:w="120" />', 'docx');
       expect(explanation).toBe('Mocked cloud tag explanation');
       
+      localStorage.removeItem('ooxml_explorer_api_key');
+    });
+
+    it('injects XML Hierarchy context into the prompt when parentPath is provided', async () => {
+      const ai = getAiClient('mock-api-key');
+      localStorage.setItem('ooxml_explorer_api_key', 'mock-api-key');
+      
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const spy = vi.spyOn(ai.models, 'generateContent').mockImplementation(async (args: any) => {
+        expect(args.contents).toContain('- XML Hierarchy: w:tbl -> w:tr -> w:trPr');
+        return {
+          text: 'Mocked cloud explanation'
+        };
+      });
+
+      await explainElement('cantSplit', '<w:cantSplit />', 'docx', ['w:tbl', 'w:tr', 'w:trPr']);
+
+      expect(spy).toHaveBeenCalled();
+      spy.mockRestore();
       localStorage.removeItem('ooxml_explorer_api_key');
     });
 

@@ -23,7 +23,7 @@ interface AIPanelProps {
     
     // Editor specific
     content?: string;
-    selectedTag?: { tagName: string; rawXml: string };
+    selectedTag?: { tagName: string; rawXml: string; parentPath?: string[] };
     
     // Diff specific
     diffOriginal?: string;
@@ -187,7 +187,8 @@ const AIPanel: React.FC<AIPanelProps> = ({ onClose, context, themeClasses }) => 
       const result = await explainElement(
         context.selectedTag.tagName,
         context.selectedTag.rawXml,
-        fileType
+        fileType,
+        context.selectedTag.parentPath
       );
       setSelectedTagResponse(result);
     } catch (e: unknown) {

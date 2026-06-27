@@ -5,7 +5,7 @@ import FileTree from '../components/FileTree';
 import AIPanel from '../components/AIPanel';
 import ErrorBoundary from '../components/ErrorBoundary';
 import Logo from '../components/Logo';
-import { formatXml, minifyXml, isXmlFile, isImageFile, isBinaryFile, extractTagAtSelection } from '../utils/xmlUtils';
+import { formatXml, minifyXml, isXmlFile, isImageFile, isBinaryFile, extractTagAtSelection, findXmlPathAtOffset } from '../utils/xmlUtils';
 import { exportModifiedZip } from '../services/zipService';
 import { isSaveHotkey, isSaveAllHotkey, isFindHotkey, isSidebarHotkey } from '../utils/hotkeyUtils';
 import { EditorFileContext } from '../services/geminiService';
@@ -35,7 +35,7 @@ const EditorView: React.FC<EditorViewProps> = ({ themeClasses }) => {
 
   const [filter, setFilter] = useState('');
   const [imageSrc, setImageSrc] = useState<string | null>(null);
-  const [selectedTagInfo, setSelectedTagInfo] = useState<{ tagName: string; rawXml: string } | null>(null);
+  const [selectedTagInfo, setSelectedTagInfo] = useState<{ tagName: string; rawXml: string; parentPath?: string[] } | null>(null);
 
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
   const monacoRef = useRef<Parameters<OnMount>[1] | null>(null);
@@ -306,10 +306,18 @@ const EditorView: React.FC<EditorViewProps> = ({ themeClasses }) => {
           selectionTimeoutRef.current = setTimeout(() => {
               const selection = editor.getSelection();
               if (selection && !selection.isEmpty()) {
-                  const selectedText = editor.getModel()?.getValueInRange(selection);
-                  if (selectedText) {
-                      const tagInfo = extractTagAtSelection(editor.getValue(), selectedText);
-                      setSelectedTagInfo(tagInfo);
+                  const model = editor.getModel();
+                  if (model) {
+                      const selectedText = model.getValueInRange(selection);
+                      const startOffset = model.getOffsetAt(selection.getStartPosition());
+                      const tagInfo = extractTagAtSelection(model.getValue(), selectedText);
+                      if (tagInfo) {
+                          const parentPath = findXmlPathAtOffset(model.getValue(), startOffset);
+                          setSelectedTagInfo({
+                              ...tagInfo,
+                              parentPath
+                          });
+                      }
                   }
               } else {
                   setSelectedTagInfo(null);

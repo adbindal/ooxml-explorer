@@ -115,3 +115,35 @@ export const extractTagAtSelection = (
 
   return null;
 };
+
+/**
+ * Parses the XML hierarchy backward from the cursor offset to find the active parent path.
+ */
+export const findXmlPathAtOffset = (xml: string, offset: number): string[] => {
+  const path: string[] = [];
+  const subXml = xml.substring(0, offset);
+  
+  // Regex to match start, end, and self-closing tags
+  const tagRegex = /<(\/?)([\w:-]+)([^>]*?)(\/?)>/g;
+  let match;
+  
+  while ((match = tagRegex.exec(subXml)) !== null) {
+    const isClose = !!match[1];
+    const tagName = match[2];
+    const isSelfClose = !!match[4];
+    
+    if (isSelfClose) {
+      continue;
+    }
+    
+    if (isClose) {
+      if (path.length > 0 && path[path.length - 1] === tagName) {
+        path.pop();
+      }
+    } else {
+      path.push(tagName);
+    }
+  }
+  
+  return path;
+};

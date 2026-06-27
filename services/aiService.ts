@@ -70,7 +70,8 @@ export const SYSTEM_INSTRUCTIONS = `You are the OOXML Explorer Assistant, a spec
 export const explainElement = async (
   tagName: string,
   rawXml: string,
-  fileType: 'docx' | 'xlsx' | 'pptx'
+  fileType: 'docx' | 'xlsx' | 'pptx',
+  parentPath?: string[]
 ): Promise<string> => {
   const provider = await getActiveAIProvider();
   
@@ -91,7 +92,11 @@ export const explainElement = async (
   // Retrieve RAG context
   const ragContext = await getRagContext(tagNameOnly, { fileType, namespace });
 
-  // Update prompt with RAG context
+  const hierarchy = parentPath && parentPath.length > 0
+    ? `\n  - XML Hierarchy: ${parentPath.join(' -> ')}`
+    : '';
+
+  // Update prompt with RAG context and hierarchy
   const prompt = `
   Explain the purpose of the XML tag "${cleanTagName}" in the context of a ${fileType.toUpperCase()} document.
   
@@ -99,6 +104,7 @@ export const explainElement = async (
   \`\`\`xml
   ${cleanXml}
   \`\`\`
+  ${hierarchy}
   
   ${ragContext}
   
