@@ -12,6 +12,7 @@ import {
   AIAnalysis,
   AIDiffAnalysis
 } from '../services/geminiService';
+import { explainElement } from '../services/aiService';
 import { ThemeClasses } from '../types';
 
 interface AIPanelProps {
@@ -22,6 +23,7 @@ interface AIPanelProps {
     
     // Editor specific
     content?: string;
+    selectedTag?: { tagName: string; rawXml: string };
     
     // Diff specific
     diffOriginal?: string;
@@ -60,6 +62,7 @@ const AIPanel: React.FC<AIPanelProps> = ({ onClose, context, themeClasses }) => 
   const [loading, setLoading] = useState(false);
   const [editorResponse, setEditorResponse] = useState<AIAnalysis | null>(null);
   const [diffResponse, setDiffResponse] = useState<AIDiffAnalysis | null>(null);
+  const [selectedTagResponse, setSelectedTagResponse] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   
   const [activeAction, setActiveAction] = useState<string | null>(null);
@@ -162,6 +165,40 @@ const AIPanel: React.FC<AIPanelProps> = ({ onClose, context, themeClasses }) => 
         }
     } finally {
         setLoading(false);
+    }
+  };
+
+  const handleExplainSelectedTag = async () => {
+    if (!context.selectedTag) return;
+    setLoading(true);
+    setActiveAction('explain-tag');
+    setEditorResponse(null);
+    setDiffResponse(null);
+    setErrorMessage(null);
+    setSelectedTagResponse(null);
+    
+    try {
+      const fileType = context.fileName?.endsWith('xlsx') 
+        ? 'xlsx' 
+        : context.fileName?.endsWith('pptx') 
+          ? 'pptx' 
+          : 'docx';
+          
+      const result = await explainElement(
+        context.selectedTag.tagName,
+        context.selectedTag.rawXml,
+        fileType
+      );
+      setSelectedTagResponse(result);
+    } catch (e: unknown) {
+      const err = e as Error;
+      if (err.message === 'API_KEY_MISSING') {
+        setApiKeyConfigured(false);
+      } else {
+        setErrorMessage(err.message || "Error explaining selected tag.");
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -517,6 +554,20 @@ const AIPanel: React.FC<AIPanelProps> = ({ onClose, context, themeClasses }) => 
 
             {/* Action Buttons */}
             <div className="grid grid-cols-1 gap-2 shrink-0">
+                {context.mode === 'editor' && context.selectedTag && (
+                    <button 
+                        onClick={handleExplainSelectedTag}
+                        disabled={loading}
+                        className="group flex items-center gap-3 p-3.5 rounded-xl border border-blue-500/30 bg-blue-500/5 hover:bg-blue-500/10 text-left transition-all shadow-md hover:shadow-lg animate-in slide-in-from-top-2"
+                    >
+                        <Sparkles size={18} className="text-blue-500 shrink-0 animate-pulse" />
+                        <div className="flex-1">
+                            <span className="block text-xs font-bold text-[#4A89DC]">Explain Selected Tag &lt;{context.selectedTag.tagName}&gt;</span>
+                            <span className="block text-[10px] opacity-70 mt-0.5">Get instant local/cloud explanation of the selected XML element.</span>
+                        </div>
+                    </button>
+                )}
+
                 {context.mode === 'editor' ? (
                     <>
                         <button 
@@ -616,6 +667,17 @@ const AIPanel: React.FC<AIPanelProps> = ({ onClose, context, themeClasses }) => 
                     renderEditorDashboard(editorResponse)
                 ) : diffResponse ? (
                     renderDiffDashboard(diffResponse)
+                ) : activeAction === 'explain-tag' && selectedTagResponse ? (
+                    <div className="space-y-3 text-xs text-left animate-in fade-in leading-relaxed">
+                        <div className="flex items-center gap-2 text-blue-500 font-bold text-[10px] uppercase tracking-wider">
+                            <Bot size={13} />
+                            <span>XML Element Explanation</span>
+                        </div>
+                        <div className="p-3 rounded-lg bg-blue-500/5 border border-blue-500/10 font-mono text-[10px] break-all text-[#4A89DC]">
+                            {context.selectedTag?.rawXml}
+                        </div>
+                        <p className={`whitespace-pre-wrap ${themeClasses.fgMuted}`}>{selectedTagResponse}</p>
+                    </div>
                 ) : (
                     <div className={`h-full flex flex-col items-center justify-center text-center gap-2 ${themeClasses.fgMuted}`}>
                         <Sparkles size={32} className="opacity-20" />

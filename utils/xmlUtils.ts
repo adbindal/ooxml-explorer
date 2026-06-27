@@ -80,3 +80,38 @@ export const minifyXml = (xml: string): string => {
   if (!xml || typeof xml !== 'string') return '';
   return xml.replace(/>\s+</g, '><').trim();
 };
+
+/**
+ * Extracts tag name and raw XML snippet from a selected text range or tag name.
+ */
+export const extractTagAtSelection = (
+  content: string,
+  selectionText: string
+): { tagName: string; rawXml: string } | null => {
+  const cleanSel = selectionText.trim();
+  if (!cleanSel) return null;
+
+  // Case 1: User selected a full XML tag e.g. <w:tcW w:w="120" /> or <w:p>
+  if (cleanSel.startsWith('<') && cleanSel.endsWith('>')) {
+    const match = cleanSel.match(/^<([\w:-]+)/);
+    if (match) {
+      return { tagName: match[1], rawXml: cleanSel };
+    }
+  }
+
+  // Case 2: User selected just a tag name e.g. "w:tcW" or "tcW"
+  const tagRegex = /^[a-zA-Z0-9_:-]+$/;
+  if (tagRegex.test(cleanSel)) {
+    // Let's find the enclosing XML tag in the content
+    // Look for <cleanSel ... > or <cleanSel> or </cleanSel>
+    const escapedTag = cleanSel.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
+    const enclosingRegex = new RegExp(`<(${escapedTag})([^>]*?)(/?>|>)`);
+    const match = content.match(enclosingRegex);
+    if (match) {
+      return { tagName: match[1], rawXml: match[0] };
+    }
+    return { tagName: cleanSel, rawXml: `<${cleanSel} />` };
+  }
+
+  return null;
+};
