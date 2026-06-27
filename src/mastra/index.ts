@@ -4,8 +4,9 @@ import { execSync } from 'child_process';
 import { z } from 'zod';
 import * as fs from 'fs';
 import * as path from 'path';
+import { ReferenceDoc } from '../../services/staticKnowledgeBase';
 
-// Define the Step for generating the schema
+// 1. Generate Schema Step (Ingestion)
 const generateSchemaStep = createStep({
   id: 'generateSchema',
   inputSchema: z.object({
@@ -61,7 +62,7 @@ You must return a JSON object conforming exactly to this JSON schema:
 Guidelines:
 1. "namespace": You MUST return the short prefix (e.g., "w" for WordprocessingML, "r" for SpreadsheetML/Relationships, "p" for PresentationML) instead of the full XML namespace URI.
 2. "definition": Provide a clear, precise explanation of what this element configures and its role. Keep it descriptive but concise (2-3 sentences).
-3. "citation": You MUST reference the most specific section number in the ECMA-376 specification that defines this specific element. Do NOT use high-level parent section numbers. For example, the element `document` is defined in `ECMA-376 Part 1, Section 17.2.3`, not the general `Section 17.2` or the incorrect `Section 17.3.1.10`. In case of multiple citations, pick the one that is the section heading and talks about that particular element only. Must match the format: "ECMA-376 Part X, Section Y.Z" (e.g. "ECMA-376 Part 1, Section 17.3.1.22"). Verify the exact section number.
+3. "citation": You MUST reference the most specific section number in the ECMA-376 specification that defines this specific element. Do NOT use high-level parent section numbers. For example, the element 'document' is defined in 'ECMA-376 Part 1, Section 17.2.3', not the general 'Section 17.2' or the incorrect 'Section 17.3.1.10'. In case of multiple citations, pick the one that is the section heading and talks about that particular element only. Must match the format: "ECMA-376 Part X, Section Y.Z" (e.g. "ECMA-376 Part 1, Section 17.3.1.22"). Verify the exact section number.
 4. "sdkClass": Provide the corresponding Microsoft Open XML SDK class name (e.g. "Paragraph" or "TableCell").
 
 Return ONLY the raw JSON block. No markdown wrapper, no explanations.
@@ -95,11 +96,112 @@ Return ONLY the raw JSON block. No markdown wrapper, no explanations.
   }
 });
 
-// Define the Step for compiling the knowledge base
-const compileKBStep = createStep({
-  id: 'compileKB',
+// 2. Evaluate and Diff Step (Decision Engine & HITL Suspension)
+const evaluateAndDiffStep = createStep({
+  id: 'evaluateAndDiff',
   inputSchema: z.object({
     results: z.array(z.object({
+      tag: z.string(),
+      namespace: z.string(),
+      domain: z.string(),
+      definition: z.string(),
+      attributes: z.array(z.string()),
+      parents: z.array(z.string()),
+      citation: z.string(),
+      sdkClass: z.string()
+    }))
+  }),
+  outputSchema: z.object({
+    approved: z.array(z.object({
+      tag: z.string(),
+      namespace: z.string(),
+      domain: z.string(),
+      definition: z.string(),
+      attributes: z.array(z.string()),
+      parents: z.array(z.string()),
+      citation: z.string(),
+      sdkClass: z.string()
+    }))
+  }),
+  execute: async ({ inputData, suspend, resumeData }) => {
+    const { results } = inputData;
+    
+    // Load golden dataset
+    const goldenPath = path.join(process.cwd(), 'public/rag-data.json');
+    let golden: ReferenceDoc[] = [];
+    if (fs.existsSync(goldenPath)) {
+      golden = JSON.parse(fs.readFileSync(goldenPath, 'utf8'));
+    }
+
+    const approved = [];
+    const conflicts = [];
+
+    for (const genDoc of results) {
+      const goldDoc = golden.find(g => g.tag === genDoc.tag && g.domain === genDoc.domain);
+
+      if (!goldDoc) {
+        // New tag - auto approve
+        approved.push(genDoc);
+        continue;
+      }
+
+      // Compare citations
+      const citationMatch = goldDoc.citation === genDoc.citation;
+
+      if (citationMatch) {
+        // Citations match, we can auto-merge attributes and parents
+        const mergedAttributes = Array.from(new Set([...goldDoc.attributes, ...genDoc.attributes]));
+        const mergedParents = Array.from(new Set([...goldDoc.parents, ...genDoc.parents]));
+        
+        approved.push({
+          ...genDoc,
+          namespace: goldDoc.namespace, // Prefer golden prefix
+          attributes: mergedAttributes,
+          parents: mergedParents
+        });
+      } else {
+        // Citation mismatch - needs human review
+        conflicts.push({
+          tag: genDoc.tag,
+          domain: genDoc.domain,
+          namespace: goldDoc.namespace,
+          golden: {
+            definition: goldDoc.definition,
+            citation: goldDoc.citation,
+            sdkClass: goldDoc.sdkClass,
+            attributes: goldDoc.attributes,
+            parents: goldDoc.parents
+          },
+          generated: {
+            definition: genDoc.definition,
+            citation: genDoc.citation,
+            sdkClass: genDoc.sdkClass,
+            attributes: genDoc.attributes,
+            parents: genDoc.parents
+          }
+        });
+      }
+    }
+
+    if (conflicts.length > 0 && !resumeData) {
+      console.log(`[Workflow] Found ${conflicts.length} citation conflicts. Suspending workflow for review...`);
+      return suspend({ conflicts });
+    }
+
+    // Resolve conflicts using resumeData
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const resolutions = resumeData ? (resumeData as any).resolutions : [];
+    const finalApproved = [...approved, ...resolutions];
+
+    return { approved: finalApproved };
+  }
+});
+
+// 3. Commit Approved Data Step
+const commitApprovedDataStep = createStep({
+  id: 'commitApprovedData',
+  inputSchema: z.object({
+    approved: z.array(z.object({
       tag: z.string(),
       namespace: z.string(),
       domain: z.string(),
@@ -115,14 +217,29 @@ const compileKBStep = createStep({
     count: z.number()
   }),
   execute: async ({ inputData }) => {
-    const { results } = inputData;
+    const { approved } = inputData;
     
-    // 1. Write to public/generated-rag.json
-    const outputPath = path.join(process.cwd(), 'public/generated-rag.json');
-    fs.writeFileSync(outputPath, JSON.stringify(results, null, 2), 'utf8');
-    console.log(`[Workflow] Wrote generated RAG database to: ${outputPath}`);
+    const goldenPath = path.join(process.cwd(), 'public/rag-data.json');
+    let golden: ReferenceDoc[] = [];
+    if (fs.existsSync(goldenPath)) {
+      golden = JSON.parse(fs.readFileSync(goldenPath, 'utf8'));
+    }
 
-    // 2. Write to services/staticKnowledgeBase.ts
+    // Merge approved into golden
+    for (const appDoc of approved) {
+      const idx = golden.findIndex(g => g.tag === appDoc.tag && g.domain === appDoc.domain);
+      if (idx > -1) {
+        golden[idx] = appDoc;
+      } else {
+        golden.push(appDoc);
+      }
+    }
+
+    // Write back to public/rag-data.json
+    fs.writeFileSync(goldenPath, JSON.stringify(golden, null, 2), 'utf8');
+    console.log(`[Workflow] Successfully updated golden dataset at: ${goldenPath}`);
+
+    // Also write to services/staticKnowledgeBase.ts
     const kbPath = path.join(process.cwd(), 'services/staticKnowledgeBase.ts');
     const codeContent = `// This file is auto-generated by compileKB step in ooxml-rag-ingestion workflow.
 // Do not edit this file manually.
@@ -138,12 +255,12 @@ export interface ReferenceDoc {
   sdkClass?: string;
 }
 
-export const KNOWLEDGE_BASE: ReferenceDoc[] = ${JSON.stringify(results, null, 2)};
+export const KNOWLEDGE_BASE: ReferenceDoc[] = ${JSON.stringify(golden, null, 2)};
 `;
     fs.writeFileSync(kbPath, codeContent, 'utf8');
     console.log(`[Workflow] Compiled static knowledge base to: ${kbPath}`);
 
-    return { success: true, count: results.length };
+    return { success: true, count: approved.length };
   }
 });
 
@@ -166,7 +283,8 @@ export const ingestionWorkflow = new Workflow({
 // Chain the steps and commit the workflow
 ingestionWorkflow
   .then(generateSchemaStep)
-  .then(compileKBStep)
+  .then(evaluateAndDiffStep)
+  .then(commitApprovedDataStep)
   .commit();
 
 // Initialize Mastra and export it
