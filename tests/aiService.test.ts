@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from '../services/browserTestRunner';
 import { getActiveAIProvider, explainElement, getAiClient } from '../services/aiService';
-import { getRagContext } from '../services/ragRouter';
+import { getRagContext, logRagFeedback } from '../services/ragRouter';
 import { useAppStore } from '../store/appStore';
 
 describe('AI Service Layer 1', () => {
@@ -198,6 +198,34 @@ describe('AI Service Layer 1', () => {
         
         expect(contextDocx).toContain('Relationship Definition');
         expect(contextXlsx).toContain('Relationship Definition');
+      });
+    });
+
+    describe('Layer 4 Self-Healing RAG & Feedback Loop', () => {
+      it('applies runtime overrides from localStorage dynamically', async () => {
+        const overrideKey = 'ooxml_rag_override_docx_cantSplit';
+        localStorage.setItem(overrideKey, 'A custom hot-patched definition of cantSplit.');
+        
+        try {
+          const context = await getRagContext('cantSplit', { fileType: 'docx', namespace: 'w' });
+          expect(context).toContain('[ECMA-376 Specification Context (Self-Healed Override)]');
+          expect(context).toContain('A custom hot-patched definition of cantSplit.');
+          expect(context).toContain('Runtime Local Patch');
+        } finally {
+          localStorage.removeItem(overrideKey);
+        }
+      });
+
+      it('logs user feedback correctly to localStorage', () => {
+        const feedbackKey = 'ooxml_rag_feedback_docx_cantSplit';
+        localStorage.removeItem(feedbackKey);
+        
+        logRagFeedback('cantSplit', 'docx', 'Please mention page breaks explicitly.');
+        
+        const storedFeedback = localStorage.getItem(feedbackKey);
+        expect(storedFeedback).toBe('Please mention page breaks explicitly.');
+        
+        localStorage.removeItem(feedbackKey);
       });
     });
   });

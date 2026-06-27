@@ -14,6 +14,7 @@ searchIndex.addAll(KNOWLEDGE_BASE);
 /**
  * RAG Context Retrieval & Router.
  * Queries the client-side database for a tag and filters by the active editor context (DOCX, XLSX, PPTX).
+ * Supports runtime self-healing overrides via localStorage.
  */
 export const getRagContext = async (
   tagName: string,
@@ -21,10 +22,26 @@ export const getRagContext = async (
 ): Promise<string> => {
   const cleanTagName = tagName.trim();
   
-  // 1. Search the local index using MiniSearch
+  // 1. Check for runtime self-healing overrides in localStorage first
+  if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+    const overrideKey = `ooxml_rag_override_${context.fileType}_${cleanTagName}`;
+    const localOverride = localStorage.getItem(overrideKey);
+    if (localOverride) {
+      console.log(`[RAG Router] Applying local self-healing override for <${cleanTagName}>`);
+      return `
+[ECMA-376 Specification Context (Self-Healed Override)]
+- Tag Name: <${context.namespace}:${cleanTagName}>
+- Schema Domain: ${context.fileType.toUpperCase()}
+- Definition: ${localOverride}
+- Source: Runtime Local Patch
+`;
+    }
+  }
+
+  // 2. Search the local index using MiniSearch
   const results = searchIndex.search(cleanTagName);
   
-  // 2. Route the query (filter by active editor domain or 'shared')
+  // 3. Route the query (filter by active editor domain or 'shared')
   const filtered = results.filter(res => 
     res.domain === context.fileType || res.domain === 'shared'
   ) as unknown as ReferenceDoc[];
@@ -44,4 +61,20 @@ export const getRagContext = async (
 - Supported Attributes: ${bestMatch.attributes.join(', ') || 'None'}
 - Valid Parent Elements: ${bestMatch.parents.join(', ') || 'None'}
 `;
+};
+
+/**
+ * Logs user feedback or corrections for a specific tag to localStorage.
+ * Used for developer audits and to patch the knowledge base.
+ */
+export const logRagFeedback = (
+  tagName: string,
+  fileType: 'docx' | 'xlsx' | 'pptx',
+  feedback: string
+): void => {
+  if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+    const feedbackKey = `ooxml_rag_feedback_${fileType}_${tagName.trim()}`;
+    localStorage.setItem(feedbackKey, feedback.trim());
+    console.log(`[RAG Feedback] Logged feedback for <${tagName}>: ${feedback}`);
+  }
 };
