@@ -6,6 +6,44 @@ import { z } from 'zod';
 import * as fs from 'fs';
 import * as path from 'path';
 import { ReferenceDoc } from 'web/services/staticKnowledgeBase';
+import { Agent } from '@mastra/core/agent';
+
+// 1. Schema Generator Agent
+export const schemaGeneratorAgent = new Agent({
+  id: 'schema-generator',
+  name: 'OOXML Schema Generator',
+  instructions: `You are an expert in the ECMA-376 Office Open XML (OOXML) specification.
+Your task is to generate a structured RAG reference document for the requested XML tag.
+Conform exactly to the requested JSON schema.
+
+Guidelines:
+1. "namespace": You MUST return the short prefix (e.g., "w" for WordprocessingML, "r" for SpreadsheetML/Relationships, "p" for PresentationML) instead of the full XML namespace URI.
+2. "definition": Provide a clear, precise explanation of what this element configures and its role. Keep it descriptive but concise (2-3 sentences).
+3. "citation": You MUST reference the most specific section number in the ECMA-376 specification that defines this specific element. Do NOT use high-level parent section numbers. For example, the element 'document' is defined in 'ECMA-376 Part 1, Section 17.2.3', not the general 'Section 17.2' or the incorrect 'Section 17.3.1.10'. In case of multiple citations, pick the one that is the section heading and talks about that particular element only. Must match the format: "ECMA-376 Part X, Section Y.Z" (e.g. "ECMA-376 Part 1, Section 17.3.1.22"). Verify the exact section number.
+4. "sdkClass": Provide the corresponding Microsoft Open XML SDK class name (e.g. "Paragraph" or "TableCell").`,
+  model: {
+    id: 'google/gemini-1.5-flash',
+  },
+});
+
+// 2. Schema Auditor Agent (The Judge)
+export const schemaAuditorAgent = new Agent({
+  id: 'schema-auditor',
+  name: 'OOXML Schema Auditor',
+  instructions: `You are an expert auditor of the ECMA-376 Office Open XML (OOXML) specification.
+Your task is to act as a Judge and compare a newly GENERATED schema reference document against the existing GOLDEN schema reference document for the requested XML tag.
+
+You must evaluate the differences and make an authoritative decision.
+
+Guidelines for your Decision:
+1. "ACCEPT_GENERATED": Choose this if the GENERATED document is correct, acceptable, or an upgrade to the GOLDEN document. Phrasing variations or identical schemas MUST be accepted. The "resolvedDoc" should be either the generated document (if upgraded) or the golden document (if identical).
+2. "REJECT_GENERATED": Choose this if the GENERATED document contains actual errors, hallucinations, or is incorrect compared to the GOLDEN document. It needs to be corrected.
+3. "SUSPEND_FOR_REVIEW": Choose this if there is a major conflict requiring human review.`,
+  model: {
+    id: 'google/gemini-1.5-pro', // Use a stronger model for auditing/pedantic checking
+  },
+});
+
 
 function getProjectRoot(): string {
   let currentDir = process.cwd();
@@ -142,55 +180,35 @@ const generateSchemaStep = createStep({
 
       const goldDoc = golden.find(g => g.tag === tag && g.domain === domain);
       
-      const prompt = `
-You are an expert in the ECMA-376 Office Open XML (OOXML) specification.
-Generate a structured RAG reference document for the following XML tag:
-- Tag Name: "${tag}"
-- Namespace Prefix: "${namespace}"
-- Domain: "${domain}"
-${goldDoc?.reviewerNote ? `\nCRITICAL REVIEWER NOTE / CORRECTION GUIDE:\n"${goldDoc.reviewerNote}"\nYou MUST strictly follow this note when generating the definition, parents, attributes, and citation. Do not override this instruction under any circumstances.\n` : ''}
+      let prompt = `Generate a structured RAG reference document for the XML tag "${tag}" (namespace prefix: "${namespace}", domain: "${domain}").`;
+      if (goldDoc?.reviewerNote) {
+        prompt += `\n\nCRITICAL REVIEWER NOTE / CORRECTION GUIDE:\n"${goldDoc.reviewerNote}"\nYou MUST strictly follow this note when generating the definition, parents, attributes, and citation. Do not override this instruction under any circumstances.`;
+      }
 
-You must return a JSON object conforming exactly to this JSON schema:
-{
-  "type": "object",
-  "properties": {
-    "tag": { "type": "string" },
-    "namespace": { "type": "string" },
-    "domain": { "type": "string" },
-    "definition": { "type": "string" },
-    "attributes": { "type": "array", "items": { "type": "string" } },
-    "parents": { "type": "array", "items": { "type": "string" } },
-    "citation": { "type": "string" },
-    "sdkClass": { "type": "string" }
-  },
-  "required": ["tag", "namespace", "domain", "definition", "attributes", "parents", "citation", "sdkClass"]
-}
-
-Guidelines:
-1. "namespace": You MUST return the short prefix (e.g., "w" for WordprocessingML, "r" for SpreadsheetML/Relationships, "p" for PresentationML) instead of the full XML namespace URI.
-2. "definition": Provide a clear, precise explanation of what this element configures and its role. Keep it descriptive but concise (2-3 sentences).
-3. "citation": You MUST reference the most specific section number in the ECMA-376 specification that defines this specific element. Do NOT use high-level parent section numbers. For example, the element 'document' is defined in 'ECMA-376 Part 1, Section 17.2.3', not the general 'Section 17.2' or the incorrect 'Section 17.3.1.10'. In case of multiple citations, pick the one that is the section heading and talks about that particular element only. Must match the format: "ECMA-376 Part X, Section Y.Z" (e.g. "ECMA-376 Part 1, Section 17.3.1.22"). Verify the exact section number.
-4. "sdkClass": Provide the corresponding Microsoft Open XML SDK class name (e.g. "Paragraph" or "TableCell").
-
-Return ONLY the raw JSON block. No markdown wrapper, no explanations.
-`;
-
-      // Escape prompt for CLI execution
-      const escapedPrompt = prompt.replace(/"/g, '\\"').replace(/`/g, '\\`');
-      const command = `jetski --print "${escapedPrompt}"`;
-      
       try {
-        const stdout = execSync(command, { 
-          encoding: 'utf8', 
-          stdio: ['ignore', 'pipe', 'ignore'],
-          timeout: 5 * 60 * 1000 // 5 minutes timeout
+        const response = await schemaGeneratorAgent.generate(prompt, {
+          structuredOutput: {
+            schema: z.object({
+              tag: z.string(),
+              namespace: z.string(),
+              domain: z.string(),
+              definition: z.string(),
+              attributes: z.array(z.string()),
+              parents: z.array(z.string()),
+              citation: z.string(),
+              sdkClass: z.string()
+            })
+          }
         });
-        
-        const doc = JSON.parse(extractJson(stdout));
-        results.push(doc);
-        console.log(`[Workflow] Successfully processed <${namespace}:${tag}>`);
+
+        if (response.object) {
+          results.push(response.object);
+          console.log(`[Workflow] Successfully processed <${namespace}:${tag}> via Agent`);
+        } else {
+          throw new Error('Agent failed to return structured object');
+        }
       } catch (error) {
-        console.error(`[Workflow] Failed to process <${namespace}:${tag}>:`, error);
+        console.error(`[Workflow] Failed to process <${namespace}:${tag}> via Agent:`, error);
       }
 
       // Avoid rate limits
@@ -274,66 +292,46 @@ const evaluateAndDiffStep = createStep({
       }
 
       // If there are differences, query the LLM Judge to evaluate
-      console.log(`[Workflow] Differences found for <${genDoc.namespace}:${genDoc.tag}>. Invoking LLM Judge...`);
+      console.log(`[Workflow] Differences found for <${genDoc.namespace}:${genDoc.tag}>. Invoking LLM Judge Agent...`);
 
-      const getJudgePrompt = (gold: ReferenceDoc, gen: typeof genDoc) => `
-You are an expert auditor of the ECMA-376 Office Open XML (OOXML) specification.
-Your task is to act as a Judge and compare a newly GENERATED schema reference document against the existing GOLDEN schema reference document for the XML tag:
-- Tag Name: "${gen.tag}"
-- Domain: "${gen.domain}"
+      const judgePrompt = `
+Compare this newly GENERATED schema reference against the GOLDEN schema reference for XML tag "${genDoc.tag}" (domain: "${genDoc.domain}").
 
 GOLDEN DOCUMENT:
-${JSON.stringify(gold, null, 2)}
+${JSON.stringify(goldDoc, null, 2)}
 
 GENERATED DOCUMENT:
-${JSON.stringify(gen, null, 2)}
+${JSON.stringify(genDoc, null, 2)}
 
 VALIDATION REPORT:
 ${JSON.stringify(validationReport, null, 2)}
-
-You must evaluate the differences and make an authoritative decision.
-Return a JSON object conforming exactly to this JSON schema:
-{
-  "type": "object",
-  "properties": {
-    "decision": { "type": "string", "enum": ["ACCEPT_GENERATED", "REJECT_GENERATED", "SUSPEND_FOR_REVIEW"] },
-    "reasoning": { "type": "string" },
-    "resolvedDoc": {
-      "type": "object",
-      "properties": {
-        "tag": { "type": "string" },
-        "namespace": { "type": "string" },
-        "domain": { "type": "string" },
-        "definition": { "type": "string" },
-        "attributes": { "type": "array", "items": { "type": "string" } },
-        "parents": { "type": "array", "items": { "type": "string" } },
-        "citation": { "type": "string" },
-        "sdkClass": { "type": "string" }
-      },
-      "required": ["tag", "namespace", "domain", "definition", "attributes", "parents", "citation", "sdkClass"]
-    }
-  },
-  "required": ["decision", "reasoning", "resolvedDoc"]
-}
-
-Guidelines for your Decision:
-1. "ACCEPT_GENERATED": Choose this if the GENERATED document is correct, acceptable, or an upgrade to the GOLDEN document. Phrasing variations or identical schemas MUST be accepted. The "resolvedDoc" should be either the generated document (if upgraded) or the golden document (if identical).
-2. "REJECT_GENERATED": Choose this if the GENERATED document contains actual errors, hallucinations, or is incorrect compared to the GOLDEN document. It needs to be corrected.
-3. "SUSPEND_FOR_REVIEW": Choose this if there is a major conflict requiring human review.
-
-Return ONLY the raw JSON block. No markdown wrapper, no explanations.
 `;
 
-      const escapedJudgePrompt = getJudgePrompt(goldDoc, genDoc).replace(/"/g, '\\"').replace(/`/g, '\\`');
-      const command = `jetski --print "${escapedJudgePrompt}"`;
-
       try {
-        const stdout = execSync(command, { 
-          encoding: 'utf8', 
-          stdio: ['ignore', 'pipe', 'ignore'],
-          timeout: 5 * 60 * 1000 // 5 minutes timeout
+        const response = await schemaAuditorAgent.generate(judgePrompt, {
+          structuredOutput: {
+            schema: z.object({
+              decision: z.enum(['ACCEPT_GENERATED', 'REJECT_GENERATED', 'SUSPEND_FOR_REVIEW']),
+              reasoning: z.string(),
+              resolvedDoc: z.object({
+                tag: z.string(),
+                namespace: z.string(),
+                domain: z.string(),
+                definition: z.string(),
+                attributes: z.array(z.string()),
+                parents: z.array(z.string()),
+                citation: z.string(),
+                sdkClass: z.string()
+              })
+            })
+          }
         });
-        const judgeResult = JSON.parse(extractJson(stdout));
+
+        const judgeResult = response.object;
+        if (!judgeResult) {
+          throw new Error('Auditor Agent failed to return structured decision');
+        }
+
         console.log(`[Workflow] Judge Decision for <${genDoc.namespace}:${genDoc.tag}>: ${judgeResult.decision}. Reasoning: ${judgeResult.reasoning}`);
 
         if (judgeResult.decision === 'ACCEPT_GENERATED') {
@@ -349,7 +347,6 @@ Return ONLY the raw JSON block. No markdown wrapper, no explanations.
             console.log(`[Workflow] 🔄 Self-Correction Attempt ${attempts}/3 for <${genDoc.namespace}:${genDoc.tag}>...`);
             
             const feedbackPrompt = `
-You are an expert in the ECMA-376 Office Open XML (OOXML) specification.
 Your previous generated schema reference document for the tag "${genDoc.tag}" was REJECTED by the auditor.
 
 REJECTION REASON:
@@ -362,36 +359,69 @@ GOLDEN REFERENCE DOCUMENT (Correct Standard):
 ${JSON.stringify(goldDoc, null, 2)}
 
 Please review the rejection reason, compare it with the Golden reference document, and regenerate a corrected schema reference document.
-Conform exactly to the same JSON schema.
-
-Return ONLY the raw JSON block. No markdown wrapper, no explanations.
 `;
 
-            const escapedFeedbackPrompt = feedbackPrompt.replace(/"/g, '\\"').replace(/`/g, '\\`');
-            const genCommand = `jetski --print "${escapedFeedbackPrompt}"`;
-            
             try {
-              const genStdout = execSync(genCommand, { 
-                encoding: 'utf8', 
-                stdio: ['ignore', 'pipe', 'ignore'],
-                timeout: 10 * 60 * 1000 // 10 minutes timeout
+              const retryResponse = await schemaGeneratorAgent.generate(feedbackPrompt, {
+                structuredOutput: {
+                  schema: z.object({
+                    tag: z.string(),
+                    namespace: z.string(),
+                    domain: z.string(),
+                    definition: z.string(),
+                    attributes: z.array(z.string()),
+                    parents: z.array(z.string()),
+                    citation: z.string(),
+                    sdkClass: z.string()
+                  })
+                }
               });
-              const parsedGen = JSON.parse(extractJson(genStdout));
-              currentGenDoc = parsedGen;
+
+              if (!retryResponse.object) {
+                throw new Error('Retry generation failed to return structured object');
+              }
+              
+              currentGenDoc = retryResponse.object;
               
               // Re-evaluate with Judge
               console.log(`[Workflow] Re-evaluating retry attempt ${attempts} with Judge...`);
-              const reJudgePrompt = getJudgePrompt(goldDoc, currentGenDoc);
-              const escapedReJudgePrompt = reJudgePrompt.replace(/"/g, '\\"').replace(/`/g, '\\`');
-              const reJudgeCommand = `jetski --print "${escapedReJudgePrompt}"`;
-              
-              const reJudgeStdout = execSync(reJudgeCommand, { 
-                encoding: 'utf8', 
-                stdio: ['ignore', 'pipe', 'ignore'],
-                timeout: 5 * 60 * 1000 // 5 minutes timeout
+              const reJudgePrompt = `
+Compare this newly GENERATED schema reference against the GOLDEN schema reference for XML tag "${genDoc.tag}" (domain: "${genDoc.domain}").
+
+GOLDEN DOCUMENT:
+${JSON.stringify(goldDoc, null, 2)}
+
+GENERATED DOCUMENT:
+${JSON.stringify(currentGenDoc, null, 2)}
+
+VALIDATION REPORT:
+${JSON.stringify(validationReport, null, 2)}
+`;
+
+              const reJudgeResponse = await schemaAuditorAgent.generate(reJudgePrompt, {
+                structuredOutput: {
+                  schema: z.object({
+                    decision: z.enum(['ACCEPT_GENERATED', 'REJECT_GENERATED', 'SUSPEND_FOR_REVIEW']),
+                    reasoning: z.string(),
+                    resolvedDoc: z.object({
+                      tag: z.string(),
+                      namespace: z.string(),
+                      domain: z.string(),
+                      definition: z.string(),
+                      attributes: z.array(z.string()),
+                      parents: z.array(z.string()),
+                      citation: z.string(),
+                      sdkClass: z.string()
+                    })
+                  })
+                }
               });
-              
-              const newJudgeResult = JSON.parse(extractJson(reJudgeStdout));
+
+              const newJudgeResult = reJudgeResponse.object;
+              if (!newJudgeResult) {
+                throw new Error('Retry auditing failed to return structured decision');
+              }
+
               console.log(`[Workflow] Retry ${attempts} Judge Decision: ${newJudgeResult.decision}. Reasoning: ${newJudgeResult.reasoning}`);
                   
               if (newJudgeResult.decision === 'ACCEPT_GENERATED') {
@@ -429,7 +459,7 @@ Return ONLY the raw JSON block. No markdown wrapper, no explanations.
           });
         }
       } catch (error) {
-        console.error(`[Workflow] Judge failed for <${genDoc.namespace}:${genDoc.tag}>, falling back to suspension:`, error);
+        console.error(`[Workflow] Judge auditing failed for <${genDoc.namespace}:${genDoc.tag}>, falling back to suspension:`, error);
         conflicts.push({
           tag: genDoc.tag,
           domain: genDoc.domain,
@@ -575,6 +605,10 @@ export const mastra = new Mastra({
     id: 'ooxml-explorer-store',
     url: `file:${path.join(dbDir, 'mastra.db')}`
   }),
+  agents: {
+    'schema-generator': schemaGeneratorAgent,
+    'schema-auditor': schemaAuditorAgent
+  },
   workflows: {
     'ooxml-rag-ingestion': ingestionWorkflow
   }
