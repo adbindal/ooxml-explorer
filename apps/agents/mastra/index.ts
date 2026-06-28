@@ -22,7 +22,7 @@ Guidelines:
 3. "citation": You MUST reference the most specific section number in the ECMA-376 specification that defines this specific element. Do NOT use high-level parent section numbers. For example, the element 'document' is defined in 'ECMA-376 Part 1, Section 17.2.3', not the general 'Section 17.2' or the incorrect 'Section 17.3.1.10'. In case of multiple citations, pick the one that is the section heading and talks about that particular element only. Must match the format: "ECMA-376 Part X, Section Y.Z" (e.g. "ECMA-376 Part 1, Section 17.3.1.22"). Verify the exact section number.
 4. "sdkClass": Provide the corresponding Microsoft Open XML SDK class name (e.g. "Paragraph" or "TableCell").`,
   model: {
-    id: 'google/gemini-3.5-flash',
+    id: 'google/gemini-2.5-flash',
   },
 });
 
@@ -40,7 +40,7 @@ Guidelines for your Decision:
 2. "REJECT_GENERATED": Choose this if the GENERATED document contains actual errors, hallucinations, or is incorrect compared to the GOLDEN document. It needs to be corrected.
 3. "SUSPEND_FOR_REVIEW": Choose this if there is a major conflict requiring human review.`,
   model: {
-    id: 'google/gemini-3.5-flash', // Use gemini-3.5-flash for auditing
+    id: 'google/gemini-2.5-flash', // Use gemini-2.5-flash for auditing
   },
 });
 
@@ -145,27 +145,23 @@ function logCalibrationDefect(
 const generateSchemaStep = createStep({
   id: 'generateSchema',
   inputSchema: z.object({
-    tags: z.array(z.object({
-      tag: z.string(),
-      namespace: z.string(),
-      domain: z.string()
-    }))
+    tag: z.string(),
+    namespace: z.string(),
+    domain: z.string()
   }),
   outputSchema: z.object({
-    results: z.array(z.object({
-      tag: z.string(),
-      namespace: z.string(),
-      domain: z.string(),
-      definition: z.string(),
-      attributes: z.array(z.string()),
-      parents: z.array(z.string()),
-      citation: z.string(),
-      sdkClass: z.string()
-    }))
+    tag: z.string(),
+    namespace: z.string(),
+    domain: z.string(),
+    definition: z.string(),
+    attributes: z.array(z.string()),
+    parents: z.array(z.string()),
+    citation: z.string(),
+    sdkClass: z.string()
   }),
   execute: async ({ inputData }) => {
-    const { tags } = inputData;
-    const results = [];
+    const { tag, namespace, domain } = inputData;
+    console.log(`[Workflow] Processing <${namespace}:${tag}>...`);
 
     // Load golden dataset to check for human reviewer notes
     const goldenPath = path.join(PROJECT_ROOT, 'apps/web/public/rag-data.json');
@@ -174,48 +170,39 @@ const generateSchemaStep = createStep({
       golden = JSON.parse(fs.readFileSync(goldenPath, 'utf8'));
     }
 
-    for (const item of tags) {
-      const { tag, namespace, domain } = item;
-      console.log(`[Workflow] Processing <${namespace}:${tag}>...`);
-
-      const goldDoc = golden.find(g => g.tag === tag && g.domain === domain);
-      
-      let prompt = `Generate a structured RAG reference document for the XML tag "${tag}" (namespace prefix: "${namespace}", domain: "${domain}").`;
-      if (goldDoc?.reviewerNote) {
-        prompt += `\n\nCRITICAL REVIEWER NOTE / CORRECTION GUIDE:\n"${goldDoc.reviewerNote}"\nYou MUST strictly follow this note when generating the definition, parents, attributes, and citation. Do not override this instruction under any circumstances.`;
-      }
-
-      try {
-        const response = await schemaGeneratorAgent.generate(prompt, {
-          structuredOutput: {
-            schema: z.object({
-              tag: z.string(),
-              namespace: z.string(),
-              domain: z.string(),
-              definition: z.string(),
-              attributes: z.array(z.string()),
-              parents: z.array(z.string()),
-              citation: z.string(),
-              sdkClass: z.string()
-            })
-          }
-        });
-
-        if (response.object) {
-          results.push(response.object);
-          console.log(`[Workflow] Successfully processed <${namespace}:${tag}> via Agent`);
-        } else {
-          throw new Error('Agent failed to return structured object');
-        }
-      } catch (error) {
-        console.error(`[Workflow] Failed to process <${namespace}:${tag}> via Agent:`, error);
-      }
-
-      // Avoid rate limits
-      await new Promise(resolve => setTimeout(resolve, 2000));
+    const goldDoc = golden.find(g => g.tag === tag && g.domain === domain);
+    
+    let prompt = `Generate a structured RAG reference document for the XML tag "${tag}" (namespace prefix: "${namespace}", domain: "${domain}").`;
+    if (goldDoc?.reviewerNote) {
+      prompt += `\n\nCRITICAL REVIEWER NOTE / CORRECTION GUIDE:\n"${goldDoc.reviewerNote}"\nYou MUST strictly follow this note when generating the definition, parents, attributes, and citation. Do not override this instruction under any circumstances.`;
     }
 
-    return { results };
+    try {
+      const response = await schemaGeneratorAgent.generate(prompt, {
+        structuredOutput: {
+          schema: z.object({
+            tag: z.string(),
+            namespace: z.string(),
+            domain: z.string(),
+            definition: z.string(),
+            attributes: z.array(z.string()),
+            parents: z.array(z.string()),
+            citation: z.string(),
+            sdkClass: z.string()
+          })
+        }
+      });
+
+      if (response.object) {
+        console.log(`[Workflow] Successfully processed <${namespace}:${tag}> via Agent`);
+        return response.object;
+      } else {
+        throw new Error('Agent failed to return structured object');
+      }
+    } catch (error) {
+      console.error(`[Workflow] Failed to process <${namespace}:${tag}> via Agent:`, error);
+      throw error;
+    }
   }
 });
 
@@ -223,92 +210,66 @@ const generateSchemaStep = createStep({
 const evaluateAndDiffStep = createStep({
   id: 'evaluateAndDiff',
   inputSchema: z.object({
-    results: z.array(z.object({
-      tag: z.string(),
-      namespace: z.string(),
-      domain: z.string(),
-      definition: z.string(),
-      attributes: z.array(z.string()),
-      parents: z.array(z.string()),
-      citation: z.string(),
-      sdkClass: z.string()
-    }))
+    tag: z.string(),
+    namespace: z.string(),
+    domain: z.string(),
+    definition: z.string(),
+    attributes: z.array(z.string()),
+    parents: z.array(z.string()),
+    citation: z.string(),
+    sdkClass: z.string()
   }),
   outputSchema: z.object({
-    approved: z.array(z.object({
-      tag: z.string(),
-      namespace: z.string(),
-      domain: z.string(),
-      definition: z.string(),
-      attributes: z.array(z.string()),
-      parents: z.array(z.string()),
-      citation: z.string(),
-      sdkClass: z.string()
-    }))
+    tag: z.string(),
+    namespace: z.string(),
+    domain: z.string(),
+    definition: z.string(),
+    attributes: z.array(z.string()),
+    parents: z.array(z.string()),
+    citation: z.string(),
+    sdkClass: z.string()
   }),
   execute: async ({ inputData, suspend, resumeData }) => {
-    const { results } = inputData;
+    const genDoc = inputData;
+    const { tag, namespace, domain } = genDoc;
+
+    // If this step is resuming from a human resolution, return the resolved doc directly
+    if (resumeData) {
+      console.log(`[Workflow] Resuming <${namespace}:${tag}> with human resolution...`);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return (resumeData as any).resolvedDoc as ReferenceDoc;
+    }
     
     // Load golden dataset
-    const goldenPath = path.join(PROJECT_ROOT, 'public/rag-data.json');
+    const goldenPath = path.join(PROJECT_ROOT, 'apps/web/public/rag-data.json');
     let golden: ReferenceDoc[] = [];
     if (fs.existsSync(goldenPath)) {
       golden = JSON.parse(fs.readFileSync(goldenPath, 'utf8'));
     }
 
-    const approved: ReferenceDoc[] = [];
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const conflicts: any[] = [];
+    const goldDoc = golden.find(g => g.tag === tag && g.domain === domain);
 
-    for (const genDoc of results) {
-      const goldDoc = golden.find(g => g.tag === genDoc.tag && g.domain === genDoc.domain);
+    if (!goldDoc) {
+      // New tag - audit it to ensure it is not a hallucination!
+      console.log(`[Workflow] Auditing new tag <${namespace}:${tag}> to verify authenticity...`);
+      const newTagAuditPrompt = `
+You are an expert auditor of the ECMA-376 Office Open XML (OOXML) specification.
+A developer has requested to ingest a new XML tag into the RAG database.
 
-      if (!goldDoc) {
-        // New tag - auto approve
-        approved.push(genDoc as ReferenceDoc);
-        continue;
-      }
+XML Tag: "${tag}"
+Namespace: "${namespace}"
+Domain: "${domain}"
 
-      // Basic deterministic validation
-      const validationReport = {
-        namespaceIsValid: ['w', 'r', 'p', 'rel', 'contentTypes'].includes(genDoc.namespace),
-        citationIsValidFormat: /^ECMA-376 Part \d+, Section \d+(\.\d+)*$/.test(genDoc.citation),
-        attributesAreArrays: Array.isArray(genDoc.attributes),
-        parentsAreArrays: Array.isArray(genDoc.parents)
-      };
-
-      // Check if there are any differences at all
-      const hasDifferences = 
-        goldDoc.citation !== genDoc.citation ||
-        goldDoc.namespace !== genDoc.namespace ||
-        goldDoc.definition !== genDoc.definition ||
-        JSON.stringify(goldDoc.attributes.sort()) !== JSON.stringify(genDoc.attributes.sort()) ||
-        JSON.stringify(goldDoc.parents.sort()) !== JSON.stringify(genDoc.parents.sort());
-
-      if (!hasDifferences) {
-        // No differences - keep golden
-        approved.push(goldDoc);
-        continue;
-      }
-
-      // If there are differences, query the LLM Judge to evaluate
-      console.log(`[Workflow] Differences found for <${genDoc.namespace}:${genDoc.tag}>. Invoking LLM Judge Agent...`);
-
-      const judgePrompt = `
-Compare this newly GENERATED schema reference against the GOLDEN schema reference for XML tag "${genDoc.tag}" (domain: "${genDoc.domain}").
-
-GOLDEN DOCUMENT:
-${JSON.stringify(goldDoc, null, 2)}
-
-GENERATED DOCUMENT:
+Proposed Schema Reference Document:
 ${JSON.stringify(genDoc, null, 2)}
 
-VALIDATION REPORT:
-${JSON.stringify(validationReport, null, 2)}
+Your task is to verify if this is a REAL, VALID XML tag defined in the official ECMA-376 specification for the "${domain}" domain.
+If it is a real tag, you MUST decide "ACCEPT_GENERATED".
+If it is a hallucinated, non-existent, or misspelled tag, you MUST decide "REJECT_GENERATED" and explain why it is invalid.
 `;
 
       try {
-        const response = await schemaAuditorAgent.generate(judgePrompt, {
+        const response = await schemaAuditorAgent.generate(newTagAuditPrompt, {
           structuredOutput: {
             schema: z.object({
               decision: z.enum(['ACCEPT_GENERATED', 'REJECT_GENERATED', 'SUSPEND_FOR_REVIEW']),
@@ -328,26 +289,116 @@ ${JSON.stringify(validationReport, null, 2)}
         });
 
         const judgeResult = response.object;
-        if (!judgeResult) {
-          throw new Error('Auditor Agent failed to return structured decision');
+        if (judgeResult && judgeResult.decision === 'ACCEPT_GENERATED') {
+          console.log(`[Workflow] New tag <${namespace}:${tag}> verified and approved.`);
+          return genDoc;
+        } else {
+          console.log(`[Workflow] ❌ New tag <${namespace}:${tag}> rejected as invalid/hallucination: ${judgeResult?.reasoning}`);
+          return suspend({
+            conflict: {
+              tag,
+              domain,
+              namespace,
+              reasoning: `New tag rejected as hallucination: ${judgeResult?.reasoning}`,
+              golden: null, // No golden document exists
+              generated: genDoc,
+              resolvedDoc: judgeResult?.resolvedDoc
+            }
+          });
         }
+      } catch (error) {
+        console.error(`[Workflow] Auditing new tag <${namespace}:${tag}> failed, suspending:`, error);
+        return suspend({
+          conflict: {
+            tag,
+            domain,
+            namespace,
+            reasoning: `New tag auditing failed: ` + (error as Error).message,
+            golden: null,
+            generated: genDoc
+          }
+        });
+      }
+    }
 
-        console.log(`[Workflow] Judge Decision for <${genDoc.namespace}:${genDoc.tag}>: ${judgeResult.decision}. Reasoning: ${judgeResult.reasoning}`);
+    // Basic deterministic validation
+    const validationReport = {
+      namespaceIsValid: ['w', 'r', 'p', 'rel', 'contentTypes'].includes(genDoc.namespace),
+      citationIsValidFormat: /^ECMA-376 Part \d+, Section \d+(\.\d+)*$/.test(genDoc.citation),
+      attributesAreArrays: Array.isArray(genDoc.attributes),
+      parentsAreArrays: Array.isArray(genDoc.parents)
+    };
 
-        if (judgeResult.decision === 'ACCEPT_GENERATED') {
-          approved.push(judgeResult.resolvedDoc as ReferenceDoc);
-        } else if (judgeResult.decision === 'REJECT_GENERATED') {
-          // --- AUTONOMOUS RETRY LOOP (Phase 2) ---
-          let attempts = 1;
-          let currentGenDoc = genDoc;
-          let currentJudgeResult = judgeResult;
-          let healed = false;
+    // Check if there are any differences at all
+    const hasDifferences = 
+      goldDoc.citation !== genDoc.citation ||
+      goldDoc.namespace !== genDoc.namespace ||
+      goldDoc.definition !== genDoc.definition ||
+      JSON.stringify(goldDoc.attributes.sort()) !== JSON.stringify(genDoc.attributes.sort()) ||
+      JSON.stringify(goldDoc.parents.sort()) !== JSON.stringify(genDoc.parents.sort());
 
-          while (attempts <= 3) {
-            console.log(`[Workflow] 🔄 Self-Correction Attempt ${attempts}/3 for <${genDoc.namespace}:${genDoc.tag}>...`);
-            
-            const feedbackPrompt = `
-Your previous generated schema reference document for the tag "${genDoc.tag}" was REJECTED by the auditor.
+    if (!hasDifferences) {
+      // No differences - keep golden
+      return goldDoc;
+    }
+
+    // If there are differences, query the LLM Judge to evaluate
+    console.log(`[Workflow] Differences found for <${namespace}:${tag}>. Invoking LLM Judge Agent...`);
+
+    const judgePrompt = `
+Compare this newly GENERATED schema reference against the GOLDEN schema reference for XML tag "${tag}" (domain: "${domain}").
+
+GOLDEN DOCUMENT:
+${JSON.stringify(goldDoc, null, 2)}
+
+GENERATED DOCUMENT:
+${JSON.stringify(genDoc, null, 2)}
+
+VALIDATION REPORT:
+${JSON.stringify(validationReport, null, 2)}
+`;
+
+    try {
+      const response = await schemaAuditorAgent.generate(judgePrompt, {
+        structuredOutput: {
+          schema: z.object({
+            decision: z.enum(['ACCEPT_GENERATED', 'REJECT_GENERATED', 'SUSPEND_FOR_REVIEW']),
+            reasoning: z.string(),
+            resolvedDoc: z.object({
+              tag: z.string(),
+              namespace: z.string(),
+              domain: z.string(),
+              definition: z.string(),
+              attributes: z.array(z.string()),
+              parents: z.array(z.string()),
+              citation: z.string(),
+              sdkClass: z.string()
+            })
+          })
+        }
+      });
+
+      const judgeResult = response.object;
+      if (!judgeResult) {
+        throw new Error('Auditor Agent failed to return structured decision');
+      }
+
+      console.log(`[Workflow] Judge Decision for <${namespace}:${tag}>: ${judgeResult.decision}. Reasoning: ${judgeResult.reasoning}`);
+
+      if (judgeResult.decision === 'ACCEPT_GENERATED') {
+        return judgeResult.resolvedDoc;
+      } else if (judgeResult.decision === 'REJECT_GENERATED') {
+        // --- AUTONOMOUS RETRY LOOP (Phase 2) ---
+        let attempts = 1;
+        let currentGenDoc = genDoc;
+        let currentJudgeResult = judgeResult;
+        let healed = false;
+
+        while (attempts <= 3) {
+          console.log(`[Workflow] 🔄 Self-Correction Attempt ${attempts}/3 for <${namespace}:${tag}>...`);
+          
+          const feedbackPrompt = `
+Your previous generated schema reference document for the tag "${tag}" was REJECTED by the auditor.
 
 REJECTION REASON:
 "${currentJudgeResult.reasoning}"
@@ -361,32 +412,32 @@ ${JSON.stringify(goldDoc, null, 2)}
 Please review the rejection reason, compare it with the Golden reference document, and regenerate a corrected schema reference document.
 `;
 
-            try {
-              const retryResponse = await schemaGeneratorAgent.generate(feedbackPrompt, {
-                structuredOutput: {
-                  schema: z.object({
-                    tag: z.string(),
-                    namespace: z.string(),
-                    domain: z.string(),
-                    definition: z.string(),
-                    attributes: z.array(z.string()),
-                    parents: z.array(z.string()),
-                    citation: z.string(),
-                    sdkClass: z.string()
-                  })
-                }
-              });
-
-              if (!retryResponse.object) {
-                throw new Error('Retry generation failed to return structured object');
+          try {
+            const retryResponse = await schemaGeneratorAgent.generate(feedbackPrompt, {
+              structuredOutput: {
+                schema: z.object({
+                  tag: z.string(),
+                  namespace: z.string(),
+                  domain: z.string(),
+                  definition: z.string(),
+                  attributes: z.array(z.string()),
+                  parents: z.array(z.string()),
+                  citation: z.string(),
+                  sdkClass: z.string()
+                })
               }
-              
-              currentGenDoc = retryResponse.object;
-              
-              // Re-evaluate with Judge
-              console.log(`[Workflow] Re-evaluating retry attempt ${attempts} with Judge...`);
-              const reJudgePrompt = `
-Compare this newly GENERATED schema reference against the GOLDEN schema reference for XML tag "${genDoc.tag}" (domain: "${genDoc.domain}").
+            });
+
+            if (!retryResponse.object) {
+              throw new Error('Retry generation failed to return structured object');
+            }
+            
+            currentGenDoc = retryResponse.object;
+            
+            // Re-evaluate with Judge
+            console.log(`[Workflow] Re-evaluating retry attempt ${attempts} with Judge...`);
+            const reJudgePrompt = `
+Compare this newly GENERATED schema reference against the GOLDEN schema reference for XML tag "${tag}" (domain: "${domain}").
 
 GOLDEN DOCUMENT:
 ${JSON.stringify(goldDoc, null, 2)}
@@ -398,117 +449,99 @@ VALIDATION REPORT:
 ${JSON.stringify(validationReport, null, 2)}
 `;
 
-              const reJudgeResponse = await schemaAuditorAgent.generate(reJudgePrompt, {
-                structuredOutput: {
-                  schema: z.object({
-                    decision: z.enum(['ACCEPT_GENERATED', 'REJECT_GENERATED', 'SUSPEND_FOR_REVIEW']),
-                    reasoning: z.string(),
-                    resolvedDoc: z.object({
-                      tag: z.string(),
-                      namespace: z.string(),
-                      domain: z.string(),
-                      definition: z.string(),
-                      attributes: z.array(z.string()),
-                      parents: z.array(z.string()),
-                      citation: z.string(),
-                      sdkClass: z.string()
-                    })
+            const reJudgeResponse = await schemaAuditorAgent.generate(reJudgePrompt, {
+              structuredOutput: {
+                schema: z.object({
+                  decision: z.enum(['ACCEPT_GENERATED', 'REJECT_GENERATED', 'SUSPEND_FOR_REVIEW']),
+                  reasoning: z.string(),
+                  resolvedDoc: z.object({
+                    tag: z.string(),
+                    namespace: z.string(),
+                    domain: z.string(),
+                    definition: z.string(),
+                    attributes: z.array(z.string()),
+                    parents: z.array(z.string()),
+                    citation: z.string(),
+                    sdkClass: z.string()
                   })
-                }
-              });
-
-              const newJudgeResult = reJudgeResponse.object;
-              if (!newJudgeResult) {
-                throw new Error('Retry auditing failed to return structured decision');
+                })
               }
+            });
 
-              console.log(`[Workflow] Retry ${attempts} Judge Decision: ${newJudgeResult.decision}. Reasoning: ${newJudgeResult.reasoning}`);
-                  
-              if (newJudgeResult.decision === 'ACCEPT_GENERATED') {
-                approved.push(newJudgeResult.resolvedDoc as ReferenceDoc);
-                healed = true;
-                console.log(`[Workflow] ✅ Self-correction succeeded on attempt ${attempts}!`);
-                break;
-              }
-              currentJudgeResult = newJudgeResult;
-            } catch (err) {
-              console.error(`[Workflow] Retry attempt ${attempts} failed:`, err);
+            const newJudgeResult = reJudgeResponse.object;
+            if (!newJudgeResult) {
+              throw new Error('Retry auditing failed to return structured decision');
             }
-            
-            attempts++;
-            await new Promise(resolve => setTimeout(resolve, 2000));
-          }
 
-          if (!healed) {
-            console.log(`[Workflow] ❌ Retries exhausted for <${genDoc.namespace}:${genDoc.tag}>. Keeping golden and logging defect.`);
-            approved.push(goldDoc);
-            
-            // Log defect to CALIBRATION_FEEDBACK.md
-            logCalibrationDefect(genDoc.tag, genDoc.domain, goldDoc, currentGenDoc as unknown as ReferenceDoc, currentJudgeResult.reasoning);
+            console.log(`[Workflow] Retry ${attempts} Judge Decision: ${newJudgeResult.decision}. Reasoning: ${newJudgeResult.reasoning}`);
+                
+            if (newJudgeResult.decision === 'ACCEPT_GENERATED') {
+              console.log(`[Workflow] ✅ Self-correction succeeded on attempt ${attempts}!`);
+              return newJudgeResult.resolvedDoc;
+            }
+            currentJudgeResult = newJudgeResult;
+          } catch (err) {
+            console.error(`[Workflow] Retry attempt ${attempts} failed:`, err);
           }
-        } else {
-          // Suspend for review
-          conflicts.push({
-            tag: genDoc.tag,
-            domain: genDoc.domain,
+          
+          attempts++;
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+
+        console.log(`[Workflow] ❌ Retries exhausted for <${namespace}:${tag}>. Keeping golden and logging defect.`);
+        // Log defect to CALIBRATION_FEEDBACK.md
+        logCalibrationDefect(tag, domain, goldDoc, currentGenDoc as unknown as ReferenceDoc, currentJudgeResult.reasoning);
+        return goldDoc;
+      } else {
+        // Suspend for review
+        console.log(`[Workflow] Suspending iteration for <${namespace}:${tag}> due to conflict.`);
+        return suspend({
+          conflict: {
+            tag,
+            domain,
             namespace: goldDoc.namespace,
             reasoning: judgeResult.reasoning,
             golden: goldDoc,
             generated: genDoc,
             resolvedDoc: judgeResult.resolvedDoc
-          });
-        }
-      } catch (error) {
-        console.error(`[Workflow] Judge auditing failed for <${genDoc.namespace}:${genDoc.tag}>, falling back to suspension:`, error);
-        conflicts.push({
-          tag: genDoc.tag,
-          domain: genDoc.domain,
-          namespace: goldDoc.namespace,
-          reasoning: 'Judge execution failed.',
-          golden: goldDoc,
-          generated: genDoc
+          }
         });
       }
-
-      // Avoid rate limits
-      await new Promise(resolve => setTimeout(resolve, 1000));
+    } catch (error) {
+      console.error(`[Workflow] Judge auditing failed for <${namespace}:${tag}>, falling back to suspension:`, error);
+      return suspend({
+        conflict: {
+          tag,
+          domain,
+          namespace: goldDoc.namespace,
+          reasoning: 'Judge execution failed: ' + (error as Error).message,
+          golden: goldDoc,
+          generated: genDoc
+        }
+      });
     }
-
-    if (conflicts.length > 0 && !resumeData) {
-      console.log(`[Workflow] Found ${conflicts.length} conflicts requiring human review. Suspending workflow...`);
-      return suspend({ conflicts });
-    }
-
-    // Resolve conflicts using resumeData
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const resolutions = resumeData ? (resumeData as any).resolutions : [];
-    const finalApproved = [...approved, ...resolutions];
-
-    return { approved: finalApproved };
   }
 });
 
 // 3. Commit Approved Data Step
 const commitApprovedDataStep = createStep({
   id: 'commitApprovedData',
-  inputSchema: z.object({
-    approved: z.array(z.object({
-      tag: z.string(),
-      namespace: z.string(),
-      domain: z.string(),
-      definition: z.string(),
-      attributes: z.array(z.string()),
-      parents: z.array(z.string()),
-      citation: z.string(),
-      sdkClass: z.string()
-    }))
-  }),
+  inputSchema: z.array(z.object({
+    tag: z.string(),
+    namespace: z.string(),
+    domain: z.string(),
+    definition: z.string(),
+    attributes: z.array(z.string()),
+    parents: z.array(z.string()),
+    citation: z.string(),
+    sdkClass: z.string()
+  })),
   outputSchema: z.object({
     success: z.boolean(),
     count: z.number()
   }),
   execute: async ({ inputData }) => {
-    const { approved } = inputData;
+    const approved = inputData;
     
     const goldenPath = path.join(PROJECT_ROOT, 'apps/web/public/rag-data.json');
     let golden: ReferenceDoc[] = [];
@@ -570,16 +603,22 @@ export const KNOWLEDGE_BASE: ReferenceDoc[] = ${JSON.stringify(highPriorityKB, n
   }
 });
 
+
 // Define the Mastra Workflow for RAG Ingestion
-export const ingestionWorkflow = new Workflow({
+export const ingestionWorkflow = new Workflow<
+  any,
+  any,
+  'ooxml-rag-ingestion',
+  any,
+  Array<{ tag: string; namespace: string; domain: string }>,
+  { success: boolean; count: number }
+>({
   id: 'ooxml-rag-ingestion',
-  inputSchema: z.object({
-    tags: z.array(z.object({
-      tag: z.string(),
-      namespace: z.string(),
-      domain: z.string()
-    }))
-  }),
+  inputSchema: z.array(z.object({
+    tag: z.string(),
+    namespace: z.string(),
+    domain: z.string()
+  })),
   outputSchema: z.object({
     success: z.boolean(),
     count: z.number()
@@ -588,8 +627,8 @@ export const ingestionWorkflow = new Workflow({
 
 // Chain the steps and commit the workflow
 ingestionWorkflow
-  .then(generateSchemaStep)
-  .then(evaluateAndDiffStep)
+  .foreach(generateSchemaStep, { concurrency: 5 })
+  .foreach(evaluateAndDiffStep, { concurrency: 5 })
   .then(commitApprovedDataStep)
   .commit();
 
