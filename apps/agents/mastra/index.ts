@@ -7,6 +7,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { ReferenceDoc } from 'web/services/staticKnowledgeBase';
 import { Agent } from '@mastra/core/agent';
+import { getXSDGrounding } from './xsdParser';
 
 // 1. Schema Generator Agent
 export const schemaGeneratorAgent = new Agent({
@@ -321,12 +322,27 @@ If it is a hallucinated, non-existent, or misspelled tag, you MUST decide "REJEC
       }
     }
 
-    // Basic deterministic validation
+    // Get XSD grounding
+    const xsdGrounding = getXSDGrounding(tag, domain);
+
+    // Basic deterministic validation against XSD grounding
     const validationReport = {
-      namespaceIsValid: ['w', 'r', 'p', 'rel', 'contentTypes'].includes(genDoc.namespace),
+      namespaceIsValid: genDoc.namespace === xsdGrounding.namespace,
       citationIsValidFormat: /^ECMA-376 Part \d+, Section \d+(\.\d+)*$/.test(genDoc.citation),
       attributesAreArrays: Array.isArray(genDoc.attributes),
-      parentsAreArrays: Array.isArray(genDoc.parents)
+      parentsAreArrays: Array.isArray(genDoc.parents),
+      
+      // Structural matches against XSD
+      attributesMatchXSD: genDoc.attributes.every(attr => xsdGrounding.attributes.includes(attr)),
+      parentsMatchXSD: genDoc.parents.every(parent => xsdGrounding.parents.includes(parent)),
+      
+      // Missing items
+      missingAttributes: xsdGrounding.attributes.filter(attr => !genDoc.attributes.includes(attr)),
+      missingParents: xsdGrounding.parents.filter(parent => !genDoc.parents.includes(parent)),
+      
+      // Expected from XSD (ground truth)
+      xsdExpectedAttributes: xsdGrounding.attributes,
+      xsdExpectedParents: xsdGrounding.parents
     };
 
     // Check if there are any differences at all
