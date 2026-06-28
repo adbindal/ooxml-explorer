@@ -5,7 +5,7 @@ import { execSync } from 'child_process';
 import { z } from 'zod';
 import * as fs from 'fs';
 import * as path from 'path';
-import { ReferenceDoc } from '../../web/services/staticKnowledgeBase';
+import { ReferenceDoc } from 'web/services/staticKnowledgeBase';
 
 function getProjectRoot(): string {
   let currentDir = process.cwd();
