@@ -46,7 +46,7 @@ const main = async () => {
 
     const workflow = mastra.getWorkflow('ooxml-rag-ingestion');
     const run = await workflow.createRun();
-    const response = await run.start({ inputData: { tags: REFERENCE_TAGS } });
+    const response = await run.start({ inputData: REFERENCE_TAGS });
     
     if (response.status === 'success') {
       const result = response.result as { success: boolean; count: number };

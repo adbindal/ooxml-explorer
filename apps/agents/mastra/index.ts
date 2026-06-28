@@ -325,7 +325,15 @@ If it is a hallucinated, non-existent, or misspelled tag, you MUST decide "REJEC
     // Get XSD grounding
     const xsdGrounding = getXSDGrounding(tag, domain);
 
-    // Basic deterministic validation against XSD grounding
+    // Get official SDK Class name from map
+    const sdkClassMapPath = path.join(PROJECT_ROOT, 'apps/agents/schemas/sdkClassMap.json');
+    let sdkClassMap: Record<string, string> = {};
+    if (fs.existsSync(sdkClassMapPath)) {
+      sdkClassMap = JSON.parse(fs.readFileSync(sdkClassMapPath, 'utf8'));
+    }
+    const expectedSdkClass = sdkClassMap[`${domain}:${tag}`] || null;
+
+    // Basic deterministic validation against XSD grounding and SDK Class Map
     const validationReport = {
       namespaceIsValid: genDoc.namespace === xsdGrounding.namespace,
       citationIsValidFormat: /^ECMA-376 Part \d+, Section \d+(\.\d+)*$/.test(genDoc.citation),
@@ -342,7 +350,11 @@ If it is a hallucinated, non-existent, or misspelled tag, you MUST decide "REJEC
       
       // Expected from XSD (ground truth)
       xsdExpectedAttributes: xsdGrounding.attributes,
-      xsdExpectedParents: xsdGrounding.parents
+      xsdExpectedParents: xsdGrounding.parents,
+
+      // SDK Class Name validation
+      sdkClassIsValid: !expectedSdkClass || genDoc.sdkClass === expectedSdkClass,
+      expectedSdkClass
     };
 
     // Check if there are any differences at all
