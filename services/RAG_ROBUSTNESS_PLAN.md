@@ -1,99 +1,145 @@
 # OOXML RAG Pipeline Robustness & Accuracy Plan
 
 ## 1. The Problem Statement
-Our current evaluation strategy assumes that the manually-created "Golden" dataset (`public/rag-data.json`) is the absolute source of truth. However, recent diff analyses revealed that:
-1.  **Golden Data Inaccuracies**: The Golden dataset contains human errors (e.g., `<w:document>` citing section `17.3.1.10` instead of `17.2.3`).
-2.  **LLM Accuracy**: The Mastra pipeline actually produced more accurate citations (`17.2.3`) and attributes (`conformance`) than the Golden reference.
-3.  **Namespace Inconsistencies**: The LLM output mixed short prefixes (`w`) with full XML URIs.
+Our RAG pipeline must ensure that the generated RAG reference database (`public/rag-data.json`) is 100% accurate and conforms strictly to the ECMA-376 specification. 
 
-If the baseline contains errors, we cannot reliably use it for automated calibration. We need a robust, scalable pipeline that ensures the final RAG database is 100% accurate with high confidence.
+However, running LLM generation sequentially on dozens or hundreds of tags is extremely slow, and relying purely on LLM memory leads to hallucinations in citations, attributes, and parent elements. 
 
----
-
-## 2. Proposed Architecture: Self-Healing Feedback Loop
-
-To solve this, we introduce an **LLM-as-a-Judge** layer coupled with an **Autonomous Self-Correction Loop** and a **Systemic Feedback Backlog**. 
-
-This architecture handles differences at two distinct timescales:
-1.  **Short-Term (Autonomous)**: If the generator produces an output that the Judge deems worse than the Golden reference (`KEEP_GOLDEN`), the pipeline automatically retries the generator (up to 3 times) by feeding it the Judge's exact error analysis.
-2.  **Long-Term (Systemic)**: If the generator fails to correct itself after 3 retries, the pipeline logs the failure and the Judge's reasoning to a local markdown file (`services/CALIBRATION_FEEDBACK.md`), creating a structured backlog for developer prompt engineering.
-
-```
-                      ┌──────────────────────────────┐
-                      │   1. generateSchemaStep      │ ◄──────────────────────────┐
-                      │  (Generator LLM / Consensus) │                            │
-                      └──────────────┬───────────────┘                            │
-                                     │                                            │ (Retry with
-                                     ▼                                            │  Feedback)
-                      ┌──────────────────────────────┐                            │
-                      │   2. xsdValidationStep       │                            │
-                      │ (Deterministic Schema Check) │                            │
-                      └──────────────┬───────────────┘                            │
-                                     │ (Passes Validation Report)                 │
-                                     ▼                                            │
-                      ┌──────────────────────────────┐                            │
-                      │   3. llmJudgeStep            │                            │
-                      │ (LLM-as-a-Judge - Pro Model) │                            │
-                      └──────────────┬───────────────┘                            │
-                                     │                                            │
-         ┌───────────────────────────┼───────────────────────────┐                │
-         │ (UPGRADE_GOLDEN)          │ (KEEP_GOLDEN)             │ (SUSPEND)      │
-         ▼                           ▼                           ▼                │
-┌──────────────────┐        ┌──────────────────┐        ┌──────────────────┐      │
-│ Auto-Approve &   │        │   Retry < 3?     ├────────┼──────────────────┼──────┘
-│ Update Golden    │        └──┬─────────────┬─┘        │ Pauses Workflow  │
-└────────┬─────────┘           │ (Yes)       │ (No)     │ Awaits Human     │
-         │                     │             │          └────────┬─────────┘
-         │                     ▼             ▼                   │
-         │              [Auto-Correct]  [Log Defect to           │
-         │                              CALIBRATION_FEEDBACK.md] │
-         │                                   │                   │
-         └───────────────────────────┬───────┴───────────────────┘
-                                     │
-                                     ▼
-                      ┌──────────────────────────────┐
-                      │   4. commitApprovedDataStep  │
-                      │   (Write & Compile KB)       │
-                      └──────────────────────────────┘
-```
+To solve this, we are transitionining the pipeline from a simple sequential script to a **parallelized, agentic workflow** using Mastra.
 
 ---
 
-## 3. Step-by-Step Execution Plan
+## 2. Proposed Architecture: Collaborative Agentic Loop
 
-### Phase 1: Namespace Decoupling & Prompt Hardening (Completed)
-*   **Action**: Decouple short prefixes from full XML URIs at the application layer.
-*   **Implementation**:
-    1.  Added a `NAMESPACE_MAP` lookup table and helper in the codebase.
-    2.  Hardened the Mastra workflow prompt to strictly return short prefixes (`w`, `r`, `p`).
-*   **Outcome**: Resolves all namespace mismatches and ensures consistency.
+We decompose the pipeline into specialized **Mastra Agents** and **deterministic code steps** composed using Mastra's native workflow engine.
 
-### Phase 2: LLM-as-a-Judge & Autonomous Self-Healing (Immediate)
-*   **Action**: Implement the `llmJudgeStep` and the self-correction retry loop.
-*   **Implementation**:
-    1.  **Define the Judge Prompt**: Instruct a high-capacity model (Gemini Pro) to act as a pedantic OOXML specification auditor.
-    2.  **Judge Input**: Receives the `generated` schema, the `golden` schema, and a `validationReport`.
-    3.  **Judge Output**: Returns a JSON object with:
-        *   `decision`: `'UPGRADE_GOLDEN' | 'KEEP_GOLDEN' | 'SUSPEND_FOR_REVIEW'`
-        *   `reasoning`: The exact reason for the decision (e.g., why the generated version was worse or what was incorrect).
-        *   `resolvedDoc`: The final corrected reference document.
-    4.  **Autonomous Retry Loop**: If the Judge returns `KEEP_GOLDEN`, re-run `generateSchemaStep` for that tag up to 3 times, appending the Judge's `reasoning` as feedback in the prompt.
-    5.  **Defect Logging**: If retries are exhausted and the output is still rejected, append the failure details and Judge's reasoning to `services/CALIBRATION_FEEDBACK.md`.
-    6.  **Suspension**: If the Judge returns `SUSPEND_FOR_REVIEW`, the workflow suspends, displaying the Judge's reasoning and the conflict in Mastra Studio.
-*   **Outcome**: Simple errors are resolved autonomously; systemic prompt/model gaps are logged as actionable developer tasks.
+```
+                  ┌──────────────────────────────────────────────┐
+                  │                 [Tag Input]                  │
+                  └──────────────────────┬───────────────────────┘
+                                         │
+                                         ▼
+                  ┌──────────────────────────────────────────────┐
+                  │          1. informationRetrieverAgent        │
+                  │       (Fetches spec text via Web Search)     │
+                  └──────────────────────┬───────────────────────┘
+                                         │
+                                         ▼
+                  ┌──────────────────────────────────────────────┐
+                  │            2. schemaGeneratorAgent           │
+                  │       (Synthesizes reference schema)         │
+                  └──────────────────────┬───────────────────────┘
+                                         │
+                                         ▼
+ ┌───────────────────────────────────────┴───────────────────────────────────────┐
+ │                                                                               │
+ │                ┌──────────────────────────────────────────────┐               │
+ │                │             3. xsdGroundingStep              │               │
+ │                │        (Extracts attributes & parents        │               │
+ │                │          deterministically from XSD)         │               │
+ │                └──────────────────────┬───────────────────────┘               │
+ │                                       │ (Validation Report)                   │
+ │                                       ▼                                       │
+ │                ┌──────────────────────────────────────────────┐               │
+ │                │              4. schemaAuditorAgent           │               │
+ │                │       (LLM-as-a-Judge - Reviews Schema)      │               │
+ │                └──────────────────────┬───────────────────────┘               │
+ │                                       │                                       │
+ │          ┌────────────────────────────┼────────────────────────────┐          │
+ │          │ (ACCEPT_GENERATED)         │ (REJECT_GENERATED)         │ (SUSPEND)│
+ │          ▼                            ▼                            ▼          │
+ │  ┌───────────────┐            ┌───────────────┐            ┌───────────────┐  │
+ │  │ Auto-Approve  │            │  Retry < 3?   ├────────────┼───────────────┼──┘
+ │  │ & Skip Retry  │            └───┬───────┬───┘            │    Pause      │
+ │  └───────┬───────┘                │ (Yes) │ (No)           │   Workflow    │
+ │          │                        ▼       ▼                └───────┬───────┘
+ │          │                  [Self-Heal]  [Log Defect to            │
+ │          │                               CALIBRATION_FEEDBACK.md]  │
+ │          │                                │                        │
+ └──────────┼────────────────────────────────┴────────────────────────┼──────────┘
+            │                                                         │
+            └────────────────────────────┬────────────────────────────┘
+                                         │
+                                         ▼
+                  ┌──────────────────────────────────────────────┐
+                  │           5. commitApprovedDataStep          │
+                  │       (Writes Golden & Compiles High-    │
+                  │            Priority Static KB)               │
+                  └──────────────────────────────────────────────┘
+```
 
-### Phase 3: XSD-Backed Schema Grounding (Medium-Term)
-*   **Action**: Remove LLM dependency for deterministic schema fields (attributes, parents, namespaces).
-*   **Implementation**:
-    1.  Download the official ECMA-376 XML Schema Definition (`.xsd`) files.
-    2.  Write a script to parse these files and generate a local schema catalog.
-    3.  Integrate this catalog into the `xsdValidationStep` to automatically populate and validate the `attributes`, `parents`, and `namespace` fields before the Judge step.
-*   **Outcome**: 100% accuracy for structural metadata. The LLM is only responsible for writing the human-readable definition and finding the citation.
+### The 4 Core Steps:
+1.  **`informationRetrieverAgent`**:
+    *   **Type**: Mastra Agent + Web Search & Scraper tools.
+    *   **Task**: Searches for and retrieves the exact online spec text for the target tag, providing "open-book" context to the generator.
+2.  **`schemaGeneratorAgent`**:
+    *   **Type**: Mastra Agent.
+    *   **Task**: Takes the retrieved spec text and any human `reviewerNote` (from the golden doc), and synthesizes a clean RAG reference schema.
+3.  **`xsdGroundingStep`**:
+    *   **Type**: Deterministic Code Step.
+    *   **Task**: Parses the official ECMA-376 `.xsd` schema files to extract the 100% correct list of valid attributes and parent elements for the tag. It generates a `validationReport` indicating any structural mismatches.
+4.  **`schemaAuditorAgent`** (The Judge):
+    *   **Type**: Mastra Agent.
+    *   **Task**: Compares the generated schema against the existing Golden doc, the validation report, and the retrieved spec text. It makes one of three decisions:
+        *   `ACCEPT_GENERATED`: The schema is correct, acceptable, or an upgrade. Phrasing variations are accepted.
+        *   `REJECT_GENERATED`: The schema has actual errors/hallucinations. This triggers the **Autonomous Self-Correction Loop** (up to 3 retries, feeding the Judge's reasoning back to the Generator).
+        *   `SUSPEND_FOR_REVIEW`: A major conflict requiring human intervention.
 
-### Phase 4: Multi-Model Consensus (Long-Term)
-*   **Action**: Automate citation verification.
-*   **Implementation**:
-    1.  Modify `generateSchemaStep` to query two independent LLM providers (e.g., Gemini and Claude).
-    2.  Pass both outputs to the `llmJudgeStep`.
-    3.  The Judge compares both outputs against the Golden dataset, resolving minor differences and flagging major ones.
-*   **Outcome**: Extremely high confidence in natural-language definitions and citations.
+---
+
+## 3. Workflow Parallelization & Concurrency
+
+To solve the execution speed issue, we use Mastra's native **`.foreach()`** operator in the workflow definition. 
+
+Instead of sequential loops inside a single step, the workflow splits the array of tags and runs them in parallel:
+
+```typescript
+ingestionWorkflow
+  // 1. Retrieve information for all tags in parallel (concurrency: 5)
+  .foreach(retrieveInfoStep, { concurrency: 5 })
+  
+  // 2. Generate schemas in parallel (concurrency: 5)
+  .foreach(generateSchemaStep, { concurrency: 5 })
+  
+  // 3. Evaluate, validate, and self-correct in parallel (concurrency: 5)
+  .foreach(evaluateAndAuditStep, { concurrency: 5 })
+  
+  // 4. Commit all results in a single final step
+  .then(commitApprovedDataStep)
+  .commit();
+```
+
+This guarantees a **5x speedup** while keeping the execution safe from API rate limits.
+
+---
+
+## 4. Scalable Static KB Compilation (Bundle Optimization)
+
+Compiling thousands of OOXML tags into a static frontend TypeScript file would bloat the bundle size. 
+
+We split the storage strategy:
+1.  **Full Database (`public/rag-data.json`)**: Contains every single ingested tag. The frontend can lazy-load this file on demand via `fetch` when a user inspects a less common tag.
+2.  **Static KB (`services/staticKnowledgeBase.ts`)**: Contains only **high-priority** tags (e.g., the 33 core calibration tags, or tags explicitly marked as `priority: "high"` by a reviewer). Only this small, optimized subset is bundled into the frontend.
+
+---
+
+## 5. Phase-by-Phase Implementation Plan
+
+### Phase 1: Clean Calibration & 3-Decision Model (Completed)
+*   Implemented the robust `extractJson` parser to prevent LLM formatting crashes.
+*   Simplified the Judge decisions to `ACCEPT_GENERATED`, `REJECT_GENERATED`, and `SUSPEND_FOR_REVIEW` to eliminate false-positive defect logs.
+*   Implemented the human `reviewerNote` injection.
+*   Implemented the priority-based `staticKnowledgeBase` compiler.
+
+### Phase 2: Mastra Agent Refactoring (Immediate)
+*   Refactor the workflow to define first-class `Agent` instances for the **Generator** and **Auditor**.
+*   Remove the `execSync(jetski)` shell wrapper, running the agents in-process.
+*   Validate the new agent execution in Mastra Studio.
+
+### Phase 3: Parallelization (`.foreach()`) (Immediate)
+*   Refactor the workflow steps to focus on a single tag.
+*   Hook them up using Mastra's `.foreach(..., { concurrency: 5 })` to enable parallel execution.
+
+### Phase 4: Deterministic XSD Grounding & Retriever Agent (Medium-Term)
+*   Write the XSD parser helper to extract attributes and parents.
+*   Equip the Retriever Agent with web search tools to fetch the spec text before generation.

@@ -45,6 +45,7 @@ public/generated-rag.json
 # Temporary search crawler files
 ddg.html
 yahoo.html
+yahoo_sp.html
 bing.html
 google.html
 
