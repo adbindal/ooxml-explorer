@@ -1,4 +1,4 @@
-import { mastra } from '../src/mastra';
+import { mastra } from '../src';
 
 // Define the reference tags to ingest during calibration
 const REFERENCE_TAGS = [
@@ -49,9 +49,10 @@ const main = async () => {
     const response = await run.start({ inputData: { tags: REFERENCE_TAGS } });
     
     if (response.status === 'success') {
+      const result = response.result as { success: boolean; count: number };
       console.log(`[Ingest] Ingestion and compilation completed successfully!`);
-      console.log(`  - Success: ${response.result.success}`);
-      console.log(`  - Processed Tags Count: ${response.result.count}`);
+      console.log(`  - Success: ${result.success}`);
+      console.log(`  - Processed Tags Count: ${result.count}`);
     } else if (response.status === 'failed') {
       console.error(`[Ingest] Ingestion workflow failed:`, response.error);
     } else {

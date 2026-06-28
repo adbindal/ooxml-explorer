@@ -1,0 +1,430 @@
+[
+  {
+    "tag": "document",
+    "namespace": "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
+    "domain": "docx",
+    "definition": "The root element for the main document part of a WordprocessingML document. It contains the primary document body, which holds the actual document content such as paragraphs, tables, and sections.",
+    "attributes": [
+      "conformance"
+    ],
+    "parents": [],
+    "citation": "ECMA-376 Part 1, Section 17.2.3",
+    "sdkClass": "Document"
+  },
+  {
+    "tag": "body",
+    "namespace": "w",
+    "domain": "docx",
+    "definition": "This element specifies the main body of a WordprocessingML document, containing the primary document content. It serves as the container for block-level elements such as paragraphs, tables, and section properties for the final section of the document.",
+    "attributes": [],
+    "parents": [
+      "document"
+    ],
+    "citation": "ECMA-376 Part 1, Section 17.2.2",
+    "sdkClass": "Body"
+  },
+  {
+    "tag": "p",
+    "namespace": "w",
+    "domain": "docx",
+    "definition": "Specifies a paragraph of content in a WordprocessingML document. It serves as the basic unit of block-level content, containing paragraph properties (pPr) and inline content runs (r).",
+    "attributes": [
+      "rsidRPr",
+      "rsidR",
+      "rsidDel",
+      "rsidP",
+      "rsidRDefault",
+      "paraId",
+      "textId"
+    ],
+    "parents": [
+      "body",
+      "tc",
+      "comment",
+      "footnote",
+      "endnote",
+      "hdr",
+      "ftr"
+    ],
+    "citation": "ECMA-376 Part 1, Section 17.3.1.22",
+    "sdkClass": "Paragraph"
+  },
+  {
+    "tag": "r",
+    "namespace": "w",
+    "domain": "docx",
+    "definition": "Specifies a run of text, which is a container for a contiguous set of text elements that share a common set of properties, formatting, and style within a paragraph.",
+    "attributes": [
+      "rsidRPr",
+      "rsidR",
+      "rsidDel"
+    ],
+    "parents": [
+      "p",
+      "hyperlink",
+      "fldSimple",
+      "sdtContent"
+    ],
+    "citation": "ECMA-376 Part 1, Section 17.3.2.25",
+    "sdkClass": "Run"
+  },
+  {
+    "tag": "t",
+    "namespace": "w",
+    "domain": "docx",
+    "definition": "Specifies that the run contains literal text to be displayed in the document. It is the primary container for text content in a WordprocessingML document, allowing the actual textual data of a paragraph to be defined. It can optionally preserve whitespace using the xml:space attribute.",
+    "attributes": [
+      "xml:space"
+    ],
+    "parents": [
+      "r"
+    ],
+    "citation": "ECMA-376 Part 1, Section 17.3.3.31",
+    "sdkClass": "Text"
+  },
+  {
+    "tag": "tbl",
+    "namespace": "w",
+    "domain": "docx",
+    "definition": "This element specifies the contents of a table present in the document. A table is a set of paragraphs and other block-level content arranged in rows and columns, analogous to the HTML table tag.",
+    "attributes": [],
+    "parents": [
+      "body",
+      "comment",
+      "customXml",
+      "docPartBody",
+      "endnote",
+      "footnote",
+      "ftr",
+      "hdr",
+      "sdtContent",
+      "tc"
+    ],
+    "citation": "ECMA-376 Part 1, Section 17.4.38",
+    "sdkClass": "Table"
+  },
+  {
+    "tag": "tr",
+    "namespace": "w",
+    "domain": "docx",
+    "definition": "Defines a single row within a table structure in a WordprocessingML document. It acts as a container for table cells (tc) and can include row-level properties (trPr) that specify row height, alignment, cantSplit, and header repeat behaviors.",
+    "attributes": [
+      "rsidR",
+      "rsidTr",
+      "rsidDel",
+      "rsidRPr"
+    ],
+    "parents": [
+      "tbl"
+    ],
+    "citation": "ECMA-376 Part 1, Section 17.4.82",
+    "sdkClass": "TableRow"
+  },
+  {
+    "tag": "tc",
+    "namespace": "w",
+    "domain": "docx",
+    "definition": "This element specifies a single cell within a table row that contains the actual content of the table. In WordprocessingML, it acts as a container for block-level elements such as paragraphs and nested tables, and can include cell-specific formatting properties.",
+    "attributes": [],
+    "parents": [
+      "tr",
+      "customXml",
+      "sdtContent"
+    ],
+    "citation": "ECMA-376 Part 1, Section 17.4.66",
+    "sdkClass": "TableCell"
+  },
+  {
+    "tag": "cantSplit",
+    "namespace": "w",
+    "domain": "docx",
+    "definition": "Specifies whether the contents of a table row are prevented from splitting across pages. If the row cannot fit on the remaining space of the current page, the entire row is moved to the top of the next page.",
+    "attributes": [
+      "val"
+    ],
+    "parents": [
+      "trPr"
+    ],
+    "citation": "ECMA-376 Part 1, Section 17.4.3",
+    "sdkClass": "CantSplit"
+  },
+  {
+    "tag": "tblHeader",
+    "namespace": "w",
+    "domain": "docx",
+    "definition": "Specifies that the current table row shall be repeated at the top of each new page on which the table is displayed. This element is used to define repeating table header rows for multi-page tables.",
+    "attributes": [
+      "w:val"
+    ],
+    "parents": [
+      "w:trPr"
+    ],
+    "citation": "ECMA-376 Part 1, Section 17.4.50",
+    "sdkClass": "TableHeader"
+  },
+  {
+    "tag": "worksheet",
+    "namespace": "r",
+    "domain": "xlsx",
+    "definition": "The worksheet element is the root element for a SpreadsheetML worksheet part, representing a single sheet or tab in a workbook. It contains all sheet-specific data, including the grid structure, column and row definitions, cell values, and sheet properties. It serves as the primary container for the grid data and layout of a spreadsheet.",
+    "attributes": [
+      "xmlns"
+    ],
+    "parents": [],
+    "citation": "ECMA-376 Part 1, Section 18.3.1.99",
+    "sdkClass": "Worksheet"
+  },
+  {
+    "tag": "sheetData",
+    "namespace": "r",
+    "domain": "xlsx",
+    "definition": "Represents the cell table within a worksheet, containing the actual cell data. The cell data is organized hierarchically, grouped together by row elements.",
+    "attributes": [],
+    "parents": [
+      "worksheet"
+    ],
+    "citation": "ECMA-376 Part 1, Section 18.3.1.80",
+    "sdkClass": "SheetData"
+  },
+  {
+    "tag": "row",
+    "namespace": "r",
+    "domain": "xlsx",
+    "definition": "This element expresses information about an individual row in a worksheet, serving as the container for all cells within that row. It allows for the configuration of row-specific properties, such as row height, custom formatting, and visibility options.",
+    "attributes": [
+      "r",
+      "spans",
+      "s",
+      "customFormat",
+      "ht",
+      "hidden",
+      "customHeight",
+      "outlineLevel",
+      "collapsed",
+      "thickTop",
+      "thickBottom",
+      "ph"
+    ],
+    "parents": [
+      "sheetData"
+    ],
+    "citation": "ECMA-376 Part 1, Section 18.3.1.73",
+    "sdkClass": "Row"
+  },
+  {
+    "tag": "c",
+    "namespace": "http://schemas.openxmlformats.org/spreadsheetml/2006/main",
+    "domain": "xlsx",
+    "definition": "Represents an individual cell within a worksheet row. It stores the cell's location reference, value, data type, style formatting, and any associated formula.",
+    "attributes": [
+      "r",
+      "s",
+      "t",
+      "cm",
+      "vm",
+      "ph"
+    ],
+    "parents": [
+      "row"
+    ],
+    "citation": "ECMA-376 Part 1, Section 18.3.1.4",
+    "sdkClass": "Cell"
+  },
+  {
+    "tag": "v",
+    "namespace": "http://schemas.openxmlformats.org/spreadsheetml/2006/main",
+    "domain": "xlsx",
+    "definition": "Specifies the value of a cell in a worksheet. For cells containing numeric, boolean, or error values, it stores the raw value directly; for cells containing strings, it stores a zero-based index pointing to the shared string table.",
+    "attributes": [],
+    "parents": [
+      "c",
+      "tp"
+    ],
+    "citation": "ECMA-376 Part 1, Section 18.3.1.96",
+    "sdkClass": "CellValue"
+  },
+  {
+    "tag": "sst",
+    "namespace": "r",
+    "domain": "xlsx",
+    "definition": "The sst element represents the Shared String Table in a SpreadsheetML document, which contains a single copy of each unique string value used in the workbook. Referencing strings from this table rather than repeating them in individual cells significantly reduces the overall file size of the spreadsheet.",
+    "attributes": [
+      "count",
+      "uniqueCount"
+    ],
+    "parents": [],
+    "citation": "ECMA-376 Part 1, Section 18.4.9",
+    "sdkClass": "SharedStringTable"
+  },
+  {
+    "tag": "si",
+    "namespace": "http://schemas.openxmlformats.org/spreadsheetml/2006/main",
+    "domain": "xlsx",
+    "definition": "Represents an individual string item within the shared string table of a spreadsheet. It can contain a single simple text element or multiple rich text runs that collectively represent the formatted string.",
+    "attributes": [],
+    "parents": [
+      "sst"
+    ],
+    "citation": "ECMA-376 Part 1, Section 18.4.8",
+    "sdkClass": "SharedStringItem"
+  },
+  {
+    "tag": "presentation",
+    "namespace": "p",
+    "domain": "pptx",
+    "definition": "This element serves as the root element for the main presentation part of a PresentationML document. It specifies presentation-wide properties, including references to slide master lists, slide lists, slide size, notes size, and default text styles.",
+    "attributes": [
+      "serverZoom",
+      "showSpecialPlsOnTitleSld",
+      "rtl",
+      "firstSlideNum",
+      "showComments",
+      "strictFirstAndLastShow",
+      "embedTrueTypeFonts",
+      "saveSubsetFonts",
+      "autoCompressPictures",
+      "bookmarkIdSeed",
+      "conformance"
+    ],
+    "parents": [],
+    "citation": "ECMA-376 Part 1, Section 19.2.1.25",
+    "sdkClass": "Presentation"
+  },
+  {
+    "tag": "sld",
+    "namespace": "p",
+    "domain": "pptx",
+    "definition": "Slide. The root element representing a single slide within the presentation. It contains the visual content, shapes, layout overrides, and transitions for the individual slide.",
+    "attributes": [
+      "show",
+      "showMasterPhAnim",
+      "showMasterSp"
+    ],
+    "parents": [],
+    "citation": "ECMA-376 Part 1, Section 19.3.1.38",
+    "sdkClass": "Slide"
+  },
+  {
+    "tag": "sldLayout",
+    "namespace": "p",
+    "domain": "pptx",
+    "definition": "This element specifies a slide layout, which defines the default structure, placeholders, and formatting for slides that reference it. It inherits design and styling properties from its parent slide master while allowing customization of content positioning and slide-specific designs.",
+    "attributes": [
+      "matchingName",
+      "type",
+      "preserve",
+      "userDrawn"
+    ],
+    "parents": [],
+    "citation": "ECMA-376 Part 1, Section 19.3.1.39",
+    "sdkClass": "SlideLayout"
+  },
+  {
+    "tag": "sldMaster",
+    "namespace": "p",
+    "domain": "pptx",
+    "definition": "This element specifies the slide master, which serves as the master template for slides in a presentation. It defines the default formatting, color schemes, slide layouts, and placeholders that are inherited by slide layouts and individual slides.",
+    "attributes": [
+      "preserve"
+    ],
+    "parents": [
+      "none"
+    ],
+    "citation": "ECMA-376 Part 1, Section 19.3.1.42",
+    "sdkClass": "SlideMaster"
+  },
+  {
+    "tag": "sp",
+    "namespace": "p",
+    "domain": "pptx",
+    "definition": "This element specifies the existence of a single shape within a slide. It can define a preset or custom geometry, along with visual, non-visual, and styling properties. Additionally, text and its corresponding styling can be attached to the shape.",
+    "attributes": [
+      "useBgFill"
+    ],
+    "parents": [
+      "grpSp",
+      "spTree"
+    ],
+    "citation": "ECMA-376 Part 1, Section 19.3.1.43",
+    "sdkClass": "Shape"
+  },
+  {
+    "tag": "txBody",
+    "namespace": "p",
+    "domain": "pptx",
+    "definition": "Text Body. Contains the text paragraphs and list properties within a slide shape.",
+    "attributes": [],
+    "parents": [
+      "sp"
+    ],
+    "citation": "ECMA-376 Part 1, Section 19.3.1.51",
+    "sdkClass": "TextBody"
+  },
+  {
+    "tag": "Relationships",
+    "namespace": "http://schemas.openxmlformats.org/package/2006/relationships",
+    "domain": "shared",
+    "definition": "The Relationships element is the root element of a relationship XML part (.rels) in an OOXML package. It acts as a container for one or more Relationship elements, which define the associations between a source part and target resources. This allows the package to establish links between parts and external resources without modifying the content of the parts themselves.",
+    "attributes": [],
+    "parents": [],
+    "citation": "ECMA-376 Part 2, Section 9.3",
+    "sdkClass": "System.IO.Packaging.PackageRelationshipCollection"
+  },
+  {
+    "tag": "Relationship",
+    "namespace": "http://schemas.openxmlformats.org/package/2006/relationships",
+    "domain": "shared",
+    "definition": "Defines a connection between a source package or part and a target resource. It specifies the relationship's unique ID, type, target URI, and whether the target is internal or external.",
+    "attributes": [
+      "Id",
+      "Type",
+      "Target",
+      "TargetMode"
+    ],
+    "parents": [
+      "Relationships"
+    ],
+    "citation": "ECMA-376 Part 2, Section 9.3",
+    "sdkClass": "PackageRelationship"
+  },
+  {
+    "tag": "Types",
+    "namespace": "http://schemas.openxmlformats.org/package/2006/content-types",
+    "domain": "shared",
+    "definition": "The Types element is the root element of the Content Types stream ([Content_Types].xml) in an Office Open XML package. It contains the declarations of the content types for all parts in the package, using Default and Override elements to map file extensions and specific part paths to their media types.",
+    "attributes": [],
+    "parents": [],
+    "citation": "ECMA-376 Part 2, Section 9.1.2",
+    "sdkClass": "N/A"
+  },
+  {
+    "tag": "Override",
+    "namespace": "http://schemas.openxmlformats.org/package/2006/content-types",
+    "domain": "shared",
+    "definition": "The Override element specifies the content type of a specific part in an OOXML package, overriding any default content type mapping defined for the part's file extension. This allows individual parts to have distinct content types even if they share the same file extension as other parts in the package.",
+    "attributes": [
+      "PartName",
+      "ContentType"
+    ],
+    "parents": [
+      "Types"
+    ],
+    "citation": "ECMA-376 Part 2, Section 9.2.6",
+    "sdkClass": "DocumentFormat.OpenXml.Packaging.OverrideContentType"
+  },
+  {
+    "tag": "Default",
+    "namespace": "http://schemas.openxmlformats.org/package/2006/content-types",
+    "domain": "shared",
+    "definition": "Defines a default content type mapping for all package parts with a specific file extension. It associates a file extension with a media type, allowing the package to resolve the content type of parts dynamically without needing explicit override elements for every individual part.",
+    "attributes": [
+      "Extension",
+      "ContentType"
+    ],
+    "parents": [
+      "Types"
+    ],
+    "citation": "ECMA-376 Part 2, Section 9.1.2.2",
+    "sdkClass": "DefaultType"
+  }
+]

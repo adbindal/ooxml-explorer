@@ -26,8 +26,8 @@ const loadJson = (filePath: string): ReferenceDoc[] => {
 };
 
 const main = () => {
-  const goldenPath = path.join(__dirname, '../public/rag-data.json');
-  const generatedPath = path.join(__dirname, '../public/generated-rag.json');
+  const goldenPath = path.join(__dirname, '../../web/public/rag-data.json');
+  const generatedPath = path.join(__dirname, '../../web/public/generated-rag.json');
 
   const golden = loadJson(goldenPath);
   const generated = loadJson(generatedPath);
