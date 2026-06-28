@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "mastra dev -d mastra",
-    "ingest": "tsx scripts/ingest_rag.ts"
+    "ingest": "tsx --env-file=.env scripts/ingest_rag.ts"
   },
   "dependencies": {
     "@mastra/core": "^1.47.0",

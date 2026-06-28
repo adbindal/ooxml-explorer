@@ -22,7 +22,7 @@ Guidelines:
 3. "citation": You MUST reference the most specific section number in the ECMA-376 specification that defines this specific element. Do NOT use high-level parent section numbers. For example, the element 'document' is defined in 'ECMA-376 Part 1, Section 17.2.3', not the general 'Section 17.2' or the incorrect 'Section 17.3.1.10'. In case of multiple citations, pick the one that is the section heading and talks about that particular element only. Must match the format: "ECMA-376 Part X, Section Y.Z" (e.g. "ECMA-376 Part 1, Section 17.3.1.22"). Verify the exact section number.
 4. "sdkClass": Provide the corresponding Microsoft Open XML SDK class name (e.g. "Paragraph" or "TableCell").`,
   model: {
-    id: 'google/gemini-1.5-flash',
+    id: 'google/gemini-3.5-flash',
   },
 });
 
@@ -40,7 +40,7 @@ Guidelines for your Decision:
 2. "REJECT_GENERATED": Choose this if the GENERATED document contains actual errors, hallucinations, or is incorrect compared to the GOLDEN document. It needs to be corrected.
 3. "SUSPEND_FOR_REVIEW": Choose this if there is a major conflict requiring human review.`,
   model: {
-    id: 'google/gemini-1.5-pro', // Use a stronger model for auditing/pedantic checking
+    id: 'google/gemini-3.5-flash', // Use gemini-3.5-flash for auditing
   },
 });
 

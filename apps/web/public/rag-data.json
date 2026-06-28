@@ -145,12 +145,12 @@
     "tag": "cantSplit",
     "namespace": "w",
     "domain": "docx",
-    "definition": "Specifies that the contents of the current table row must not be split across multiple pages when a page break occurs. If the row cannot fit on the remainder of the page, the entire row is moved to the start of the next page.",
+    "definition": "Specifies that the contents of the current table row shall not be split across a page break. If the row cannot fit entirely within the remaining space on the current page, the entire row is moved to the start of the next page.",
     "attributes": [
-      "val"
+      "w:val"
     ],
     "parents": [
-      "trPr"
+      "w:trPr"
     ],
     "citation": "ECMA-376 Part 1, Section 17.4.6",
     "sdkClass": "CantSplit"
