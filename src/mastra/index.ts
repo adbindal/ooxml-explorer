@@ -129,9 +129,18 @@ const generateSchemaStep = createStep({
     const { tags } = inputData;
     const results = [];
 
+    // Load golden dataset to check for human reviewer notes
+    const goldenPath = path.join(PROJECT_ROOT, 'public/rag-data.json');
+    let golden: ReferenceDoc[] = [];
+    if (fs.existsSync(goldenPath)) {
+      golden = JSON.parse(fs.readFileSync(goldenPath, 'utf8'));
+    }
+
     for (const item of tags) {
       const { tag, namespace, domain } = item;
       console.log(`[Workflow] Processing <${namespace}:${tag}>...`);
+
+      const goldDoc = golden.find(g => g.tag === tag && g.domain === domain);
       
       const prompt = `
 You are an expert in the ECMA-376 Office Open XML (OOXML) specification.
@@ -139,6 +148,7 @@ Generate a structured RAG reference document for the following XML tag:
 - Tag Name: "${tag}"
 - Namespace Prefix: "${namespace}"
 - Domain: "${domain}"
+${goldDoc?.reviewerNote ? `\nCRITICAL REVIEWER NOTE / CORRECTION GUIDE:\n"${goldDoc.reviewerNote}"\nYou MUST strictly follow this note when generating the definition, parents, attributes, and citation. Do not override this instruction under any circumstances.\n` : ''}
 
 You must return a JSON object conforming exactly to this JSON schema:
 {
@@ -287,6 +297,7 @@ Return a JSON object conforming exactly to this JSON schema:
   "type": "object",
   "properties": {
     "decision": { "type": "string", "enum": ["UPGRADE_GOLDEN", "KEEP_GOLDEN", "SUSPEND_FOR_REVIEW"] },
+    "needsCorrection": { "type": "boolean" },
     "reasoning": { "type": "string" },
     "resolvedDoc": {
       "type": "object",
@@ -303,7 +314,7 @@ Return a JSON object conforming exactly to this JSON schema:
       "required": ["tag", "namespace", "domain", "definition", "attributes", "parents", "citation", "sdkClass"]
     }
   },
-  "required": ["decision", "reasoning", "resolvedDoc"]
+  "required": ["decision", "needsCorrection", "reasoning", "resolvedDoc"]
 }
 
 Guidelines for your Decision:
@@ -313,7 +324,9 @@ Guidelines for your Decision:
 2. "KEEP_GOLDEN": Choose this if the GENERATED document contains hallucinations, incorrect citations, or is less accurate than the GOLDEN document.
    - If you choose KEEP_GOLDEN, the "resolvedDoc" should be the GOLDEN document.
 
-3. "SUSPEND_FOR_REVIEW": Choose this if there is a major conflict, or if you are unsure which citation or definition is correct and require a human expert to decide.
+3. "needsCorrection": Set this to true if the GENERATED document contains actual errors, hallucinations, or is incorrect compared to the GOLDEN document. Set this to false if the GENERATED document is correct, acceptable, or semantically identical to the GOLDEN document (even if they differ slightly in phrasing or formatting).
+
+4. "SUSPEND_FOR_REVIEW": Choose this if there is a major conflict, or if you are unsure which citation or definition is correct and require a human expert to decide.
 
 Return ONLY the raw JSON block. No markdown wrapper, no explanations.
 `;
@@ -333,16 +346,17 @@ Return ONLY the raw JSON block. No markdown wrapper, no explanations.
         if (judgeResult.decision === 'UPGRADE_GOLDEN') {
           approved.push(judgeResult.resolvedDoc as ReferenceDoc);
         } else if (judgeResult.decision === 'KEEP_GOLDEN') {
-          // --- AUTONOMOUS RETRY LOOP (Phase 2) ---
-          let attempts = 1;
-          let currentGenDoc = genDoc;
-          let currentJudgeResult = judgeResult;
-          let healed = false;
+          if (judgeResult.needsCorrection) {
+            // --- AUTONOMOUS RETRY LOOP (Phase 2) ---
+            let attempts = 1;
+            let currentGenDoc = genDoc;
+            let currentJudgeResult = judgeResult;
+            let healed = false;
 
-          while (attempts <= 3) {
-            console.log(`[Workflow] 🔄 Self-Correction Attempt ${attempts}/3 for <${genDoc.namespace}:${genDoc.tag}>...`);
-            
-            const feedbackPrompt = `
+            while (attempts <= 3) {
+              console.log(`[Workflow] 🔄 Self-Correction Attempt ${attempts}/3 for <${genDoc.namespace}:${genDoc.tag}>...`);
+              
+              const feedbackPrompt = `
 You are an expert in the ECMA-376 Office Open XML (OOXML) specification.
 Your previous generated schema reference document for the tag "${genDoc.tag}" was REJECTED by the auditor.
 
@@ -361,54 +375,59 @@ Conform exactly to the same JSON schema.
 Return ONLY the raw JSON block. No markdown wrapper, no explanations.
 `;
 
-            const escapedFeedbackPrompt = feedbackPrompt.replace(/"/g, '\\"').replace(/`/g, '\\`');
-            const genCommand = `jetski --print "${escapedFeedbackPrompt}"`;
-            
-            try {
-              const genStdout = execSync(genCommand, { 
-                encoding: 'utf8', 
-                stdio: ['ignore', 'pipe', 'ignore'],
-                timeout: 10 * 60 * 1000 // 10 minutes timeout
-              });
-              const parsedGen = JSON.parse(extractJson(genStdout));
-              currentGenDoc = parsedGen;
+              const escapedFeedbackPrompt = feedbackPrompt.replace(/"/g, '\\"').replace(/`/g, '\\`');
+              const genCommand = `jetski --print "${escapedFeedbackPrompt}"`;
               
-              // Re-evaluate with Judge
-              console.log(`[Workflow] Re-evaluating retry attempt ${attempts} with Judge...`);
-              const reJudgePrompt = getJudgePrompt(goldDoc, currentGenDoc);
-              const escapedReJudgePrompt = reJudgePrompt.replace(/"/g, '\\"').replace(/`/g, '\\`');
-              const reJudgeCommand = `jetski --print "${escapedReJudgePrompt}"`;
+              try {
+                const genStdout = execSync(genCommand, { 
+                  encoding: 'utf8', 
+                  stdio: ['ignore', 'pipe', 'ignore'],
+                  timeout: 10 * 60 * 1000 // 10 minutes timeout
+                });
+                const parsedGen = JSON.parse(extractJson(genStdout));
+                currentGenDoc = parsedGen;
+                
+                // Re-evaluate with Judge
+                console.log(`[Workflow] Re-evaluating retry attempt ${attempts} with Judge...`);
+                const reJudgePrompt = getJudgePrompt(goldDoc, currentGenDoc);
+                const escapedReJudgePrompt = reJudgePrompt.replace(/"/g, '\\"').replace(/`/g, '\\`');
+                const reJudgeCommand = `jetski --print "${escapedReJudgePrompt}"`;
+                
+                const reJudgeStdout = execSync(reJudgeCommand, { 
+                  encoding: 'utf8', 
+                  stdio: ['ignore', 'pipe', 'ignore'],
+                  timeout: 5 * 60 * 1000 // 5 minutes timeout
+                });
+                
+                const newJudgeResult = JSON.parse(extractJson(reJudgeStdout));
+                console.log(`[Workflow] Retry ${attempts} Judge Decision: ${newJudgeResult.decision}. Reasoning: ${newJudgeResult.reasoning}`);
+                    
+                if (newJudgeResult.decision === 'UPGRADE_GOLDEN') {
+                  approved.push(newJudgeResult.resolvedDoc as ReferenceDoc);
+                  healed = true;
+                  console.log(`[Workflow] ✅ Self-correction succeeded on attempt ${attempts}!`);
+                  break;
+                }
+                currentJudgeResult = newJudgeResult;
+              } catch (err) {
+                console.error(`[Workflow] Retry attempt ${attempts} failed:`, err);
+              }
               
-              const reJudgeStdout = execSync(reJudgeCommand, { 
-                encoding: 'utf8', 
-                stdio: ['ignore', 'pipe', 'ignore'],
-                timeout: 5 * 60 * 1000 // 5 minutes timeout
-              });
-              
-              const newJudgeResult = JSON.parse(extractJson(reJudgeStdout));
-              console.log(`[Workflow] Retry ${attempts} Judge Decision: ${newJudgeResult.decision}. Reasoning: ${newJudgeResult.reasoning}`);
-                  
-                  if (newJudgeResult.decision === 'UPGRADE_GOLDEN') {
-                    approved.push(newJudgeResult.resolvedDoc as ReferenceDoc);
-                    healed = true;
-                    console.log(`[Workflow] ✅ Self-correction succeeded on attempt ${attempts}!`);
-                    break;
-                  }
-                  currentJudgeResult = newJudgeResult;
-            } catch (err) {
-              console.error(`[Workflow] Retry attempt ${attempts} failed:`, err);
+              attempts++;
+              await new Promise(resolve => setTimeout(resolve, 2000));
             }
-            
-            attempts++;
-            await new Promise(resolve => setTimeout(resolve, 2000));
-          }
 
-          if (!healed) {
-            console.log(`[Workflow] ❌ Retries exhausted for <${genDoc.namespace}:${genDoc.tag}>. Keeping golden and logging defect.`);
+            if (!healed) {
+              console.log(`[Workflow] ❌ Retries exhausted for <${genDoc.namespace}:${genDoc.tag}>. Keeping golden and logging defect.`);
+              approved.push(goldDoc);
+              
+              // Log defect to CALIBRATION_FEEDBACK.md
+              logCalibrationDefect(genDoc.tag, genDoc.domain, goldDoc, currentGenDoc as unknown as ReferenceDoc, currentJudgeResult.reasoning);
+            }
+          } else {
+            // Semantically correct - keep golden without retrying or logging a defect
+            console.log(`[Workflow] Gen doc for <${genDoc.namespace}:${genDoc.tag}> is semantically correct. Keeping golden without retrying.`);
             approved.push(goldDoc);
-            
-            // Log defect to CALIBRATION_FEEDBACK.md
-            logCalibrationDefect(genDoc.tag, genDoc.domain, goldDoc, currentGenDoc as unknown as ReferenceDoc, currentJudgeResult.reasoning);
           }
         } else {
           // Suspend for review
@@ -496,7 +515,8 @@ const commitApprovedDataStep = createStep({
 
     // Also write to services/staticKnowledgeBase.ts
     const kbPath = path.join(PROJECT_ROOT, 'services/staticKnowledgeBase.ts');
-    const codeContent = `// This file is auto-generated by compileKB step in ooxml-rag-ingestion workflow.
+    const codeContent = `// This file is auto-generated by the ooxml-rag-ingestion workflow.
+// To regenerate this file, run: npx tsx scripts/ingest_rag.ts
 // Do not edit this file manually.
 
 export interface ReferenceDoc {
@@ -508,6 +528,7 @@ export interface ReferenceDoc {
   parents: string[];
   citation?: string;
   sdkClass?: string;
+  reviewerNote?: string;
 }
 
 export const KNOWLEDGE_BASE: ReferenceDoc[] = ${JSON.stringify(golden, null, 2)};

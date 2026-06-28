@@ -41,3 +41,10 @@ playwright-/.cache
 
 # Generated RAG output
 public/generated-rag.json
+
+# Temporary search crawler files
+ddg.html
+yahoo.html
+bing.html
+google.html
+
