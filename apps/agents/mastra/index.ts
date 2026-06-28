@@ -122,7 +122,7 @@ function logCalibrationDefect(
   generated: ReferenceDoc,
   reasoning: string
 ) {
-  const feedbackPath = path.join(PROJECT_ROOT, 'apps/mastra/CALIBRATION_FEEDBACK.md');
+  const feedbackPath = path.join(PROJECT_ROOT, 'apps/agents/CALIBRATION_FEEDBACK.md');
   const timestamp = new Date().toISOString().split('T')[0];
   
   const entry = `

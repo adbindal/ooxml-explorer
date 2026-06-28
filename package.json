@@ -8,8 +8,8 @@
     "web:build": "pnpm --filter web build",
     "web:lint": "pnpm --filter web lint",
     "web:test": "pnpm --filter web test",
-    "mastra:dev": "pnpm --filter mastra dev",
-    "mastra:ingest": "pnpm --filter mastra ingest",
+    "agents:dev": "pnpm --filter agents dev",
+    "agents:ingest": "pnpm --filter agents ingest",
     "dev": "pnpm -r --parallel dev"
   },
   "devDependencies": {

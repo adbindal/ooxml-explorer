@@ -7,5 +7,5 @@
     "strict": true,
     "skipLibCheck": true
   },
-  "include": ["src/**/*", "scripts/**/*"]
+  "include": ["mastra/**/*", "scripts/**/*"]
 }

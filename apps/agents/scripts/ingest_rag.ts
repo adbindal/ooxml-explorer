@@ -1,4 +1,4 @@
-import { mastra } from '../src';
+import { mastra } from '../mastra';
 
 // Define the reference tags to ingest during calibration
 const REFERENCE_TAGS = [
