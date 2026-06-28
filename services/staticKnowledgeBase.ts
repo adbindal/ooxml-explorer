@@ -11,6 +11,7 @@ export interface ReferenceDoc {
   citation?: string;
   sdkClass?: string;
   reviewerNote?: string;
+  priority?: 'high' | 'low';
 }
 
 export const KNOWLEDGE_BASE: ReferenceDoc[] = [
