@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Sparkles, X, Bot, Loader2, Microscope, FileDiff, Plus, Check, Settings, Key, Save, LogOut } from 'lucide-react';
+import { useAppStore } from '../store/appStore';
 import { 
   analyzeFile, 
   analyzeDiff, 
@@ -11,6 +12,7 @@ import {
   AIAnalysis,
   AIDiffAnalysis
 } from '../services/geminiService';
+import { explainElement } from '../services/aiService';
 import { ThemeClasses } from '../types';
 
 interface AIPanelProps {
@@ -21,6 +23,7 @@ interface AIPanelProps {
     
     // Editor specific
     content?: string;
+    selectedTag?: { tagName: string; rawXml: string; parentPath?: string[] };
     
     // Diff specific
     diffOriginal?: string;
@@ -34,9 +37,33 @@ interface AIPanelProps {
 }
 
 const AIPanel: React.FC<AIPanelProps> = ({ onClose, context, themeClasses }) => {
+  const aiProvider = useAppStore(state => state.ui.aiProvider);
+  const dlpMode = useAppStore(state => state.ui.dlpMode);
+  const [localAiStatus, setLocalAiStatus] = useState<'available' | 'downloadable' | 'downloading' | 'unavailable'>('unavailable');
+  
+  useEffect(() => {
+    const checkLocalAi = async () => {
+      if (typeof window !== 'undefined' && window.LanguageModel) {
+        try {
+          const status = await window.LanguageModel.availability();
+          setLocalAiStatus(status);
+        } catch {
+          setLocalAiStatus('unavailable');
+        }
+      } else {
+        setLocalAiStatus('unavailable');
+      }
+    };
+    checkLocalAi();
+    // Poll every 5s if downloading or downloadable
+    const interval = setInterval(checkLocalAi, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
   const [loading, setLoading] = useState(false);
   const [editorResponse, setEditorResponse] = useState<AIAnalysis | null>(null);
   const [diffResponse, setDiffResponse] = useState<AIDiffAnalysis | null>(null);
+  const [selectedTagResponse, setSelectedTagResponse] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   
   const [activeAction, setActiveAction] = useState<string | null>(null);
@@ -44,20 +71,24 @@ const AIPanel: React.FC<AIPanelProps> = ({ onClose, context, themeClasses }) => 
   const [isExpanded, setIsExpanded] = useState(false);
   
   // API Key Configuration State
-  const [needsApiKey, setNeedsApiKey] = useState(() => !getApiKey());
+  const [apiKeyConfigured, setApiKeyConfigured] = useState(() => !!getApiKey());
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [showSettings, setShowSettings] = useState(false);
+
+  const effectiveNeedsApiKey = aiProvider === 'chrome-local' && localAiStatus === 'available'
+      ? false
+      : !apiKeyConfigured;
 
   const handleSaveKey = () => {
       if (!apiKeyInput.trim()) return;
       setApiKey(apiKeyInput.trim());
-      setNeedsApiKey(false);
+      setApiKeyConfigured(true);
       setShowSettings(false);
   };
 
   const handleClearKey = () => {
       clearApiKey();
-      setNeedsApiKey(true);
+      setApiKeyConfigured(false);
       setShowSettings(false);
       setApiKeyInput('');
   };
@@ -90,7 +121,7 @@ const AIPanel: React.FC<AIPanelProps> = ({ onClose, context, themeClasses }) => 
     } catch (e: unknown) {
         const err = e as Error;
         if (err.message === 'API_KEY_MISSING') {
-            setNeedsApiKey(true);
+            setApiKeyConfigured(false);
         } else {
             setErrorMessage(err.message || "Error contacting Gemini. Please check your connection.");
         }
@@ -128,13 +159,48 @@ const AIPanel: React.FC<AIPanelProps> = ({ onClose, context, themeClasses }) => 
     } catch (e: unknown) {
         const err = e as Error;
         if (err.message === 'API_KEY_MISSING') {
-            setNeedsApiKey(true);
+            setApiKeyConfigured(false);
         } else {
             console.error(err);
             setErrorMessage(err.message || "Error contacting Gemini.");
         }
     } finally {
         setLoading(false);
+    }
+  };
+
+  const handleExplainSelectedTag = async () => {
+    if (!context.selectedTag) return;
+    setLoading(true);
+    setActiveAction('explain-tag');
+    setEditorResponse(null);
+    setDiffResponse(null);
+    setErrorMessage(null);
+    setSelectedTagResponse(null);
+    
+    try {
+      const fileType = context.fileName?.endsWith('xlsx') 
+        ? 'xlsx' 
+        : context.fileName?.endsWith('pptx') 
+          ? 'pptx' 
+          : 'docx';
+          
+      const result = await explainElement(
+        context.selectedTag.tagName,
+        context.selectedTag.rawXml,
+        fileType,
+        context.selectedTag.parentPath
+      );
+      setSelectedTagResponse(result);
+    } catch (e: unknown) {
+      const err = e as Error;
+      if (err.message === 'API_KEY_MISSING') {
+        setApiKeyConfigured(false);
+      } else {
+        setErrorMessage(err.message || "Error explaining selected tag.");
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -303,30 +369,125 @@ const AIPanel: React.FC<AIPanelProps> = ({ onClose, context, themeClasses }) => 
     <div className={`w-full h-full flex flex-col shadow-2xl z-20 ${themeClasses.bgPanel} ${themeClasses.border}`}>
       <div className={`h-12 border-b flex items-center justify-between px-4 shrink-0 ${themeClasses.bgSec} ${themeClasses.border}`}>
         <div className="flex items-center gap-2 text-blue-500 font-medium">
-            <Sparkles size={16} />
-            <span>Gemini Assistant</span>
+            <Sparkles size={16} className="shrink-0" />
+            <span className="truncate">Gemini Assistant</span>
+            {dlpMode ? (
+                <span className="px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider border bg-green-500/10 border-green-500/20 text-green-500 shrink-0" title="Data Loss Prevention Active: All cloud traffic blocked. Only local models allowed.">
+                    🔒 DLP Shield
+                </span>
+            ) : aiProvider === 'chrome-local' ? (
+                localAiStatus === 'available' ? (
+                    <span className="px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider border bg-blue-500/10 border-blue-500/20 text-blue-500 shrink-0" title="Running 100% locally in your browser">
+                        ⚡ Local
+                    </span>
+                ) : localAiStatus === 'downloading' ? (
+                    <span className="px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider border bg-[#EAB308]/10 border-[#EAB308]/20 text-[#EAB308] animate-pulse shrink-0" title="Downloading Gemini Nano local model...">
+                        ⏳ Downloading...
+                    </span>
+                ) : localAiStatus === 'downloadable' ? (
+                    <span className="px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider border bg-[#EAB308]/10 border-[#EAB308]/20 text-[#EAB308] shrink-0" title="Local AI is supported but model is not downloaded. Run the setup in settings.">
+                        ⏳ Install Ready
+                    </span>
+                ) : (
+                    <span className="px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider border bg-[#EAB308]/10 border-[#EAB308]/20 text-[#EAB308] shrink-0" title="Local AI is not supported on this browser/device. Automatically falling back to Cloud Gemini.">
+                        ☁️ Cloud Fallback
+                    </span>
+                )
+            ) : (
+                <span className="px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider border bg-slate-500/10 border-slate-500/20 text-slate-400 shrink-0" title="Running via Google Gemini Cloud API">
+                    ☁️ Cloud
+                </span>
+            )}
         </div>
         <div className="flex items-center gap-2">
-            {!needsApiKey && (
-                <button 
-                    onClick={() => setShowSettings(!showSettings)} 
-                    className={`p-1.5 rounded transition-colors ${showSettings ? 'text-blue-500 bg-blue-500/10' : `${themeClasses.fgMuted} ${themeClasses.hover}`}`}
-                    title="Settings"
-                >
-                    <Settings size={14} />
-                </button>
-            )}
+            <button 
+                onClick={() => setShowSettings(!showSettings)} 
+                className={`p-1.5 rounded transition-colors ${showSettings ? 'text-blue-500 bg-blue-500/10' : `${themeClasses.fgMuted} ${themeClasses.hover}`}`}
+                title="Settings"
+            >
+                <Settings size={14} />
+            </button>
             <button onClick={onClose} className={`${themeClasses.fgMuted} hover:${themeClasses.fg}`}>
                 <X size={16} />
             </button>
         </div>
       </div>
 
-      {needsApiKey ? (
-          renderConfiguration()
-      ) : showSettings ? (
-          <div className="flex-1 p-6 flex flex-col gap-4 animate-in fade-in slide-in-from-right-4">
-              <h3 className={`font-bold flex items-center gap-2 ${themeClasses.fg}`}><Settings size={16}/> Settings</h3>
+      {showSettings ? (
+          <div className="flex-1 p-6 flex flex-col gap-4 animate-in fade-in slide-in-from-right-4 overflow-y-auto max-h-[600px] scrollbar-thin text-left">
+              <h3 className={`font-bold flex items-center gap-2 ${themeClasses.fg} shrink-0`}><Settings size={16}/> Settings</h3>
+
+              {/* AI Provider Toggle */}
+              <div className="space-y-2 text-left shrink-0">
+                  <span className={`text-[10px] font-bold uppercase tracking-wider ${themeClasses.fgMuted}`}>AI Provider</span>
+                  <div className={`grid grid-cols-2 p-1 rounded-xl border ${themeClasses.bgSec} ${themeClasses.border}`}>
+                      <button
+                          onClick={() => useAppStore.getState().setAiProvider('gemini-cloud')}
+                          className={`py-1.5 rounded-lg text-xs font-semibold transition-all ${aiProvider === 'gemini-cloud' ? 'bg-blue-500 text-white shadow-sm' : `${themeClasses.fgMuted} hover:${themeClasses.fg}`}`}
+                      >
+                          Cloud Gemini
+                      </button>
+                      <button
+                          onClick={() => useAppStore.getState().setAiProvider('chrome-local')}
+                          className={`py-1.5 rounded-lg text-xs font-semibold transition-all ${aiProvider === 'chrome-local' ? 'bg-blue-500 text-white shadow-sm' : `${themeClasses.fgMuted} hover:${themeClasses.fg}`}`}
+                      >
+                          Local AI (Nano)
+                      </button>
+                  </div>
+              </div>
+
+              {/* Local AI Status Guide */}
+              {aiProvider === 'chrome-local' && (
+                  <div className={`p-4 rounded-xl border space-y-2 text-xs text-left shrink-0 ${themeClasses.bg} ${themeClasses.border}`}>
+                      <div className="flex items-center justify-between">
+                          <span className={`${themeClasses.fgMuted}`}>Local AI Engine</span>
+                          {localAiStatus === 'available' && <span className="text-green-500 font-bold">● Active</span>}
+                          {localAiStatus === 'downloading' && <span className="text-[#EAB308] font-bold animate-pulse">● Downloading</span>}
+                          {localAiStatus === 'downloadable' && <span className="text-[#EAB308] font-bold">● Download Ready</span>}
+                          {localAiStatus === 'unavailable' && <span className="text-[#EAB308] font-bold">● Unsupported</span>}
+                      </div>
+                      
+                      {localAiStatus === 'available' && (
+                          <p className={`text-[10px] leading-relaxed ${themeClasses.fgMuted}`}>
+                              Running 100% locally in your browser. All analysis is computed on-device for absolute privacy (DLP bypass).
+                          </p>
+                      )}
+                      
+                      {localAiStatus === 'downloading' && (
+                          <p className={`text-[10px] leading-relaxed text-[#EAB308]`}>
+                              Chrome is downloading Gemini Nano in the background. You can monitor progress in <code className="font-mono bg-black/10 px-1 py-0.5 rounded">chrome://on-device-internals</code>. We are automatically using Cloud Gemini as a fallback.
+                          </p>
+                      )}
+                      
+                      {localAiStatus === 'downloadable' && (
+                          <div className="space-y-2">
+                              <p className={`text-[10px] leading-relaxed ${themeClasses.fgMuted}`}>
+                                  Chrome supports built-in AI on this machine, but the local model is not yet downloaded.
+                              </p>
+                              <div className="p-2 rounded bg-[#EAB308]/5 border border-[#EAB308]/15 text-[9px] text-[#EAB308] font-mono leading-relaxed">
+                                  To trigger the download: Open DevTools Console, run <code className="bg-black/10 px-1 py-0.5 rounded">await LanguageModel.create()</code>, then wait for the download to complete in <code className="bg-black/10 px-1 py-0.5 rounded">chrome://on-device-internals</code>.
+                              </div>
+                          </div>
+                      )}
+                      
+                      {localAiStatus === 'unavailable' && (
+                          <div className="space-y-2">
+                              <p className={`text-[10px] leading-relaxed ${themeClasses.fgMuted}`}>
+                                  Your browser or hardware does not support Chrome's local Prompt API natively.
+                              </p>
+                              <div className="p-2.5 rounded bg-[#EAB308]/5 border border-[#EAB308]/15 text-[9px] text-[#EAB308] leading-relaxed space-y-1">
+                                  <div className="font-bold">To Enable Local AI in Chrome:</div>
+                                  <ol className="list-decimal list-inside space-y-0.5 pl-1 font-mono">
+                                      <li>Go to <code className="bg-black/10 px-1 py-0.5 rounded">chrome://flags</code></li>
+                                      <li>Enable <code className="bg-black/10 px-1 py-0.5 rounded">#optimization-guide-on-device-model</code></li>
+                                      <li>Enable <code className="bg-black/10 px-1 py-0.5 rounded">#prompt-api-for-gemini-nano</code></li>
+                                      <li>Relaunch the browser</li>
+                                  </ol>
+                              </div>
+                          </div>
+                      )}
+                  </div>
+              )}
               
               <div className={`p-4 rounded border space-y-3 ${themeClasses.bg} ${themeClasses.border}`}>
                   <div className="flex items-center justify-between">
@@ -351,6 +512,8 @@ const AIPanel: React.FC<AIPanelProps> = ({ onClose, context, themeClasses }) => 
                  </button>
               </div>
           </div>
+      ) : effectiveNeedsApiKey ? (
+          renderConfiguration()
       ) : (
         <div className="p-4 flex flex-col gap-4 flex-1 overflow-hidden">
             {/* Context Header */}
@@ -397,6 +560,20 @@ const AIPanel: React.FC<AIPanelProps> = ({ onClose, context, themeClasses }) => 
 
             {/* Action Buttons */}
             <div className="grid grid-cols-1 gap-2 shrink-0">
+                {context.mode === 'editor' && context.selectedTag && (
+                    <button 
+                        onClick={handleExplainSelectedTag}
+                        disabled={loading}
+                        className="group flex items-center gap-3 p-3.5 rounded-xl border border-blue-500/30 bg-blue-500/5 hover:bg-blue-500/10 text-left transition-all shadow-md hover:shadow-lg animate-in slide-in-from-top-2"
+                    >
+                        <Sparkles size={18} className="text-blue-500 shrink-0 animate-pulse" />
+                        <div className="flex-1">
+                            <span className="block text-xs font-bold text-[#4A89DC]">Explain Selected Tag &lt;{context.selectedTag.tagName}&gt;</span>
+                            <span className="block text-[10px] opacity-70 mt-0.5">Get instant local/cloud explanation of the selected XML element.</span>
+                        </div>
+                    </button>
+                )}
+
                 {context.mode === 'editor' ? (
                     <>
                         <button 
@@ -496,6 +673,17 @@ const AIPanel: React.FC<AIPanelProps> = ({ onClose, context, themeClasses }) => 
                     renderEditorDashboard(editorResponse)
                 ) : diffResponse ? (
                     renderDiffDashboard(diffResponse)
+                ) : activeAction === 'explain-tag' && selectedTagResponse ? (
+                    <div className="space-y-3 text-xs text-left animate-in fade-in leading-relaxed">
+                        <div className="flex items-center gap-2 text-blue-500 font-bold text-[10px] uppercase tracking-wider">
+                            <Bot size={13} />
+                            <span>XML Element Explanation</span>
+                        </div>
+                        <div className="p-3 rounded-lg bg-blue-500/5 border border-blue-500/10 font-mono text-[10px] break-all text-[#4A89DC]">
+                            {context.selectedTag?.rawXml}
+                        </div>
+                        <p className={`whitespace-pre-wrap ${themeClasses.fgMuted}`}>{selectedTagResponse}</p>
+                    </div>
                 ) : (
                     <div className={`h-full flex flex-col items-center justify-center text-center gap-2 ${themeClasses.fgMuted}`}>
                         <Sparkles size={32} className="opacity-20" />

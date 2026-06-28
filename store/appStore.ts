@@ -6,6 +6,8 @@ interface UiState {
   sidebarOpen: boolean;
   showAi: boolean;
   diffViewMode: 'split' | 'inline';
+  aiProvider: 'gemini-cloud' | 'chrome-local';
+  dlpMode: boolean;
 }
 
 export interface AppStore {
@@ -30,6 +32,8 @@ export interface AppStore {
   toggleSidebar: (force?: boolean) => void;
   toggleAiPanel: (force?: boolean) => void;
   setDiffViewMode: (mode: 'split' | 'inline') => void;
+  setAiProvider: (provider: 'gemini-cloud' | 'chrome-local') => void;
+  setDlpMode: (enabled: boolean) => void;
 
   // Editor Actions
   loadEditorFile: (file: File) => Promise<void>;
@@ -70,7 +74,9 @@ export const appStoreCreator: StateCreator<AppStore> = (set, get) => ({
   ui: {
     sidebarOpen: true,
     showAi: false,
-    diffViewMode: 'split'
+    diffViewMode: 'split',
+    aiProvider: 'gemini-cloud',
+    dlpMode: true
   },
   editor: initialEditorState,
   diff: { ...initialDiffState, loading: false },
@@ -107,6 +113,14 @@ export const appStoreCreator: StateCreator<AppStore> = (set, get) => ({
 
   setDiffViewMode: (viewMode) => set(state => ({
     ui: { ...state.ui, diffViewMode: viewMode }
+  })),
+
+  setAiProvider: (provider) => set(state => ({
+    ui: { ...state.ui, aiProvider: provider }
+  })),
+
+  setDlpMode: (enabled) => set(state => ({
+    ui: { ...state.ui, dlpMode: enabled }
   })),
 
   // Editor Logic
@@ -179,3 +193,8 @@ export const appStoreCreator: StateCreator<AppStore> = (set, get) => ({
 });
 
 export const useAppStore = create<AppStore>(appStoreCreator);
+
+if (typeof window !== 'undefined') {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (window as any).__store__ = useAppStore;
+}

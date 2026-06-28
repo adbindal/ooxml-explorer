@@ -7,10 +7,13 @@ import '../tests/tree.test';
 import '../tests/zip.test';
 import '../tests/store.test';
 import '../tests/theme.test';
+import '../tests/aiService.test';
+import '../tests/aiEvaluation.test';
 import '../tests/zipInvariants.test';
 import '../tests/types.test';
 import '../tests/security.test';
 import '../tests/resilience.test';
+import '../tests/namespaceMap.test';
 import { generateDiffTree } from './zipService';
 
 export interface LogEntry {

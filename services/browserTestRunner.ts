@@ -36,8 +36,10 @@ export const it = (name: string, fn: () => void | Promise<void>) => {
     });
 };
 
-export const beforeEach = (fn: () => void) => {
-    try { fn(); } catch(e) { console.error("beforeEach failed", e); }
+const beforeEachCallbacks: (() => void | Promise<void>)[] = [];
+
+export const beforeEach = (fn: () => void | Promise<void>) => {
+    beforeEachCallbacks.push(fn);
 };
 
 // Mocking 'vi' object
@@ -52,30 +54,41 @@ export const vi = {
     },
     spyOn: <T, K extends keyof T>(obj: T, method: K) => {
         const original = obj[method];
+        let currentImpl = typeof original === 'function' ? original : undefined;
+        
         const mockFn = (...args: unknown[]) => {
             mockFn.mock.calls.push(args);
-            return typeof original === 'function' ? original.apply(obj, args) : undefined;
+            return currentImpl ? currentImpl.apply(obj, args) : undefined;
         };
         mockFn.mock = { calls: [] as unknown[][] };
         mockFn.mockRestore = () => {
             obj[method] = original;
         };
         mockFn.mockImplementation = (impl: (...args: unknown[]) => unknown) => {
-            // @ts-expect-error - bypass index signature assignment
-            obj[method] = impl;
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            currentImpl = impl as any;
             return mockFn;
         };
-        // @ts-expect-error - bypass index signature assignment for mock
+        // @ts-expect-error - bypass index signature assignment
         obj[method] = mockFn;
         return mockFn;
     },
-    mock: (moduleName: string) => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    mock: (moduleName: string, factory?: () => unknown) => {
         console.warn(`[BrowserRunner] vi.mock('${moduleName}') ignored. Tests will run against REAL implementations.`);
+    },
+    hoisted: <T>(factory: () => T): T => {
+        return factory();
     },
     clearAllMocks: () => {
         // No-op in browser runner context
     }
 };
+
+if (typeof window !== 'undefined') {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).vi = vi;
+}
 
 // Assertion Logic
 export const expect = (actual: unknown) => ({
@@ -153,6 +166,15 @@ export const executeBrowserTests = async (): Promise<{ logs: TestLogEntry[], pas
     console.log(`[BrowserRunner] Starting execution of ${registeredTests.length} tests...`);
 
     for (const test of registeredTests) {
+        // Run all registered beforeEach callbacks
+        for (const cb of beforeEachCallbacks) {
+            try {
+                await cb();
+            } catch (e) {
+                console.error("[BrowserRunner] beforeEach failed:", e);
+            }
+        }
+
         const startTime = Date.now();
         try {
             await test.fn();

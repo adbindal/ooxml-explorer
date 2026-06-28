@@ -1,5 +1,33 @@
 import { GoogleGenAI } from "@google/genai";
 import { z } from "zod";
+import { useAppStore } from "../store/appStore";
+
+export const getActiveAIProvider = async (): Promise<'chrome-local' | 'gemini-cloud'> => {
+  const preferredProvider = useAppStore.getState().ui.aiProvider;
+  
+  if (preferredProvider === 'chrome-local') {
+    if (typeof window !== 'undefined' && window.LanguageModel) {
+      try {
+        const availability = await window.LanguageModel.availability();
+        if (availability === 'available') {
+          return 'chrome-local';
+        }
+      } catch (e) {
+        console.warn("[AI Service] Error checking local AI availability, falling back to cloud:", e);
+      }
+    }
+    return 'gemini-cloud';
+  }
+  return 'gemini-cloud';
+};
+
+const cleanAndParseJson = (text: string) => {
+  let cleaned = text.trim();
+  if (cleaned.startsWith('```')) {
+    cleaned = cleaned.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim();
+  }
+  return JSON.parse(cleaned);
+};
 
 const STORAGE_KEY = 'ooxml_explorer_api_key';
 
@@ -169,7 +197,7 @@ export const analyzeFile = async (
     throw new Error("No files provided for analysis.");
   }
   try {
-    const ai = getAI();
+    const activeProvider = await getActiveAIProvider();
     
     // Construct the prompt content dynamically based on multiple files
     let filesContext = "";
@@ -208,6 +236,33 @@ export const analyzeFile = async (
         3. **Key Elements**: Extract the main structural elements, listing their tag names and technical configurations.
         `;
     }
+
+    if (activeProvider === 'chrome-local') {
+      const localPrompt = `
+      ${prompt}
+
+      You MUST respond ONLY with a valid JSON string matching this exact JSON schema:
+      ${JSON.stringify(AI_ANALYSIS_RESPONSE_SCHEMA, null, 2)}
+
+      Do NOT include any markdown formatting, backticks, or extra text outside of the JSON block.
+
+      Here is the input file content:
+      ${filesContext}
+      `;
+
+      const session = await window.LanguageModel!.create({
+        systemPrompt: systemInstruction
+      });
+      try {
+        const resultText = await session.prompt(localPrompt);
+        const parsed = cleanAndParseJson(resultText);
+        return AIAnalysisSchema.parse(parsed);
+      } finally {
+        session.destroy();
+      }
+    }
+
+    const ai = getAI();
 
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
@@ -250,7 +305,7 @@ export const analyzeDiff = async (
     throw new Error("No files provided for diff analysis.");
   }
   try {
-    const ai = getAI();
+    const activeProvider = await getActiveAIProvider();
     
     // Construct the prompt content dynamically based on multiple files
     let filesContext = "";
@@ -295,6 +350,33 @@ export const analyzeDiff = async (
         2. **Changes List**: Extract all key attribute or tag modifications. For each, describe the change type, provide the exact technical explanation, and check for schema compliance and side effects.
         `;
     }
+
+    if (activeProvider === 'chrome-local') {
+      const localPrompt = `
+      ${prompt}
+
+      You MUST respond ONLY with a valid JSON string matching this exact JSON schema:
+      ${JSON.stringify(AI_DIFF_RESPONSE_SCHEMA, null, 2)}
+
+      Do NOT include any markdown formatting, backticks, or extra text outside of the JSON block.
+
+      Here are the original/modified files:
+      ${filesContext}
+      `;
+
+      const session = await window.LanguageModel!.create({
+        systemPrompt: systemInstruction
+      });
+      try {
+        const resultText = await session.prompt(localPrompt);
+        const parsed = cleanAndParseJson(resultText);
+        return AIDiffSchema.parse(parsed);
+      } finally {
+        session.destroy();
+      }
+    }
+
+    const ai = getAI();
 
     const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash', 

@@ -35,3 +35,17 @@ playwright-/.cache
 !.dev.vars.example
 .env*
 !.env.example
+
+# Mastra
+.mastra
+
+# Generated RAG output
+public/generated-rag.json
+
+# Temporary search crawler files
+ddg.html
+yahoo.html
+yahoo_sp.html
+bing.html
+google.html
+

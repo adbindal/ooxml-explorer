@@ -5,7 +5,7 @@ import FileTree from '../components/FileTree';
 import AIPanel from '../components/AIPanel';
 import ErrorBoundary from '../components/ErrorBoundary';
 import Logo from '../components/Logo';
-import { formatXml, minifyXml, isXmlFile, isImageFile, isBinaryFile } from '../utils/xmlUtils';
+import { formatXml, minifyXml, isXmlFile, isImageFile, isBinaryFile, extractTagAtSelection, findXmlPathAtOffset } from '../utils/xmlUtils';
 import { exportModifiedZip } from '../services/zipService';
 import { isSaveHotkey, isSaveAllHotkey, isFindHotkey, isSidebarHotkey } from '../utils/hotkeyUtils';
 import { EditorFileContext } from '../services/geminiService';
@@ -35,10 +35,12 @@ const EditorView: React.FC<EditorViewProps> = ({ themeClasses }) => {
 
   const [filter, setFilter] = useState('');
   const [imageSrc, setImageSrc] = useState<string | null>(null);
+  const [selectedTagInfo, setSelectedTagInfo] = useState<{ tagName: string; rawXml: string; parentPath?: string[] } | null>(null);
 
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
   const monacoRef = useRef<Parameters<OnMount>[1] | null>(null);
   const isMounted = useRef(false);
+  const selectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     isMounted.current = true;
@@ -48,6 +50,9 @@ const EditorView: React.FC<EditorViewProps> = ({ themeClasses }) => {
     }
     return () => { 
         isMounted.current = false; 
+        if (selectionTimeoutRef.current) {
+            clearTimeout(selectionTimeoutRef.current);
+        }
         if (editorRef.current) {
             try {
                 const model = editorRef.current.getModel();
@@ -272,6 +277,33 @@ const EditorView: React.FC<EditorViewProps> = ({ themeClasses }) => {
 
       // Set initial theme
       monaco.editor.setTheme(theme === 'dark' ? 'ooxml-dark' : 'ooxml-light');
+
+      // Listen to selection changes to update the selected XML tag context (debounced by 300ms)
+      editor.onDidChangeCursorSelection(() => {
+          if (selectionTimeoutRef.current) {
+              clearTimeout(selectionTimeoutRef.current);
+          }
+          selectionTimeoutRef.current = setTimeout(() => {
+              const selection = editor.getSelection();
+              if (selection && !selection.isEmpty()) {
+                  const model = editor.getModel();
+                  if (model) {
+                      const selectedText = model.getValueInRange(selection);
+                      const startOffset = model.getOffsetAt(selection.getStartPosition());
+                      const tagInfo = extractTagAtSelection(model.getValue(), selectedText);
+                      if (tagInfo) {
+                          const parentPath = findXmlPathAtOffset(model.getValue(), startOffset);
+                          setSelectedTagInfo({
+                              ...tagInfo,
+                              parentPath
+                          });
+                      }
+                  }
+              } else {
+                  setSelectedTagInfo(null);
+              }
+          }, 300);
+      });
   };
 
   return (
@@ -321,6 +353,7 @@ const EditorView: React.FC<EditorViewProps> = ({ themeClasses }) => {
 
            <button 
                onClick={() => toggleAiPanel()} 
+               title="AI Assistant"
                className={`p-2 rounded transition-colors ${showAi ? 'bg-[#4A89DC]/20 text-[#4A89DC]' : `${themeClasses.icon} ${themeClasses.hoverText}`}`} 
            >
                <Sparkles size={18} />
@@ -447,6 +480,7 @@ const EditorView: React.FC<EditorViewProps> = ({ themeClasses }) => {
                         mode: 'editor',
                         fileName: activePath || undefined,
                         content: currentContent,
+                        selectedTag: selectedTagInfo || undefined,
                         relatedFiles: allPaths,
                         onLoadContext: handleFetchContext
                     }}

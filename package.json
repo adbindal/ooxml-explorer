@@ -15,9 +15,11 @@
   },
   "dependencies": {
     "@google/genai": "^1.30.0",
+    "@mastra/libsql": "^1.14.2",
     "@monaco-editor/react": "^4.7.0",
     "jszip": "^3.10.1",
     "lucide-react": "^0.555.0",
+    "minisearch": "^7.2.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "vitest": "^4.0.15",
@@ -27,6 +29,7 @@
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.42.1",
     "@eslint/js": "^9.39.1",
+    "@mastra/core": "^1.47.0",
     "@playwright/test": "^1.61.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.0",
