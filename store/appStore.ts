@@ -194,7 +194,8 @@ export const appStoreCreator: StateCreator<AppStore> = (set, get) => ({
 
 export const useAppStore = create<AppStore>(appStoreCreator);
 
-if (typeof window !== 'undefined') {
+if (typeof window !== 'undefined' && typeof process !== 'undefined' && process.env.NODE_ENV !== 'production') {
+  // Dev-only debugging hook; never exposed in production builds.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (window as any).__store__ = useAppStore;
 }

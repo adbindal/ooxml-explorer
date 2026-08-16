@@ -270,7 +270,11 @@ describe('AI Service Layer 1', () => {
       it('retrieves the correct ECMA-376 context for a valid tag within its domain', async () => {
         const context = await getRagContext('cantSplit', { fileType: 'docx', namespace: 'w' });
         expect(context).toContain('[ECMA-376 Specification Context]');
-        expect(context).toContain('Table Row Cannot Split');
+        // Assert on the stable structural marker rather than the dataset's free-text
+        // definition prose, which differs between the mocked KB used here under Vitest
+        // and the real public/rag-data.json used when this same test runs in-browser
+        // via the Validator (vi.mock is a documented no-op in that runner).
+        expect(context).toContain('Tag Name: <w:cantSplit>');
         expect(context).toContain('DOCX');
       });
 
@@ -285,8 +289,8 @@ describe('AI Service Layer 1', () => {
         const contextDocx = await getRagContext('Relationship', { fileType: 'docx', namespace: 'r' });
         const contextXlsx = await getRagContext('Relationship', { fileType: 'xlsx', namespace: 'r' });
 
-        expect(contextDocx).toContain('Relationship Definition');
-        expect(contextXlsx).toContain('Relationship Definition');
+        expect(contextDocx).toContain('Tag Name: <r:Relationship>');
+        expect(contextXlsx).toContain('Tag Name: <r:Relationship>');
       });
     });
 
