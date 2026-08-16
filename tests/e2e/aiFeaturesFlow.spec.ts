@@ -88,14 +88,19 @@ test.describe('OOXML Explorer E2E AI Features & DLP Flow', () => {
         // Verify the header pill shows "DLP Shield" (since dlpMode is true, it forces local)
         await expect(page.locator('text=DLP Shield')).toBeVisible();
 
-        // Trigger any AI action (e.g., Technical Analysis or double-click to explain)
+        // Select a file so the "Technical Analysis" action becomes enabled
+        const fileNode = page.locator('text=document.xml');
+        await fileNode.click();
+
+        // Trigger the AI action - it must be enabled and visible now that DLP mode no
+        // longer forces users through the (irrelevant, under DLP) cloud API key screen.
         const explainBtn = page.locator('button:has-text("Technical Analysis")').first();
-        if (await explainBtn.isVisible()) {
-            await explainBtn.click();
-            // Verify that the output area displays the DLP block error
-            await expect(page.locator('text=Analysis Failed')).toBeVisible();
-            await expect(page.locator('text=DLP_BLOCK')).toBeVisible();
-        }
+        await expect(explainBtn).toBeEnabled();
+        await explainBtn.click();
+
+        // Verify that the output area displays the DLP block error
+        await expect(page.locator('text=Analysis Failed')).toBeVisible();
+        await expect(page.locator('text=DLP_BLOCK')).toBeVisible();
     });
 
     test('should explain selected tag when Local AI is active and tag is double-clicked', async ({ page }) => {
