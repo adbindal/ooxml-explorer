@@ -1,6 +1,6 @@
 # OOXML Expert Agent — Research State & Resume Point
 
-**Status:** research complete; build plan published; **Stage 0 shipped** (see §8b).
+**Status:** research complete; build plan published; **Stage 0 shipped, Stage 1a shipped** (see §8b).
 **Last updated:** 2026-08-17
 **Purpose:** durable record so this work can resume after a session ends. If you are picking this up cold, read this file top to bottom before doing anything else.
 
@@ -274,16 +274,33 @@ Three branches pushed to origin, all off `main`, none merged:
 
 **Mastra assessed and declined** for ingestion: the pipeline contains no LLM, so a workflow framework adds a dependency and buys nothing. Revisit only if prose generation later needs durable suspend/resume for human review — but note the research ruled out the LLM-judge and self-correction-retry patterns that were the old Mastra pipeline's entire purpose.
 
+## 8c. Stage 1a — package integrity (2026-08-17)
+
+`services/packageIntegrity.ts` + 21 tests, commit `1a7905f`. **The first code in the app that answers a correctness question by computation rather than retrieval** — every finding is derived, so it can be presented as *verified* rather than merely grounded.
+
+Rules: `missing-content-types`, `untyped-part`, `dangling-relationship-id`, `missing-relationship-target`, `orphaned-rels-part`, `malformed-xml`.
+
+Two design points worth not re-deriving:
+- **Relationships resolve per part.** An image used by `header1.xml` must be declared in `word/_rels/header1.xml.rels`; `document.xml.rels` does not satisfy it. Word rejects the lenient reading; some readers accept it. There is a test asserting rejection.
+- **References found by scanning, not enumerating** — any attribute in the relationships namespace holding an `rId`. Enumerating `r:id`/`r:embed`/`r:link`/… silently misses format-specific ones.
+
+Format-agnostic by construction (packaging is fully shared across the three formats). Pure functions over a `Record<partPath, content>` map, decoupled from JSZip.
+
+⚠️ **Not wired up.** `checkPackageIntegrity()` has no caller yet — see task #9.
+
+**Remaining in Stage 1:** MCE preprocessing (task #8). Naive walkers double-count every textbox, because Word writes shapes twice — DrawingML in `mc:Choice`, VML in `mc:Fallback`. Required before the Stage 2 resolvers. The seam is clean: `packageIntegrity` consumes a path→content map, so MCE slots in as a transform over that map.
+
 ## 9. Next actions
 
 1. ~~Research (Word, architecture, tooling, storage)~~ — done.
 2. ~~Write the build plan~~ — done, Part 3 above.
 3. ~~Fix the `geminiService.ts` context bug~~ — done, `3af80df`.
-4. ~~Stage 0~~ — done, see §8b. **Three branches are pushed and unmerged; open PRs when ready.**
-5. **Stage 1 — package integrity.** Format-agnostic: content-type coverage, per-part relationship resolution (headers/footers have their own `.rels`), dangling `r:id` detection, MCE preprocessing. This is what makes the *Verified* badge tier real.
-6. Decide: which format goes first (recommend sequencing, not parallelising — resolvers are genuinely different per format).
-7. Decide: MS-OI29500 licensing — ask or not. Gates Stage 3 only.
-8. Decide: audience (self vs onboarding engineers). If mentoring is primary, Stage 5 moves up.
+4. ~~Stage 0~~ — done, see §8b. **All work is consolidated on the single branch `feat/schema-derived-rag-corpus`; `main` is untouched.**
+5. ~~Stage 1a — package integrity~~ — done, `1a7905f`. See §8c.
+6. **Stage 1b — MCE preprocessing** (task #8), then **1c — surface findings in the UI** (task #9). Together these finish Stage 1 and make the *Verified* badge tier real.
+7. Decide: which format goes first (recommend sequencing, not parallelising — resolvers are genuinely different per format).
+8. Decide: MS-OI29500 licensing — ask or not. Gates Stage 3 only.
+9. Decide: audience (self vs onboarding engineers). If mentoring is primary, Stage 5 moves up.
 
 ## 10. Known gaps at time of writing
 
