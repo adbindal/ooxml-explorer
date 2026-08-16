@@ -34,6 +34,30 @@ describe('Gemini AI Service', () => {
         await expect(analyzeDiff(mockFiles, 'summary')).rejects.toThrow('API_KEY_MISSING');
     });
 
+    describe('Request Validation (Zod)', () => {
+        it('analyzeFile rejects an empty file list before making any request', async () => {
+            await expect(analyzeFile([], 'explain')).rejects.toThrow('No files provided for analysis.');
+        });
+
+        it('analyzeFile rejects a malformed file object before making any request', async () => {
+            setApiKey('test-key');
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const malformed = [{ fileName: 'test.xml', content: 42 }] as any;
+            await expect(analyzeFile(malformed, 'explain')).rejects.toThrow('No files provided for analysis.');
+        });
+
+        it('analyzeDiff rejects an empty file list before making any request', async () => {
+            await expect(analyzeDiff([], 'summary')).rejects.toThrow('No files provided for diff analysis.');
+        });
+
+        it('analyzeDiff rejects a malformed file object before making any request', async () => {
+            setApiKey('test-key');
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const malformed = [{ fileName: 'test.xml', original: 1, modified: 2 }] as any;
+            await expect(analyzeDiff(malformed, 'summary')).rejects.toThrow('No files provided for diff analysis.');
+        });
+    });
+
     describe('DLP Mode Security Shield', () => {
         it('analyzeFile is blocked by DLP mode instead of silently falling back to cloud', async () => {
             useAppStore.setState(state => ({ ui: { ...state.ui, dlpMode: true } }));

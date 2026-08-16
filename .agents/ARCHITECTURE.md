@@ -151,3 +151,7 @@ To guarantee that the application remains robust and compliant with the ECMA-376
 ### Invariant D: No Local State Duplication
 * **Rule**: Components must not manage local duplicate states for variables that require global synchronization (such as `activePath` or `sidebarOpen`). All shared parameters must be routed through the Zustand store.
 * **Validation**: Verified statically in [tests/staticInvariants.test.ts](file:///Users/adbindal/code/exp/ooxml-explorer/tests/staticInvariants.test.ts).
+
+### Invariant E: AI Request/Response Zod Validation
+* **Rule**: Every exported AI service function (`services/aiService.ts`, `services/geminiService.ts`) MUST define its request and response shape as a Zod schema (type derived via `z.infer`), validate the request at the top of the function, and validate the response before returning it - especially for the local on-device model, which is not a constrained-decoding API and can return anything. Validation failures must surface a short, readable `Error`, never a raw `ZodError`.
+* **Validation**: Verified functionally in [tests/ai.test.ts](file:///Users/adbindal/code/exp/ooxml-explorer/tests/ai.test.ts) ("Request Validation (Zod)") and [tests/aiService.test.ts](file:///Users/adbindal/code/exp/ooxml-explorer/tests/aiService.test.ts) (`explainElement` invalid-request case).

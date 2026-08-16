@@ -43,6 +43,13 @@ ooxml-explorer/
 - Monaco Editor configurations MUST use the theme definitions declared in [utils/theme.ts](file:///Users/adbindal/code/exp/ooxml-explorer/utils/theme.ts).
 - Word wrap (`wordWrap: 'on'`) MUST be enabled for all editor and diff editor models to guarantee readable viewports.
 
+### E. AI Request/Response Validation (Zod)
+- Every exported AI service function's request and response shape MUST be a Zod schema (`z.object(...)`), with the TypeScript type derived via `z.infer<typeof Schema>` - never a hand-written `interface` for these shapes. See `EditorFileContextSchema`/`AIAnalysisSchema` in [services/geminiService.ts](file:///Users/adbindal/code/exp/ooxml-explorer/services/geminiService.ts) and `ElementExplanationSchema` in [services/aiService.ts](file:///Users/adbindal/code/exp/ooxml-explorer/services/aiService.ts) as the canonical examples.
+- **Validate the request** at the top of the function (`Schema.parse(...)` or `.safeParse(...)`) before doing any work. This catches malformed callers at runtime, not just at compile time.
+- **Validate the response** before returning it to the caller. This matters most for the on-device local model, which is not a constrained-decoding API and can return literally anything - Zod validation is what turns "the model returned garbage" into a caught, readable error instead of a silent type mismatch or a crash deeper in the UI. See `promptLocalModelForJson` in `services/geminiService.ts`.
+- On a validation failure, throw a short, readable `Error` message - never let a raw `ZodError` (its `.message` is a JSON dump of every issue) reach the UI. Catch the parse call and rethrow with a message the AI panel can display directly.
+- Scope: this rule covers the AI service layer's exported request/response contracts - the actual model I/O boundary in `services/aiService.ts` and `services/geminiService.ts` - not every internal helper type in the codebase.
+
 ---
 
 ## 3. Style Guide & Design Aesthetics
