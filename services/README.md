@@ -58,6 +58,34 @@ Do not hand-edit either generated file. To correct or add prose, edit the record
 
 ---
 
+## Deterministic checks (no model involved)
+
+**[services/packageIntegrity.ts](./packageIntegrity.ts)** answers correctness questions by *computing* them rather than retrieving or asking a model. Every finding is derived, so an answer built on one can be presented as **verified** rather than merely grounded.
+
+It targets the failure class that produces Word's *"found unreadable content"* dialog rather than a wrong-looking render — and schema validity catches none of it. A document can be perfectly valid WordprocessingML and still fail to open because a part was never declared in `[Content_Types].xml`, or an `r:id` resolves to nothing.
+
+| Rule | Severity | Catches |
+|---|---|---|
+| `missing-content-types` | error | No `[Content_Types].xml` in the package |
+| `untyped-part` | error | A part covered by neither an `Override` nor a `Default` extension |
+| `dangling-relationship-id` | error | An `rId` referenced by a part but not declared in *that part's* `.rels` |
+| `missing-relationship-target` | error | A relationship pointing at a part not present in the package |
+| `orphaned-rels-part` | warning | A `.rels` file whose owning part is absent |
+| `malformed-xml` | error | A part that does not parse |
+
+Two details carry most of the value:
+
+*   **Relationships resolve per part.** An image used by `header1.xml` must be declared in `word/_rels/header1.xml.rels`; a declaration in `word/_rels/document.xml.rels` does *not* satisfy it. Some readers tolerate the mistake and Word does not — exactly the package that looks fine locally and fails for a user. There is a test asserting the lenient reading is rejected.
+*   **References are found by scanning, not enumerating.** Any attribute in the relationships namespace holding an `rId` value counts. Enumerating `r:id`/`r:embed`/`r:link`/… would silently miss the format-specific ones, and a missed reference is an integrity hole rather than a cosmetic gap.
+
+The checks are **format-agnostic**. Packaging is the one layer Word, Excel and PowerPoint share completely, so the same code runs unchanged against `.docx`, `.xlsx` and `.pptx`; a test covers a spreadsheet to keep that honest.
+
+The API is pure functions over a `Record<partPath, content>` map, deliberately decoupled from JSZip so it is testable without binary fixtures and reusable anywhere.
+
+> **Not yet wired up.** `checkPackageIntegrity()` is complete and tested but has no caller. Surfacing findings in the UI and feeding them to the AI as verified evidence is still to do.
+
+---
+
 ## AI Provider Routing
 
 *   **[services/aiProvider.ts](./aiProvider.ts)**: Single source of truth for choosing between Chrome's built-in local model (`chrome-local`) and the Gemini Cloud API (`gemini-cloud`), and for enforcing DLP Mode (see below). Both `aiService.ts` and `geminiService.ts` call into this instead of each maintaining their own provider-detection logic.
