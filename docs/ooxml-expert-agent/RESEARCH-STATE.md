@@ -1,6 +1,6 @@
 # OOXML Expert Agent — Research State & Resume Point
 
-**Status:** research complete; plan in progress.
+**Status:** research complete; build plan published; **Stage 0 shipped** (see §8b).
 **Last updated:** 2026-08-17
 **Purpose:** durable record so this work can resume after a session ends. If you are picking this up cold, read this file top to bottom before doing anything else.
 
@@ -9,7 +9,7 @@ Published write-ups (private artifacts):
 - Part 2 — What the Schema Can't Tell You: https://claude.ai/code/artifact/d3fb80ba-ea48-411a-b04a-848c52418147
 - **Part 3 — Staff Engineer in a Box (the build plan): https://claude.ai/code/artifact/a76cb080-e4fd-4be5-b524-9ca490a94470**
 
-**To resume:** read §9 for next actions. Two research agents were running on SpreadsheetML and PresentationML/DrawingML semantics when this was last written — if their output never landed, those are the gaps to re-fill (see §10). The build plan's architecture does not depend on them; only Stage 2's per-format detail does.
+**To resume:** read §8b for what shipped, then §9 for next actions. The SpreadsheetML and PresentationML/DrawingML research was never completed (§10) — those are the gaps to re-fill. The build plan's architecture does not depend on them; only Stage 2's per-format detail does.
 
 ---
 
@@ -35,7 +35,7 @@ Hard constraint carried from shipped code: the **honesty property**. The app sho
 | `grounded` flag | Computed **in TypeScript** from whether lookup hit. Model never asserts it. **This is correct and must be preserved.** |
 | Zip dependency | `jszip ^3.10.1` (only archive dep) |
 
-### Bugs / defects found (not yet fixed)
+### Bugs / defects found — ALL FIXED in Stage 0, see §8b
 
 1. **`staticKnowledgeBase.ts` is dead code.** `KNOWLEDGE_BASE` exported, imported by nothing — only the `ReferenceDoc` *type* is used. `services/README.md` claims the router falls back to it. It does not.
 2. **All 8 xlsx records carry `"namespace": "r"`** — that's the relationships namespace, not SpreadsheetML. Source: the ingestion branch's generator prompt literally instructs the model to conflate them. User-visible as `<r:worksheet>` under a "Grounded" badge.
@@ -251,15 +251,39 @@ Both sit **above** the provider branch — same string reaches `promptLocalModel
 
 ---
 
+## 8b. Stage 0 — COMPLETE (2026-08-17)
+
+Three branches pushed to origin, all off `main`, none merged:
+
+| Branch | Commit | What |
+|---|---|---|
+| `fix/ai-prompt-context-budget` | `3af80df` | Context-budget fix + `services/promptBudget.ts` + 22 tests |
+| `feat/schema-derived-rag-corpus` | `534dd10` | Corpus 29 → **1,521** records via `scripts/ingestSchema.ts` |
+| `feat/schema-derived-rag-corpus` | `2ecd45d` | Offline fallback wired up; `services/README.md` corrected |
+| `docs/ooxml-expert-agent-research` | `9551657` | This file + the build plan |
+
+**All four defects from §1 are fixed**, plus two found en route: `ragRouter` mapped the `shared`/DrawingML domain onto the *Presentation* SDK namespace, and an IndexedDB rejection propagated out of `getRagContext` instead of degrading to the offline store.
+
+**Corpus now:** docx 603, xlsx 383, shared/DrawingML 323, pptx 212 = 1,521. Only 0.27 MB minified, so the sharding work in §6 is **not yet needed**. 29 records are `curated` (prose + citation); 1,492 are `schema` (structure only, deliberately carrying no definition and no citation).
+
+**Design rule established — *prose from humans, structure from the schema*.** Curated records are authoritative only for `definition`/`citation`/`reviewerNote`; every structural field comes from the schema whenever a schema record exists. Worth remembering why: the first attempt let curation win outright, and the xlsx namespace bug *survived*, because the curated values were precisely the wrong ones.
+
+**Two derivations in `scripts/ingestSchema.ts` that aren't obvious from the source data:** parents are the inverse of each element's `Children` list; and attributes are usually inherited (only 174 of 726 WordprocessingML entries declare them directly, 408 come via `BaseClass`).
+
+**`ragRouter` honesty change:** schema-derived records have no prose, so the prompt now states that no specification description is on file and instructs the model not to cite one. Structure stays grounded, meaning explicitly does not. This is the minimal honest version of the badge question — the full four-tier ladder is still unbuilt.
+
+**Mastra assessed and declined** for ingestion: the pipeline contains no LLM, so a workflow framework adds a dependency and buys nothing. Revisit only if prose generation later needs durable suspend/resume for human review — but note the research ruled out the LLM-judge and self-correction-retry patterns that were the old Mastra pipeline's entire purpose.
+
 ## 9. Next actions
 
 1. ~~Research (Word, architecture, tooling, storage)~~ — done.
 2. ~~Write the build plan~~ — done, Part 3 above.
-3. **Fix the `geminiService.ts` context bug (§6).** Standalone, small, no dependency on anything else. Best first PR.
-4. **Stage 0 of the plan**: ingest SDK `/data` + ECMA XSDs, write a real parser, schema-validate in CI. Fresh branch off `main`.
-5. Decide: which format goes first (recommend sequencing, not parallelising — resolvers are genuinely different per format).
-6. Decide: MS-OI29500 licensing — ask or not. Gates Stage 3 only.
-7. Decide: audience (self vs onboarding engineers). If mentoring is primary, Stage 5 moves up.
+3. ~~Fix the `geminiService.ts` context bug~~ — done, `3af80df`.
+4. ~~Stage 0~~ — done, see §8b. **Three branches are pushed and unmerged; open PRs when ready.**
+5. **Stage 1 — package integrity.** Format-agnostic: content-type coverage, per-part relationship resolution (headers/footers have their own `.rels`), dangling `r:id` detection, MCE preprocessing. This is what makes the *Verified* badge tier real.
+6. Decide: which format goes first (recommend sequencing, not parallelising — resolvers are genuinely different per format).
+7. Decide: MS-OI29500 licensing — ask or not. Gates Stage 3 only.
+8. Decide: audience (self vs onboarding engineers). If mentoring is primary, Stage 5 moves up.
 
 ## 10. Known gaps at time of writing
 
