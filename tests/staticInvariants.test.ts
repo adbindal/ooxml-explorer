@@ -33,6 +33,7 @@ describe('Static Architecture Invariants', () => {
             'FileTree.tsx',      // Recurse file tree requiring explicit green/red/amber diff status markers
             'LandingView.tsx',   // Specific branding gradient buttons and decorative elements
             'Logo.tsx',          // Core logo SVG path colors
+            'MarkdownContent.tsx', // Renders AIPanel's AI responses; matches AIPanel's own blue-accented branding
             'ValidatorView.tsx'  // QA dashboard custom black console output styling
         ];
         

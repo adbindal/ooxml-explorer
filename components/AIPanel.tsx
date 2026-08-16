@@ -14,6 +14,7 @@ import {
 } from '../services/geminiService';
 import { explainElement, ElementExplanation } from '../services/aiService';
 import { ThemeClasses } from '../types';
+import MarkdownContent from './MarkdownContent';
 
 interface AIPanelProps {
   onClose: () => void;
@@ -229,7 +230,7 @@ const AIPanel: React.FC<AIPanelProps> = ({ onClose, context, themeClasses }) => 
                       <Bot size={13} />
                       <span>File Purpose</span>
                   </div>
-                  <p className={`text-xs leading-relaxed ${themeClasses.fgMuted}`}>{data.summary}</p>
+                  <MarkdownContent content={data.summary} className={`text-xs ${themeClasses.fgMuted}`} />
               </div>
 
               {/* Critical Issues Panel */}
@@ -289,7 +290,7 @@ const AIPanel: React.FC<AIPanelProps> = ({ onClose, context, themeClasses }) => 
                       <FileDiff size={13} />
                       <span>Functional Impact</span>
                   </div>
-                  <p className={`text-xs leading-relaxed ${themeClasses.fgMuted}`}>{data.summary}</p>
+                  <MarkdownContent content={data.summary} className={`text-xs ${themeClasses.fgMuted}`} />
               </div>
 
               {/* Changes List Panel */}
@@ -703,7 +704,7 @@ const AIPanel: React.FC<AIPanelProps> = ({ onClose, context, themeClasses }) => 
                         <div className="p-3 rounded-lg bg-blue-500/5 border border-blue-500/10 font-mono text-[10px] break-all text-[#4A89DC]">
                             {context.selectedTag?.rawXml}
                         </div>
-                        <p className={`whitespace-pre-wrap ${themeClasses.fgMuted}`}>{selectedTagResponse.explanation}</p>
+                        <MarkdownContent content={selectedTagResponse.explanation} className={themeClasses.fgMuted} />
                     </div>
                 ) : (
                     <div className={`h-full flex flex-col items-center justify-center text-center gap-2 ${themeClasses.fgMuted}`}>
