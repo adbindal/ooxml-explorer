@@ -75,9 +75,15 @@ const AIPanel: React.FC<AIPanelProps> = ({ onClose, context, themeClasses }) => 
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [showSettings, setShowSettings] = useState(false);
 
-  const effectiveNeedsApiKey = aiProvider === 'chrome-local' && localAiStatus === 'available'
+  // Under DLP Mode, cloud is disabled outright regardless of aiProvider preference, so a
+  // cloud API key is never required up front - if local AI turns out to be unavailable,
+  // the action itself surfaces a clear DLP_BLOCK error instead. Without DLP Mode, a key
+  // is only unnecessary once local AI is confirmed available and selected.
+  const effectiveNeedsApiKey = dlpMode
       ? false
-      : !apiKeyConfigured;
+      : aiProvider === 'chrome-local' && localAiStatus === 'available'
+          ? false
+          : !apiKeyConfigured;
 
   const handleSaveKey = () => {
       if (!apiKeyInput.trim()) return;
@@ -492,10 +498,14 @@ const AIPanel: React.FC<AIPanelProps> = ({ onClose, context, themeClasses }) => 
               <div className={`p-4 rounded border space-y-3 ${themeClasses.bg} ${themeClasses.border}`}>
                   <div className="flex items-center justify-between">
                       <span className={`text-xs ${themeClasses.fgMuted}`}>API Key Status</span>
-                      <span className="text-xs text-green-500 flex items-center gap-1"><Check size={12}/> Configured</span>
+                      {apiKeyConfigured ? (
+                          <span className="text-xs text-green-500 flex items-center gap-1"><Check size={12}/> Configured</span>
+                      ) : (
+                          <span className="text-xs text-[#EAB308] flex items-center gap-1"><Key size={12}/> Not Configured</span>
+                      )}
                   </div>
                   <div className={`text-[10px] ${themeClasses.fgMuted} font-mono`}>
-                      Stored locally in browser
+                      {apiKeyConfigured ? 'Stored locally in browser' : 'Required for Cloud Gemini; not needed for Local AI'}
                   </div>
               </div>
 
