@@ -1,6 +1,12 @@
 import { GoogleGenAI } from "@google/genai";
 import { z } from "zod";
 import { getActiveAIProvider } from "./aiProvider";
+import {
+  CLOUD_CONTENT_BUDGET_CHARS,
+  allocateContentBudget,
+  getLocalContentBudgetChars,
+  renderContentSnippet
+} from "./promptBudget";
 
 const cleanAndParseJson = (text: string) => {
   let cleaned = text.trim();
@@ -20,14 +26,20 @@ const cleanAndParseJson = (text: string) => {
  * so the prompt must show a concrete filled-in example instead. Even so, on-device
  * models occasionally wrap the response in prose or partially miss the shape, so this
  * makes one corrective retry (reusing the same session) before giving up.
+ *
+ * The prompt is supplied as a builder rather than a string because the amount of file
+ * content that fits can only be known once the session exists - the window size varies
+ * by Chrome version and the system prompt has already consumed part of it. See
+ * ./promptBudget.
  */
 const promptLocalModelForJson = async <T>(
   systemInstruction: string,
-  userPrompt: string,
+  buildUserPrompt: (contentBudgetChars: number) => string,
   schema: z.ZodType<T>
 ): Promise<T> => {
   const session = await window.LanguageModel!.create({ systemPrompt: systemInstruction });
   try {
+    const userPrompt = buildUserPrompt(getLocalContentBudgetChars(session));
     const resultText = await session.prompt(userPrompt);
     try {
       return schema.parse(cleanAndParseJson(resultText));
@@ -243,18 +255,18 @@ export const analyzeFile = async (
   files = parsedFiles.data;
   try {
     const activeProvider = await getActiveAIProvider();
-    
-    // Construct the prompt content dynamically based on multiple files
-    let filesContext = "";
-    files.forEach((f, index) => {
-        const snippet = f.content.slice(0, 8000);
-        filesContext += `
+
+    // Built against a *total* budget shared across every file, not a per-file cap -
+    // otherwise N files means N times the limit, which overflows the on-device window.
+    const buildFilesContext = (budgetChars: number): string => {
+      const limits = allocateContentBudget(files.map(f => f.content.length), budgetChars);
+      return files.map((f, index) => `
         --- FILE ${index + 1}: ${f.fileName} ---
         \`\`\`xml
-        ${snippet}
+        ${renderContentSnippet(f.content, limits[index])}
         \`\`\`
-        \n`;
-    });
+        \n`).join('');
+    };
 
     const mainFileName = files[0].fileName;
     const relatedCount = files.length - 1;
@@ -283,7 +295,7 @@ export const analyzeFile = async (
     }
 
     if (activeProvider === 'chrome-local') {
-      const localPrompt = `
+      return await promptLocalModelForJson(systemInstruction, (budgetChars) => `
       ${prompt}
 
       Respond with ONLY a single JSON object - no markdown formatting, no backticks, no commentary
@@ -292,10 +304,8 @@ export const analyzeFile = async (
       ${AI_ANALYSIS_LOCAL_EXAMPLE}
 
       Here is the input file content:
-      ${filesContext}
-      `;
-
-      return await promptLocalModelForJson(systemInstruction, localPrompt, AIAnalysisSchema);
+      ${buildFilesContext(budgetChars)}
+      `, AIAnalysisSchema);
     }
 
     const ai = getAI();
@@ -311,13 +321,13 @@ export const analyzeFile = async (
       contents: `
       ${prompt}
 
-      ${filesContext}
+      ${buildFilesContext(CLOUD_CONTENT_BUDGET_CHARS)}
       `
     });
-    
+
     const text = response.text || "{}";
     const rawData = JSON.parse(text);
-    
+
     // Validate with Zod to guarantee runtime type safety
     return AIAnalysisSchema.parse(rawData);
   } catch (error: unknown) {
@@ -344,26 +354,33 @@ export const analyzeDiff = async (
   files = parsedFiles.data;
   try {
     const activeProvider = await getActiveAIProvider();
-    
-    // Construct the prompt content dynamically based on multiple files
-    let filesContext = "";
-    files.forEach((f, index) => {
-        const snipA = f.original ? f.original.slice(0, 8000) : "(File did not exist)";
-        const snipB = f.modified ? f.modified.slice(0, 8000) : "(File deleted)";
-        
-        filesContext += `
+
+    // A diff carries two versions per file, so the budget is split across 2N bodies -
+    // the previous per-side cap let a single two-file diff reach four times its limit.
+    const buildFilesContext = (budgetChars: number): string => {
+      const sides = files.flatMap(f => [f.original?.length ?? 0, f.modified?.length ?? 0]);
+      const limits = allocateContentBudget(sides, budgetChars);
+      return files.map((f, index) => {
+        const snipA = f.original
+          ? renderContentSnippet(f.original, limits[index * 2])
+          : "(File did not exist)";
+        const snipB = f.modified
+          ? renderContentSnippet(f.modified, limits[index * 2 + 1])
+          : "(File deleted)";
+        return `
         --- FILE ${index + 1}: ${f.fileName} ---
         [ORIGINAL VERSION]:
         \`\`\`xml
         ${snipA}
         \`\`\`
-        
+
         [MODIFIED VERSION]:
         \`\`\`xml
         ${snipB}
         \`\`\`
         \n`;
-    });
+      }).join('');
+    };
 
     let systemInstruction = "";
     let prompt = "";
@@ -390,7 +407,7 @@ export const analyzeDiff = async (
     }
 
     if (activeProvider === 'chrome-local') {
-      const localPrompt = `
+      return await promptLocalModelForJson(systemInstruction, (budgetChars) => `
       ${prompt}
 
       Respond with ONLY a single JSON object - no markdown formatting, no backticks, no commentary
@@ -399,10 +416,8 @@ export const analyzeDiff = async (
       ${AI_DIFF_LOCAL_EXAMPLE}
 
       Here are the original/modified files:
-      ${filesContext}
-      `;
-
-      return await promptLocalModelForJson(systemInstruction, localPrompt, AIDiffSchema);
+      ${buildFilesContext(budgetChars)}
+      `, AIDiffSchema);
     }
 
     const ai = getAI();
@@ -418,7 +433,7 @@ export const analyzeDiff = async (
         contents: `
         ${prompt}
 
-        ${filesContext}
+        ${buildFilesContext(CLOUD_CONTENT_BUDGET_CHARS)}
         `
     });
 
