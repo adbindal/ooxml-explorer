@@ -6,13 +6,22 @@ export interface ReferenceDoc {
   tag: string;
   namespace: string;
   domain: 'docx' | 'xlsx' | 'pptx' | 'shared';
-  definition: string;
+  /**
+   * Human-readable prose. Optional because the bulk of the dataset is generated from
+   * the Open XML SDK's schema metadata, which supplies structure but no usable
+   * description - its own `Summary` field is boilerplate ("Defines the Table Class.")
+   * and sometimes wrong, so generating from it would manufacture false authority.
+   * Records without a definition are structurally grounded only; see ragRouter.
+   */
+  definition?: string;
   attributes: string[];
   parents: string[];
   citation?: string;
   sdkClass?: string;
   reviewerNote?: string;
   priority?: 'high' | 'low';
+  /** `curated` records were written by a human; `schema` records are generated. */
+  provenance?: 'curated' | 'schema';
 }
 
 export const KNOWLEDGE_BASE: ReferenceDoc[] = [
