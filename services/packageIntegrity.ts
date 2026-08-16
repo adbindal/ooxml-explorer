@@ -206,8 +206,9 @@ export const checkPackageIntegrity = (parts: PackageParts): IntegrityFinding[] =
     }
 
     // Relationship targets are resolved against the *owning part's* directory, not
-    // the _rels directory the file physically lives in.
-    const resolveBase = owner ?? path.replace(/_rels\/\.rels$/, 'x');
+    // the _rels directory the file physically lives in. The package-level
+    // `_rels/.rels` has no owning part, so its targets resolve from the package root.
+    const resolveBase = owner ?? '';
     for (const rel of relationships) {
       if (rel.external || rel.target === '') continue;
       const resolved = resolveTarget(resolveBase, rel.target);

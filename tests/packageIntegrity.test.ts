@@ -65,6 +65,29 @@ describe('path helpers', () => {
   it('resolves absolute targets', () => {
     expect(resolveTarget('word/document.xml', '/word/styles.xml')).toBe('word/styles.xml');
   });
+
+  it('resolves package-root targets, which _rels/.rels uses', () => {
+    // The package-level relationships part has no owning part, so its targets are
+    // relative to the root rather than to any directory.
+    expect(resolveTarget('', 'word/document.xml')).toBe('word/document.xml');
+    expect(resolveTarget('', 'xl/workbook.xml')).toBe('xl/workbook.xml');
+  });
+});
+
+describe('package-level relationships', () => {
+  it('validates the root _rels/.rels target', () => {
+    const parts = validPackage();
+    parts['_rels/.rels'] = `<?xml version="1.0"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://purl.org/officeDocument" Target="word/missing.xml"/>
+</Relationships>`;
+    const finding = checkPackageIntegrity(parts).find(f => f.rule === 'missing-relationship-target');
+    expect(finding?.message).toContain('word/missing.xml');
+  });
+
+  it('accepts a correct root relationship', () => {
+    expect(rules(validPackage())).not.toContain('missing-relationship-target');
+  });
 });
 
 describe('a well-formed package', () => {
