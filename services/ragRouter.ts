@@ -1,5 +1,22 @@
-import { ReferenceDoc } from './staticKnowledgeBase';
+import { KNOWLEDGE_BASE, ReferenceDoc } from './staticKnowledgeBase';
 import { querySchemaFromStorage, searchSchemasInStorage } from './storageService';
+
+/**
+ * Looks a tag up in the bundled fallback knowledge base.
+ *
+ * IndexedDB is the primary store, but it is empty until `/rag-data.json` has been
+ * fetched and can be unavailable outright (private browsing modes, storage pressure,
+ * a failed fetch). Without this, the common tags would come back ungrounded in exactly
+ * the offline situations the app is meant to handle - and under DLP mode, where no
+ * network call is permitted, that is the situation.
+ */
+const queryStaticKnowledgeBase = (
+  tag: string,
+  domain: 'docx' | 'xlsx' | 'pptx'
+): ReferenceDoc | null =>
+  KNOWLEDGE_BASE.find(
+    doc => doc.tag === tag && (doc.domain === domain || doc.domain === 'shared')
+  ) ?? null;
 
 /**
  * Uses the local Gemini Nano model (if available) to extract 1-2 search keywords
@@ -67,16 +84,32 @@ export const getRagContext = async (
     }
   }
 
-  // 2. Try direct lookup in IndexedDB
-  let match: ReferenceDoc | null = await querySchemaFromStorage(cleanTagName, context.fileType);
+  // 2. Try direct lookup in IndexedDB, then the bundled fallback.
+  //
+  // Storage access is wrapped because IndexedDB can be unavailable rather than merely
+  // empty; letting that reject would fail the whole explanation instead of degrading
+  // to the offline knowledge base.
+  let match: ReferenceDoc | null = null;
+  try {
+    match = await querySchemaFromStorage(cleanTagName, context.fileType);
+  } catch (e) {
+    console.warn('[RAG Router] IndexedDB lookup failed; using bundled knowledge base:', e);
+  }
+  if (!match) {
+    match = queryStaticKnowledgeBase(cleanTagName, context.fileType);
+  }
 
   // 3. Fallback: If not found and looks like a natural language query, run LLM keyword search
   if (!match && (cleanTagName.includes(' ') || cleanTagName.length > 15)) {
     console.log(`[RAG Router] Tag <${cleanTagName}> not found. Running LLM-assisted keyword search...`);
     const keywords = await extractKeywordsWithLocalAI(cleanTagName);
-    const searchResults = await searchSchemasInStorage(keywords, context.fileType);
-    if (searchResults.length > 0) {
-      match = searchResults[0]; // Pick the best keyword match
+    try {
+      const searchResults = await searchSchemasInStorage(keywords, context.fileType);
+      if (searchResults.length > 0) {
+        match = searchResults[0]; // Pick the best keyword match
+      }
+    } catch (e) {
+      console.warn('[RAG Router] IndexedDB keyword search failed:', e);
     }
   }
 
