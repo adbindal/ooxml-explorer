@@ -103,10 +103,14 @@ export const testConnection = async (): Promise<{ success: boolean; message: str
 };
 
 // --- EDITOR MODE TYPES & SCHEMAS ---
-export interface EditorFileContext {
-    fileName: string;
-    content: string;
-}
+// Request shape is Zod-derived (not a hand-written interface) so the same schema
+// validates the request at the function boundary and stays in sync with the type.
+// See AGENTS.md "AI Request/Response Validation" for the project-wide rule.
+export const EditorFileContextSchema = z.object({
+    fileName: z.string(),
+    content: z.string()
+});
+export type EditorFileContext = z.infer<typeof EditorFileContextSchema>;
 
 export const AIAnalysisSchema = z.object({
   summary: z.string(),
@@ -173,11 +177,12 @@ const AI_ANALYSIS_LOCAL_EXAMPLE = JSON.stringify({
 } satisfies AIAnalysis, null, 2);
 
 // --- DIFF MODE TYPES & SCHEMAS ---
-export interface DiffFileContext {
-    fileName: string;
-    original: string | null;
-    modified: string | null;
-}
+export const DiffFileContextSchema = z.object({
+    fileName: z.string(),
+    original: z.string().nullable(),
+    modified: z.string().nullable()
+});
+export type DiffFileContext = z.infer<typeof DiffFileContextSchema>;
 
 export const AIDiffSchema = z.object({
   summary: z.string(),
@@ -231,9 +236,11 @@ export const analyzeFile = async (
     files: EditorFileContext[],
     mode: 'explain' | 'technical'
 ): Promise<AIAnalysis> => {
-  if (!files || files.length === 0) {
+  const parsedFiles = z.array(EditorFileContextSchema).min(1, "No files provided for analysis.").safeParse(files);
+  if (!parsedFiles.success) {
     throw new Error("No files provided for analysis.");
   }
+  files = parsedFiles.data;
   try {
     const activeProvider = await getActiveAIProvider();
     
@@ -327,12 +334,14 @@ export const analyzeFile = async (
  * Analyzes file differences in Diff Mode.
  */
 export const analyzeDiff = async (
-    files: DiffFileContext[], 
+    files: DiffFileContext[],
     mode: 'summary' | 'technical'
 ): Promise<AIDiffAnalysis> => {
-  if (!files || files.length === 0) {
+  const parsedFiles = z.array(DiffFileContextSchema).min(1, "No files provided for diff analysis.").safeParse(files);
+  if (!parsedFiles.success) {
     throw new Error("No files provided for diff analysis.");
   }
+  files = parsedFiles.data;
   try {
     const activeProvider = await getActiveAIProvider();
     
