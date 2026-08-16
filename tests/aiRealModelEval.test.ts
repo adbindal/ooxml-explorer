@@ -43,7 +43,7 @@ describe('Real Local AI Model Eval (Gemini Nano, opt-in - see file header)', () 
 
     useAppStore.setState(state => ({ ui: { ...state.ui, aiProvider: 'chrome-local', dlpMode: true } }));
 
-    const explanation = await explainElement(
+    const result = await explainElement(
       'cantSplit',
       '<w:trPr><w:cantSplit/></w:trPr>',
       'docx'
@@ -52,7 +52,8 @@ describe('Real Local AI Model Eval (Gemini Nano, opt-in - see file header)', () 
     // Grounded in the real RAG data (table-row splitting), not a hallucinated
     // guess like "text boxes" - this is the behavior the RAG layer exists to
     // guarantee, and only a real model run can verify it.
-    const lower = explanation.toLowerCase();
+    expect(result.grounded).toBe(true);
+    const lower = result.explanation.toLowerCase();
     expect(lower).toContain('row');
     expect(lower.includes('page') || lower.includes('split')).toBe(true);
   });

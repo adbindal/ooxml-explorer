@@ -103,11 +103,11 @@ describe('AI EVAL Pipeline (Layer 5)', () => {
         };
       });
 
-      const explanation = await explainElement(testCase.tagName, testCase.rawXml, testCase.fileType);
-      
+      const result = await explainElement(testCase.tagName, testCase.rawXml, testCase.fileType);
+
       // Verify that the returned explanation contains the expected evaluation keywords
       for (const keyword of testCase.expectedKeywords) {
-        expect(explanation.toLowerCase()).toContain(keyword);
+        expect(result.explanation.toLowerCase()).toContain(keyword);
       }
 
       generateSpy.mockRestore?.();

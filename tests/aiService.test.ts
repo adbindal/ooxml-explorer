@@ -139,6 +139,12 @@ describe('AI Service Layer 1', () => {
   });
 
   describe('explainElement', () => {
+    it('rejects an invalid fileType before making any request', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await expect(explainElement('tcW', '<w:tcW />', 'invalidFormat' as any))
+        .rejects.toThrow('Invalid request');
+    });
+
     it('routes to local AI when provider is local', async () => {
       useAppStore.setState(state => ({
         ui: { ...state.ui, aiProvider: 'chrome-local' }
@@ -160,8 +166,12 @@ describe('AI Service Layer 1', () => {
       } as any;
       /* eslint-enable @typescript-eslint/no-explicit-any */
 
-      const explanation = await explainElement('tcW', '<w:tcW w:w="120" />', 'docx');
-      expect(explanation).toBe('Mocked local tag explanation');
+      // Note: this test is about provider routing, not grounding - it deliberately
+      // doesn't assert on `grounded`, since that depends on the RAG dataset (mocked
+      // here, but real when this file runs in-browser via the Validator) actually
+      // covering "tcW". See the "Layer 3 Local RAG" tests below for grounding checks.
+      const result = await explainElement('tcW', '<w:tcW w:w="120" />', 'docx');
+      expect(result.explanation).toBe('Mocked local tag explanation');
       expect(mockPrompt.mock.calls.length).toBe(1);
       expect(mockDestroy.mock.calls.length).toBe(1);
     });
@@ -184,9 +194,10 @@ describe('AI Service Layer 1', () => {
         };
       });
 
-      const explanation = await explainElement('tcW', '<w:tcW w:w="120" />', 'docx');
-      expect(explanation).toBe('Mocked cloud tag explanation');
-      
+      // See note above - this test is about provider routing, not grounding.
+      const result = await explainElement('tcW', '<w:tcW w:w="120" />', 'docx');
+      expect(result.explanation).toBe('Mocked cloud tag explanation');
+
       localStorage.removeItem('ooxml_explorer_api_key');
     });
 
@@ -261,14 +272,15 @@ describe('AI Service Layer 1', () => {
           } as any)
         };
 
-        const explanation = await explainElement('tcW', '<w:tcW />', 'docx');
-        expect(explanation).toBe('This tag configures the cell width.');
+        const result = await explainElement('tcW', '<w:tcW />', 'docx');
+        expect(result.explanation).toBe('This tag configures the cell width.');
       });
     });
 
     describe('Layer 3 Local RAG & Contextual Router', () => {
       it('retrieves the correct ECMA-376 context for a valid tag within its domain', async () => {
-        const context = await getRagContext('cantSplit', { fileType: 'docx', namespace: 'w' });
+        const { context, grounded } = await getRagContext('cantSplit', { fileType: 'docx', namespace: 'w' });
+        expect(grounded).toBe(true);
         expect(context).toContain('[ECMA-376 Specification Context]');
         // Assert on the stable structural marker rather than the dataset's free-text
         // definition prose, which differs between the mocked KB used here under Vitest
@@ -280,17 +292,26 @@ describe('AI Service Layer 1', () => {
 
       it('routes and filters out tags from other domains (preventing cross-domain leakage)', async () => {
         // cantSplit is a DOCX tag. Querying it in XLSX context should not return the DOCX definition.
-        const context = await getRagContext('cantSplit', { fileType: 'xlsx', namespace: 'w' });
+        const { context, grounded } = await getRagContext('cantSplit', { fileType: 'xlsx', namespace: 'w' });
+        expect(grounded).toBe(false);
         expect(context).toContain('No official ECMA-376 definitions found locally');
         expect(context).not.toContain('Table Row Cannot Split');
       });
 
       it('allows shared domain tags to resolve across all file types', async () => {
-        const contextDocx = await getRagContext('Relationship', { fileType: 'docx', namespace: 'r' });
-        const contextXlsx = await getRagContext('Relationship', { fileType: 'xlsx', namespace: 'r' });
+        const docx = await getRagContext('Relationship', { fileType: 'docx', namespace: 'r' });
+        const xlsx = await getRagContext('Relationship', { fileType: 'xlsx', namespace: 'r' });
 
-        expect(contextDocx).toContain('Tag Name: <r:Relationship>');
-        expect(contextXlsx).toContain('Tag Name: <r:Relationship>');
+        expect(docx.grounded).toBe(true);
+        expect(xlsx.grounded).toBe(true);
+        expect(docx.context).toContain('Tag Name: <r:Relationship>');
+        expect(xlsx.context).toContain('Tag Name: <r:Relationship>');
+      });
+
+      it('does not instruct the model to fabricate a citation when nothing is grounded', async () => {
+        // A tag with no entry anywhere in the mocked knowledge base.
+        const { grounded } = await getRagContext('totallyMadeUpTag', { fileType: 'docx', namespace: 'w' });
+        expect(grounded).toBe(false);
       });
     });
 
@@ -298,9 +319,10 @@ describe('AI Service Layer 1', () => {
       it('applies runtime overrides from localStorage dynamically', async () => {
         const overrideKey = 'ooxml_rag_override_docx_cantSplit';
         localStorage.setItem(overrideKey, 'A custom hot-patched definition of cantSplit.');
-        
+
         try {
-          const context = await getRagContext('cantSplit', { fileType: 'docx', namespace: 'w' });
+          const { context, grounded } = await getRagContext('cantSplit', { fileType: 'docx', namespace: 'w' });
+          expect(grounded).toBe(true);
           expect(context).toContain('[ECMA-376 Specification Context (Self-Healed Override)]');
           expect(context).toContain('A custom hot-patched definition of cantSplit.');
           expect(context).toContain('Runtime Local Patch');
