@@ -2,10 +2,12 @@ import React, { useState, useRef, useEffect } from 'react';
 import { 
   ArrowLeft, Play, Loader2, Maximize2, GitCompare, ExternalLink, 
   CheckSquare, Square, Zap, AlertTriangle, Power, Activity,
-  PieChart
+  PieChart, ShieldCheck
 } from 'lucide-react';
 import { ThemeClasses } from '../types';
 import { runSystemChecks, LogEntry, CoverageModule } from '../services/testService';
+import { loadZipFile, readPackageParts } from '../services/zipService';
+import { checkPackageIntegrity } from '../services/packageIntegrity';
 import { getApiKey, testConnection } from '../services/geminiService';
 
 import { useAppStore } from '../store/appStore';
@@ -24,6 +26,7 @@ const ValidatorView: React.FC<ValidatorViewProps> = ({ themeClasses }) => {
     const [shouldCrash, setShouldCrash] = useState(false);
     const [debugEnabled, setDebugEnabled] = useState(getDebugMode());
     const [coverageReport, setCoverageReport] = useState<CoverageModule[]>([]);
+    const [integrityStatus, setIntegrityStatus] = useState<'idle' | 'running' | 'done'>('idle');
     
     const consoleEndRef = useRef<HTMLDivElement>(null);
     
@@ -80,8 +83,47 @@ const ValidatorView: React.FC<ValidatorViewProps> = ({ themeClasses }) => {
         }]);
     };
 
+    /**
+     * Runs the deterministic OPC integrity checks against the selected file.
+     *
+     * Distinct from the AI features on purpose: nothing here is generated or
+     * retrieved. Every line it prints is computed from the package, so a clean run is
+     * a fact about the file rather than a model's opinion of it.
+     */
+    const handleCheckIntegrity = async () => {
+        const addLog = (msg: string, type: 'info' | 'success' | 'warning' | 'error') =>
+            setLogs(prev => [...prev, { msg, type, timestamp: Date.now() }]);
+
+        if (!files.a) return;
+        setIntegrityStatus('running');
+        addLog(`🔍 Checking package integrity of ${files.a.name}...`, 'info');
+
+        try {
+            const { zip } = await loadZipFile(files.a);
+            const parts = await readPackageParts(zip);
+            const findings = checkPackageIntegrity(parts);
+
+            addLog(`Inspected ${Object.keys(parts).length} parts.`, 'info');
+
+            if (findings.length === 0) {
+                addLog('✅ No integrity problems found. Content types and relationships are internally consistent.', 'success');
+            } else {
+                const errors = findings.filter(f => f.severity === 'error').length;
+                const warnings = findings.length - errors;
+                addLog(`Found ${errors} error(s) and ${warnings} warning(s).`, errors > 0 ? 'error' : 'warning');
+                for (const finding of findings) {
+                    addLog(`[${finding.rule}] ${finding.part} — ${finding.message}`, finding.severity);
+                }
+            }
+            setIntegrityStatus('done');
+        } catch (e) {
+            addLog(`❌ Could not read the package: ${(e as Error).message}`, 'error');
+            setIntegrityStatus('done');
+        }
+    };
+
     const handleInteractiveTest = async (id: string) => {
-        const addLog = (msg: string, type: 'info' | 'success' | 'warning' | 'error') => 
+        const addLog = (msg: string, type: 'info' | 'success' | 'warning' | 'error') =>
             setLogs(prev => [...prev, { msg, type, timestamp: Date.now() }]);
 
         try {
@@ -184,6 +226,16 @@ const ValidatorView: React.FC<ValidatorViewProps> = ({ themeClasses }) => {
                                 className={`w-full py-2 rounded font-medium flex items-center justify-center gap-2 transition-all ${!files.a ? 'bg-zinc-700 text-zinc-500 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500 text-white'}`}
                             >
                                 {status === 'running' ? <Loader2 className="animate-spin" size={16} /> : <Play size={16} />} Run Unit Tests
+                            </button>
+
+                            {/* Deterministic package checks - no model, no network. */}
+                            <button
+                                onClick={handleCheckIntegrity}
+                                disabled={!files.a || integrityStatus === 'running'}
+                                title="Verify content types and relationship integrity. Computed, not inferred."
+                                className={`w-full py-2 rounded font-medium flex items-center justify-center gap-2 transition-all ${!files.a ? 'bg-zinc-700 text-zinc-500 cursor-not-allowed' : 'bg-emerald-700 hover:bg-emerald-600 text-white'}`}
+                            >
+                                {integrityStatus === 'running' ? <Loader2 className="animate-spin" size={16} /> : <ShieldCheck size={16} />} Check Package Integrity
                             </button>
                             
                             {/* Coverage Report Widget */}

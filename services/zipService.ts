@@ -238,3 +238,25 @@ export const exportModifiedZip = async (originalZip: JSZip, pendingChanges: Reco
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
 };
+/**
+ * Reads a loaded package into the flat path-to-content map that
+ * `services/packageIntegrity.ts` consumes.
+ *
+ * Binary parts (images, embedded fonts, OLE objects) are mapped to an empty string
+ * rather than skipped. Their *presence* is what the integrity checks care about - a
+ * relationship pointing at `media/image1.png` is satisfied by the part existing, and
+ * decoding megabytes of image data to confirm that would be wasted work.
+ */
+export const readPackageParts = async (zip: JSZip): Promise<Record<string, string>> => {
+  const parts: Record<string, string> = {};
+  const entries = Object.entries(zip.files).filter(([, entry]) => !entry.dir);
+
+  await Promise.all(
+    entries.map(async ([path, entry]) => {
+      const isText = /\.(xml|rels)$/i.test(path) || path === '[Content_Types].xml';
+      parts[path] = isText ? await entry.async('string') : '';
+    })
+  );
+
+  return parts;
+};
