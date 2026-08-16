@@ -24,6 +24,18 @@ const extractKeywordsWithLocalAI = async (query: string): Promise<string> => {
   return query;
 };
 
+export interface RagContextResult {
+  /** The text block to inject into the AI prompt. */
+  context: string;
+  /**
+   * Whether `context` carries an actual citation (official DB match or a human-provided
+   * runtime override) versus the "nothing found" fallback. The RAG database only covers
+   * a curated subset of ECMA-376 - most tags will not be grounded - so callers MUST use
+   * this to avoid instructing the model to cite a source that doesn't exist.
+   */
+  grounded: boolean;
+}
+
 /**
  * RAG Context Retrieval & Router.
  * Queries the client-side IndexedDB database for a tag and filters by the active editor context.
@@ -33,22 +45,25 @@ const extractKeywordsWithLocalAI = async (query: string): Promise<string> => {
 export const getRagContext = async (
   tagName: string,
   context: { fileType: 'docx' | 'xlsx' | 'pptx'; namespace: string }
-): Promise<string> => {
+): Promise<RagContextResult> => {
   const cleanTagName = tagName.trim();
-  
+
   // 1. Check for runtime self-healing overrides in localStorage first
   if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
     const overrideKey = `ooxml_rag_override_${context.fileType}_${cleanTagName}`;
     const localOverride = localStorage.getItem(overrideKey);
     if (localOverride) {
       console.log(`[RAG Router] Applying local self-healing override for <${cleanTagName}>`);
-      return `
+      return {
+        grounded: true,
+        context: `
 [ECMA-376 Specification Context (Self-Healed Override)]
 - Tag Name: <${context.namespace}:${cleanTagName}>
 - Schema Domain: ${context.fileType.toUpperCase()}
 - Definition: ${localOverride}
 - Source: Runtime Local Patch
-`;
+`
+      };
     }
   }
 
@@ -66,11 +81,19 @@ export const getRagContext = async (
   }
 
   if (!match) {
-    return `No official ECMA-376 definitions found locally in the RAG database for tag <${context.namespace}:${cleanTagName}>.`;
+    // The curated RAG database only covers a small subset of ECMA-376. This is the
+    // common case, not an edge case - be explicit that there is nothing to cite here,
+    // so the prompt (see aiService.ts) can instruct the model not to invent one.
+    return {
+      grounded: false,
+      context: `No official ECMA-376 definitions found locally in the RAG database for tag <${context.namespace}:${cleanTagName}>. No citation or SDK class name is available for this tag.`
+    };
   }
 
   // 4. Return enriched grounding context with official citations and SDK mappings
-  return `
+  return {
+    grounded: true,
+    context: `
 [ECMA-376 Specification Context]
 - Tag Name: <${match.namespace}:${match.tag}>
 - Schema Domain: ${match.domain.toUpperCase()}
@@ -79,7 +102,8 @@ export const getRagContext = async (
 - Microsoft Open XML SDK Class: DocumentFormat.OpenXml.${match.domain === 'docx' ? 'Wordprocessing' : match.domain === 'xlsx' ? 'Spreadsheet' : 'Presentation'}.${match.sdkClass || match.tag}
 - Supported Attributes: ${match.attributes.join(', ') || 'None'}
 - Valid Parent Elements: ${match.parents.join(', ') || 'None'}
-`;
+`
+  };
 };
 
 /**

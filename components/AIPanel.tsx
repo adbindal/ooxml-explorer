@@ -12,7 +12,7 @@ import {
   AIAnalysis,
   AIDiffAnalysis
 } from '../services/geminiService';
-import { explainElement } from '../services/aiService';
+import { explainElement, ElementExplanation } from '../services/aiService';
 import { ThemeClasses } from '../types';
 
 interface AIPanelProps {
@@ -63,7 +63,7 @@ const AIPanel: React.FC<AIPanelProps> = ({ onClose, context, themeClasses }) => 
   const [loading, setLoading] = useState(false);
   const [editorResponse, setEditorResponse] = useState<AIAnalysis | null>(null);
   const [diffResponse, setDiffResponse] = useState<AIDiffAnalysis | null>(null);
-  const [selectedTagResponse, setSelectedTagResponse] = useState<string | null>(null);
+  const [selectedTagResponse, setSelectedTagResponse] = useState<ElementExplanation | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   
   const [activeAction, setActiveAction] = useState<string | null>(null);
@@ -685,14 +685,25 @@ const AIPanel: React.FC<AIPanelProps> = ({ onClose, context, themeClasses }) => 
                     renderDiffDashboard(diffResponse)
                 ) : activeAction === 'explain-tag' && selectedTagResponse ? (
                     <div className="space-y-3 text-xs text-left animate-in fade-in leading-relaxed">
-                        <div className="flex items-center gap-2 text-blue-500 font-bold text-[10px] uppercase tracking-wider">
-                            <Bot size={13} />
-                            <span>XML Element Explanation</span>
+                        <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 text-blue-500 font-bold text-[10px] uppercase tracking-wider">
+                                <Bot size={13} />
+                                <span>XML Element Explanation</span>
+                            </div>
+                            {selectedTagResponse.grounded ? (
+                                <span className="px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider border bg-green-500/10 border-green-500/20 text-green-500 shrink-0" title="Backed by an official ECMA-376 citation from the RAG database.">
+                                    ✅ Grounded
+                                </span>
+                            ) : (
+                                <span className="px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider border bg-[#EAB308]/10 border-[#EAB308]/20 text-[#EAB308] shrink-0" title="No official citation was found for this tag - this explanation comes from the model's general knowledge and has not been independently verified.">
+                                    ⚠️ Unverified
+                                </span>
+                            )}
                         </div>
                         <div className="p-3 rounded-lg bg-blue-500/5 border border-blue-500/10 font-mono text-[10px] break-all text-[#4A89DC]">
                             {context.selectedTag?.rawXml}
                         </div>
-                        <p className={`whitespace-pre-wrap ${themeClasses.fgMuted}`}>{selectedTagResponse}</p>
+                        <p className={`whitespace-pre-wrap ${themeClasses.fgMuted}`}>{selectedTagResponse.explanation}</p>
                     </div>
                 ) : (
                     <div className={`h-full flex flex-col items-center justify-center text-center gap-2 ${themeClasses.fgMuted}`}>
