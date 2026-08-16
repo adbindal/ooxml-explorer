@@ -46,7 +46,7 @@ export const testConnection = async (): Promise<{ success: boolean; message: str
         const ai = new GoogleGenAI({ apiKey });
         // Lightweight call to verify authentication and quota
         await ai.models.generateContent({
-            model: 'gemini-3-flash-preview',
+            model: 'gemini-2.5-flash',
             contents: 'Test connection',
         });
         

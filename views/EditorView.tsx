@@ -208,6 +208,14 @@ const EditorView: React.FC<EditorViewProps> = ({ themeClasses }) => {
     await exportModifiedZip(zip, changesToExport, editorState.fileName);
   };
 
+  const handleBack = () => {
+    if (pendingCount > 0) {
+        const confirmLeave = window.confirm(`You have ${pendingCount} unsaved file(s). Are you sure you want to leave and discard your edits?`);
+        if (!confirmLeave) return;
+    }
+    setMode('landing');
+  };
+
   const closeTab = (e: React.MouseEvent, path: string) => {
     e.stopPropagation();
     
@@ -263,6 +271,18 @@ const EditorView: React.FC<EditorViewProps> = ({ themeClasses }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activePath, pendingChanges, sidebarOpen]);
 
+  // Warn on browser-level exit (refresh/close) when there are unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (pendingCount > 0) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [pendingCount]);
+
   const handleEditorMount: OnMount = (editor, monaco) => {
       editorRef.current = editor;
       monacoRef.current = monaco;
@@ -278,7 +298,7 @@ const EditorView: React.FC<EditorViewProps> = ({ themeClasses }) => {
     <div className={`h-screen w-full flex flex-col transition-colors duration-300 ${themeClasses.bg} ${themeClasses.fg} overflow-hidden`}>
       <header className={`h-12 border-b flex items-center justify-between px-2 md:px-4 shrink-0 ${themeClasses.bgSec} ${themeClasses.border}`}>
         <div className="flex items-center gap-2 md:gap-4 overflow-hidden">
-            <button onClick={() => setMode('landing')} className={`transition-colors ${themeClasses.hoverText} shrink-0`}><ArrowLeft size={18} /></button>
+            <button onClick={handleBack} className={`transition-colors ${themeClasses.hoverText} shrink-0`}><ArrowLeft size={18} /></button>
             <button onClick={() => toggleSidebar()} className={`${themeClasses.icon} hover:${themeClasses.fg} mr-1 shrink-0`}>
                 {sidebarOpen ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}
             </button>

@@ -161,15 +161,88 @@ describe('EditorView Component Validation', () => {
   it('disables save button when no pending changes', () => {
     mockStore.editor.pendingChanges = {};
     render(<EditorView themeClasses={themeClasses} />);
-    
+
     // The save button is the first button in the actions group
     // In EditorView, it's the one with <Save /> icon.
     // We can find it by its disabled attribute or class.
-    const saveButton = screen.getAllByRole('button').find(btn => 
+    const saveButton = screen.getAllByRole('button').find(btn =>
         btn.innerHTML.includes('lucide-save') || btn.querySelector('.lucide-save')
     );
     expect(saveButton).toBeDefined();
     expect(saveButton?.hasAttribute('disabled')).toBe(true);
+  });
+
+  describe('Confirm-before-leaving behavior', () => {
+    const getBackButton = () => screen.getAllByRole('button').find(btn => btn.querySelector('.lucide-arrow-left'));
+
+    it('navigates back immediately when there are no unsaved changes', () => {
+      mockStore.editor.pendingChanges = {};
+      mockStore.setMode.mockClear();
+      const confirmSpy = vi.spyOn(window, 'confirm');
+
+      render(<EditorView themeClasses={themeClasses} />);
+      fireEvent.click(getBackButton()!);
+
+      expect(confirmSpy).not.toHaveBeenCalled();
+      expect(mockStore.setMode).toHaveBeenCalledWith('landing');
+
+      confirmSpy.mockRestore();
+    });
+
+    it('prompts for confirmation and stays when the user cancels', () => {
+      mockStore.editor.pendingChanges = { 'word/document.xml': '<modified/>' };
+      mockStore.setMode.mockClear();
+      const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+
+      render(<EditorView themeClasses={themeClasses} />);
+      fireEvent.click(getBackButton()!);
+
+      expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining('1 unsaved file'));
+      expect(mockStore.setMode).not.toHaveBeenCalled();
+
+      confirmSpy.mockRestore();
+      mockStore.editor.pendingChanges = {};
+    });
+
+    it('navigates back and discards edits once the user confirms', () => {
+      mockStore.editor.pendingChanges = { 'word/document.xml': '<modified/>' };
+      mockStore.setMode.mockClear();
+      const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+      render(<EditorView themeClasses={themeClasses} />);
+      fireEvent.click(getBackButton()!);
+
+      expect(confirmSpy).toHaveBeenCalled();
+      expect(mockStore.setMode).toHaveBeenCalledWith('landing');
+
+      confirmSpy.mockRestore();
+      mockStore.editor.pendingChanges = {};
+    });
+
+    it('blocks browser tab close/refresh while there are unsaved changes', () => {
+      mockStore.editor.pendingChanges = { 'word/document.xml': '<modified/>' };
+      render(<EditorView themeClasses={themeClasses} />);
+
+      const event = new Event('beforeunload', { cancelable: true }) as BeforeUnloadEvent;
+      window.dispatchEvent(event);
+
+      expect(event.defaultPrevented).toBe(true);
+      // jsdom's `returnValue` is a spec-compliant boolean mirror of `!defaultPrevented`,
+      // not the raw string our handler assigns (browsers historically required a string here).
+      expect(event.returnValue).toBe(false);
+
+      mockStore.editor.pendingChanges = {};
+    });
+
+    it('does not block browser tab close/refresh when there are no unsaved changes', () => {
+      mockStore.editor.pendingChanges = {};
+      render(<EditorView themeClasses={themeClasses} />);
+
+      const event = new Event('beforeunload', { cancelable: true }) as BeforeUnloadEvent;
+      window.dispatchEvent(event);
+
+      expect(event.defaultPrevented).toBe(false);
+    });
   });
 });
 
