@@ -90,16 +90,37 @@ export const getRagContext = async (
     };
   }
 
-  // 4. Return enriched grounding context with official citations and SDK mappings
+  // 4. Return enriched grounding context with official citations and SDK mappings.
+  //
+  // Most of the database is generated from the Open XML SDK's schema metadata, which
+  // gives verified structure (attributes, parents, class name) but no prose. Those
+  // records are genuinely grounded about structure and genuinely silent about meaning,
+  // and the prompt has to say so - interpolating an absent definition would print
+  // "undefined" under a "Grounded" badge, and paraphrasing one would invent authority
+  // the schema never conferred.
+  const sdkNamespace =
+    match.domain === 'docx' ? 'Wordprocessing'
+    : match.domain === 'xlsx' ? 'Spreadsheet'
+    : match.domain === 'pptx' ? 'Presentation'
+    : 'Drawing';
+
+  const definitionLine = match.definition
+    ? `- Definition: ${match.definition}`
+    : `- Definition: NOT AVAILABLE. The schema database covers this element's structure but carries no description for it. Explain the element from your own knowledge and say plainly that the explanation is not from the specification.`;
+
+  const citationLine = match.citation
+    ? `- Official Citation: ${match.citation}`
+    : `- Official Citation: none on file. Do not cite a specification section for this element.`;
+
   return {
     grounded: true,
     context: `
 [ECMA-376 Specification Context]
 - Tag Name: <${match.namespace}:${match.tag}>
 - Schema Domain: ${match.domain.toUpperCase()}
-- Definition: ${match.definition}
-- Official Citation: ${match.citation || 'ECMA-376 Standard'}
-- Microsoft Open XML SDK Class: DocumentFormat.OpenXml.${match.domain === 'docx' ? 'Wordprocessing' : match.domain === 'xlsx' ? 'Spreadsheet' : 'Presentation'}.${match.sdkClass || match.tag}
+${definitionLine}
+${citationLine}
+- Microsoft Open XML SDK Class: DocumentFormat.OpenXml.${sdkNamespace}.${match.sdkClass || match.tag}
 - Supported Attributes: ${match.attributes.join(', ') || 'None'}
 - Valid Parent Elements: ${match.parents.join(', ') || 'None'}
 `
