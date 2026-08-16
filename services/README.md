@@ -44,3 +44,15 @@ To provide accurate explanations of XML elements with official ECMA-376 citation
 *   **[services/aiProvider.ts](./aiProvider.ts)**: Single source of truth for choosing between Chrome's built-in local model (`chrome-local`) and the Gemini Cloud API (`gemini-cloud`), and for enforcing DLP Mode (see below). Both `aiService.ts` and `geminiService.ts` call into this instead of each maintaining their own provider-detection logic.
 *   **DLP Mode** (`ui.dlpMode`, default on): when enabled, no request may reach the cloud API — if local AI isn't available, the call fails with a `DLP_BLOCK` error rather than silently falling back to the cloud. This applies uniformly to every AI action in the app (whole-file explain/technical analysis, diff explain, and the selected-tag explainer).
 *   **[utils/guardrails.ts](../utils/guardrails.ts)**: Lightweight prompt-injection guardrails applied to AI input and output regardless of provider.
+
+### Local model prompting
+Chrome's on-device Prompt API (`window.LanguageModel`) is not a constrained-decoding API the way Gemini Cloud's `responseSchema` config is — it just follows instructions in the prompt text. `services/geminiService.ts`'s `promptLocalModelForJson` handles this: it shows the model a concrete filled-in example of the desired JSON shape (not an abstract JSON Schema, which small on-device models tend to echo back verbatim instead of filling in), validates the result with Zod, and makes one corrective retry before giving up with a readable error.
+
+---
+
+## Verifying Local AI actually works (not just mocked)
+
+Every automated test that touches `window.LanguageModel` — including `tests/aiService.test.ts` and the E2E specs — mocks it, which proves the app's plumbing is wired correctly but can't catch the real model behaving differently than the mock assumes. `tests/aiRealModelEval.test.ts` closes that gap: it runs with **no mock**, feature-detecting the real Prompt API.
+
+- In CI, `vitest run`, and Playwright's automation profile, the API is absent (Playwright launches an isolated profile without the on-device model or flags, even when it resolves to a real Chrome install), so these tests no-op with a console warning — expected, not a failure.
+- To get a real signal, open the app in a Chrome build with the on-device model enabled and downloaded (`chrome://flags` → enable `#optimization-guide-on-device-model` and `#prompt-api-for-gemini-nano`, relaunch, then run `await LanguageModel.create()` once in DevTools and wait for the download in `chrome://on-device-internals`), go to the **Validator** page, and run the test suite. With the model available, `aiRealModelEval.test.ts` actually exercises `explainElement`, `analyzeFile`, and `analyzeDiff` against the real model and asserts on real, schema-validated output — this is the check that would have caught the JSON-schema-echo bug that shipped past every mocked test.
