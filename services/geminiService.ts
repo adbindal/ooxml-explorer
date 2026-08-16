@@ -10,6 +10,42 @@ const cleanAndParseJson = (text: string) => {
   return JSON.parse(cleaned);
 };
 
+/**
+ * Prompts the on-device model for a JSON response and validates it against `schema`.
+ *
+ * Chrome's local Prompt API is not a constrained-decoding API like Gemini Cloud's
+ * `responseSchema` - it just follows instructions in the prompt text. Describing the
+ * desired shape as an abstract JSON Schema (as the cloud path does) confuses small
+ * on-device models into echoing the schema definition back instead of filling it in,
+ * so the prompt must show a concrete filled-in example instead. Even so, on-device
+ * models occasionally wrap the response in prose or partially miss the shape, so this
+ * makes one corrective retry (reusing the same session) before giving up.
+ */
+const promptLocalModelForJson = async <T>(
+  systemInstruction: string,
+  userPrompt: string,
+  schema: z.ZodType<T>
+): Promise<T> => {
+  const session = await window.LanguageModel!.create({ systemPrompt: systemInstruction });
+  try {
+    const resultText = await session.prompt(userPrompt);
+    try {
+      return schema.parse(cleanAndParseJson(resultText));
+    } catch {
+      const retryText = await session.prompt(
+        "That response was not valid. Reply again with ONLY the JSON data object itself - not the schema, not markdown, not any explanation."
+      );
+      try {
+        return schema.parse(cleanAndParseJson(retryText));
+      } catch {
+        throw new Error("Local AI returned a response that didn't match the expected format. Try again, or switch to Cloud AI in Settings.");
+      }
+    }
+  } finally {
+    session.destroy();
+  }
+};
+
 const STORAGE_KEY = 'ooxml_explorer_api_key';
 
 export const getApiKey = (): string | undefined => {
@@ -123,6 +159,19 @@ const AI_ANALYSIS_RESPONSE_SCHEMA = {
   required: ['summary', 'criticalIssues', 'keyElements']
 };
 
+// Concrete filled-in example for local-model prompting (see promptLocalModelForJson).
+// The example's content is unrelated to any real file on purpose, so the model can't
+// mistake it for the answer.
+const AI_ANALYSIS_LOCAL_EXAMPLE = JSON.stringify({
+  summary: "This file defines the styles used throughout the document, such as heading and paragraph formatting.",
+  criticalIssues: [
+    { issue: "Missing xml:space attribute", impact: "Leading or trailing whitespace in text runs may be trimmed unexpectedly.", remediation: "Add xml:space=\"preserve\" to the affected <w:t> element." }
+  ],
+  keyElements: [
+    { tag: "w:style", purpose: "Defines a single named style (e.g. Heading1) and its formatting properties." }
+  ]
+} satisfies AIAnalysis, null, 2);
+
 // --- DIFF MODE TYPES & SCHEMAS ---
 export interface DiffFileContext {
     fileName: string;
@@ -166,6 +215,14 @@ const AI_DIFF_RESPONSE_SCHEMA = {
   },
   required: ['summary', 'changesList']
 };
+
+// Concrete filled-in example for local-model prompting (see promptLocalModelForJson).
+const AI_DIFF_LOCAL_EXAMPLE = JSON.stringify({
+  summary: "The default paragraph spacing was increased, making the document look less dense.",
+  changesList: [
+    { element: "w:spacing", changeType: "modified", description: "The 'after' spacing value on the default paragraph style was increased from 100 to 200 twips.", visualImpact: "Paragraphs will have more vertical space between them." }
+  ]
+} satisfies AIDiffAnalysis, null, 2);
 
 /**
  * Analyzes a single file (with optional context files) in Editor Mode.
@@ -222,25 +279,16 @@ export const analyzeFile = async (
       const localPrompt = `
       ${prompt}
 
-      You MUST respond ONLY with a valid JSON string matching this exact JSON schema:
-      ${JSON.stringify(AI_ANALYSIS_RESPONSE_SCHEMA, null, 2)}
-
-      Do NOT include any markdown formatting, backticks, or extra text outside of the JSON block.
+      Respond with ONLY a single JSON object - no markdown formatting, no backticks, no commentary
+      before or after. Here is an EXAMPLE of a correctly formatted response for a different file
+      (its content is unrelated - write your own analysis for the actual file below):
+      ${AI_ANALYSIS_LOCAL_EXAMPLE}
 
       Here is the input file content:
       ${filesContext}
       `;
 
-      const session = await window.LanguageModel!.create({
-        systemPrompt: systemInstruction
-      });
-      try {
-        const resultText = await session.prompt(localPrompt);
-        const parsed = cleanAndParseJson(resultText);
-        return AIAnalysisSchema.parse(parsed);
-      } finally {
-        session.destroy();
-      }
+      return await promptLocalModelForJson(systemInstruction, localPrompt, AIAnalysisSchema);
     }
 
     const ai = getAI();
@@ -336,25 +384,16 @@ export const analyzeDiff = async (
       const localPrompt = `
       ${prompt}
 
-      You MUST respond ONLY with a valid JSON string matching this exact JSON schema:
-      ${JSON.stringify(AI_DIFF_RESPONSE_SCHEMA, null, 2)}
-
-      Do NOT include any markdown formatting, backticks, or extra text outside of the JSON block.
+      Respond with ONLY a single JSON object - no markdown formatting, no backticks, no commentary
+      before or after. Here is an EXAMPLE of a correctly formatted response for a different diff
+      (its content is unrelated - write your own analysis for the actual diff below):
+      ${AI_DIFF_LOCAL_EXAMPLE}
 
       Here are the original/modified files:
       ${filesContext}
       `;
 
-      const session = await window.LanguageModel!.create({
-        systemPrompt: systemInstruction
-      });
-      try {
-        const resultText = await session.prompt(localPrompt);
-        const parsed = cleanAndParseJson(resultText);
-        return AIDiffSchema.parse(parsed);
-      } finally {
-        session.destroy();
-      }
+      return await promptLocalModelForJson(systemInstruction, localPrompt, AIDiffSchema);
     }
 
     const ai = getAI();
