@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { z } from 'zod';
+import { KNOWLEDGE_BASE } from '../services/staticKnowledgeBase';
 
 /**
  * Invariants over the generated RAG corpus (public/rag-data.json).
@@ -100,6 +101,45 @@ describe('provenance honesty', () => {
 
   it('every record declares its provenance', () => {
     expect(docs.filter(d => !d.provenance).map(d => d.tag)).toEqual([]);
+  });
+});
+
+describe('bundled offline fallback', () => {
+  // KNOWLEDGE_BASE ships inside the JS bundle and is consulted by ragRouter when
+  // IndexedDB has no answer. It was previously exported but imported by nothing, so
+  // these tests exist to keep it both wired up and consistent with the full corpus.
+  it('is a strict subset of the generated corpus', () => {
+    const corpusKeys = new Set(docs.map(d => `${d.domain}:${d.tag}`));
+    const orphans = KNOWLEDGE_BASE
+      .map(d => `${d.domain}:${d.tag}`)
+      .filter(key => !corpusKeys.has(key));
+    expect(orphans).toEqual([]);
+  });
+
+  it('agrees with the corpus on every field it duplicates', () => {
+    // Divergence here would mean an offline user and an online user get different
+    // answers for the same tag - which the badge would present as equally grounded.
+    const byKey = new Map(docs.map(d => [`${d.domain}:${d.tag}`, d]));
+    for (const bundled of KNOWLEDGE_BASE) {
+      const canonical = byKey.get(`${bundled.domain}:${bundled.tag}`)!;
+      expect(bundled.namespace, `${bundled.tag} namespace`).toBe(canonical.namespace);
+      expect(bundled.definition, `${bundled.tag} definition`).toBe(canonical.definition);
+      expect(bundled.citation, `${bundled.tag} citation`).toBe(canonical.citation);
+    }
+  });
+
+  it('carries only curated records, all with prose', () => {
+    expect(KNOWLEDGE_BASE.length).toBeGreaterThan(0);
+    for (const doc of KNOWLEDGE_BASE) {
+      expect(doc.provenance, `${doc.tag}`).toBe('curated');
+      expect(doc.definition, `${doc.tag}`).toBeTruthy();
+    }
+  });
+
+  it('stays small enough to justify bundling', () => {
+    // Shipping the full corpus would add ~0.27 MB of JavaScript to duplicate what
+    // IndexedDB already holds. If this ever fails, the subset rule has been lost.
+    expect(KNOWLEDGE_BASE.length).toBeLessThan(200);
   });
 });
 
