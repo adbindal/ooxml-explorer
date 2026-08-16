@@ -1,6 +1,6 @@
 # OOXML Expert Agent — Research State & Resume Point
 
-**Status:** research complete; build plan published; **Stage 0 shipped, Stage 1a shipped** (see §8b).
+**Status:** research complete; build plan published; **Stage 0 shipped; Stage 1a + 1c shipped** (see §8b).
 **Last updated:** 2026-08-17
 **Purpose:** durable record so this work can resume after a session ends. If you are picking this up cold, read this file top to bottom before doing anything else.
 
@@ -286,9 +286,9 @@ Two design points worth not re-deriving:
 
 Format-agnostic by construction (packaging is fully shared across the three formats). Pure functions over a `Record<partPath, content>` map, decoupled from JSZip.
 
-⚠️ **Not wired up.** `checkPackageIntegrity()` has no caller yet — see task #9.
+✅ **Wired up** (`af11bf5`, Stage 1c). `readPackageParts()` in `zipService.ts` adapts JSZip to the checker's path→content map (binary parts map to `''` — presence is all the checks need). A "Check Package Integrity" action in the Validator reports findings into the existing log console, styled apart from the AI actions because nothing on that path is generated, retrieved, or networked. Verified against a real 107-part package.
 
-**Remaining in Stage 1:** MCE preprocessing (task #8). Naive walkers double-count every textbox, because Word writes shapes twice — DrawingML in `mc:Choice`, VML in `mc:Fallback`. Required before the Stage 2 resolvers. The seam is clean: `packageIntegrity` consumes a path→content map, so MCE slots in as a transform over that map.
+**Remaining in Stage 1:** MCE preprocessing (task #8) — the last piece. Naive walkers double-count every textbox, because Word writes shapes twice — DrawingML in `mc:Choice`, VML in `mc:Fallback`. Required before the Stage 2 resolvers. The seam is clean: `packageIntegrity` consumes a path→content map, so MCE slots in as a transform over that map.
 
 ## 9. Next actions
 
@@ -297,10 +297,11 @@ Format-agnostic by construction (packaging is fully shared across the three form
 3. ~~Fix the `geminiService.ts` context bug~~ — done, `3af80df`.
 4. ~~Stage 0~~ — done, see §8b. **All work is consolidated on the single branch `feat/schema-derived-rag-corpus`; `main` is untouched.**
 5. ~~Stage 1a — package integrity~~ — done, `1a7905f`. See §8c.
-6. **Stage 1b — MCE preprocessing** (task #8), then **1c — surface findings in the UI** (task #9). Together these finish Stage 1 and make the *Verified* badge tier real.
-7. Decide: which format goes first (recommend sequencing, not parallelising — resolvers are genuinely different per format).
-8. Decide: MS-OI29500 licensing — ask or not. Gates Stage 3 only.
-9. Decide: audience (self vs onboarding engineers). If mentoring is primary, Stage 5 moves up.
+6. ~~Stage 1c — surface findings in the UI~~ — done, `af11bf5`.
+7. **Stage 1b — MCE preprocessing** (task #8). The last piece of Stage 1, and a prerequisite for the Stage 2 resolvers.
+8. Decide: which format goes first (recommend sequencing, not parallelising — resolvers are genuinely different per format).
+9. Decide: MS-OI29500 licensing — ask or not. Gates Stage 3 only.
+10. Decide: audience (self vs onboarding engineers). If mentoring is primary, Stage 5 moves up.
 
 ## 10. Known gaps at time of writing
 

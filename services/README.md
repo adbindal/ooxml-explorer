@@ -82,7 +82,7 @@ The checks are **format-agnostic**. Packaging is the one layer Word, Excel and P
 
 The API is pure functions over a `Record<partPath, content>` map, deliberately decoupled from JSZip so it is testable without binary fixtures and reusable anywhere.
 
-> **Not yet wired up.** `checkPackageIntegrity()` is complete and tested but has no caller. Surfacing findings in the UI and feeding them to the AI as verified evidence is still to do.
+> **Wired up in the Validator.** The "Check Package Integrity" action runs these checks against a selected file and reports findings to the log console. Feeding them to the AI as verified-tier evidence is still to do.
 
 ---
 
