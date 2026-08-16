@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from '../services/browserTestRunner';
-import { getActiveAIProvider, explainElement, getAiClient } from '../services/aiService';
+import { explainElement, getAiClient } from '../services/aiService';
+import { getActiveAIProvider } from '../services/aiProvider';
 import { getRagContext, logRagFeedback } from '../services/ragRouter';
 import { findXmlPathAtOffset } from '../utils/xmlUtils';
 import { useAppStore } from '../store/appStore';
@@ -98,7 +99,7 @@ describe('AI Service Layer 1', () => {
         ui: { ...state.ui, aiProvider: 'gemini-cloud' }
       }));
       const provider = await getActiveAIProvider();
-      expect(provider).toBe('cloud');
+      expect(provider).toBe('gemini-cloud');
     });
 
     it('returns cloud when preferred is local but LanguageModel is not in window', async () => {
@@ -107,7 +108,7 @@ describe('AI Service Layer 1', () => {
       }));
       window.LanguageModel = undefined;
       const provider = await getActiveAIProvider();
-      expect(provider).toBe('cloud');
+      expect(provider).toBe('gemini-cloud');
     });
 
     it('returns cloud when preferred is local but LanguageModel availability is not available', async () => {
@@ -120,7 +121,7 @@ describe('AI Service Layer 1', () => {
         create: async () => ({} as any)
       };
       const provider = await getActiveAIProvider();
-      expect(provider).toBe('cloud');
+      expect(provider).toBe('gemini-cloud');
     });
 
     it('returns local when preferred is local and LanguageModel availability is available', async () => {
@@ -133,7 +134,7 @@ describe('AI Service Layer 1', () => {
         create: async () => ({} as any)
       };
       const provider = await getActiveAIProvider();
-      expect(provider).toBe('local');
+      expect(provider).toBe('chrome-local');
     });
   });
 
@@ -283,7 +284,7 @@ describe('AI Service Layer 1', () => {
       it('allows shared domain tags to resolve across all file types', async () => {
         const contextDocx = await getRagContext('Relationship', { fileType: 'docx', namespace: 'r' });
         const contextXlsx = await getRagContext('Relationship', { fileType: 'xlsx', namespace: 'r' });
-        
+
         expect(contextDocx).toContain('Relationship Definition');
         expect(contextXlsx).toContain('Relationship Definition');
       });
@@ -339,7 +340,7 @@ describe('AI Service Layer 1', () => {
         };
 
         const provider = await getActiveAIProvider();
-        expect(provider).toBe('local');
+        expect(provider).toBe('chrome-local');
       });
     });
   });

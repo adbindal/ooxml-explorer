@@ -1,49 +1,8 @@
 import { GoogleGenAI } from "@google/genai";
-import { useAppStore } from "../store/appStore";
 import { getApiKey } from "./geminiService";
+import { getActiveAIProvider } from "./aiProvider";
 import { validateInput, validateOutput } from "../utils/guardrails";
 import { getRagContext } from "./ragRouter";
-
-/**
- * Detects whether the local AI provider (Chrome Gemini Nano) is available and ready.
- * Falls back to cloud if unavailable, unsupported, or still downloading.
- */
-export const getActiveAIProvider = async (): Promise<'local' | 'cloud'> => {
-  const uiState = useAppStore.getState().ui;
-  const preferredProvider = uiState.aiProvider;
-  const dlpMode = uiState.dlpMode;
-  
-  if (dlpMode) {
-    // Under DLP mode, ONLY local AI is allowed.
-    if (typeof window !== 'undefined' && window.LanguageModel) {
-      try {
-        const availability = await window.LanguageModel.availability();
-        if (availability === 'available') {
-          return 'local';
-        }
-      } catch (e) {
-        console.warn("[AI Service] Error checking local AI in DLP mode:", e);
-      }
-    }
-    throw new Error("DLP_BLOCK: Cloud AI is disabled under DLP mode, and Local AI is unavailable.");
-  }
-
-  if (preferredProvider === 'chrome-local') {
-    if (typeof window !== 'undefined' && window.LanguageModel) {
-      try {
-        const availability = await window.LanguageModel.availability();
-        if (availability === 'available') {
-          return 'local';
-        }
-      } catch (e) {
-        console.warn("[AI Service] Error checking local AI availability, falling back to cloud:", e);
-      }
-    }
-    return 'cloud'; // Fallback
-  }
-  
-  return 'cloud';
-};
 
 let cachedAi: GoogleGenAI | null = null;
 let cachedApiKey: string | null = null;
@@ -119,7 +78,7 @@ export const explainElement = async (
   validateInput(prompt);
   validateInput(cleanTagName);
 
-  if (provider === 'local') {
+  if (provider === 'chrome-local') {
     console.log(`[AI Service] Running Explainer locally for <${cleanTagName}>`);
     const session = await window.LanguageModel!.create({
       systemPrompt: SYSTEM_INSTRUCTIONS

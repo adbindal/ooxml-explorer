@@ -1,25 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 import { z } from "zod";
-import { useAppStore } from "../store/appStore";
-
-export const getActiveAIProvider = async (): Promise<'chrome-local' | 'gemini-cloud'> => {
-  const preferredProvider = useAppStore.getState().ui.aiProvider;
-  
-  if (preferredProvider === 'chrome-local') {
-    if (typeof window !== 'undefined' && window.LanguageModel) {
-      try {
-        const availability = await window.LanguageModel.availability();
-        if (availability === 'available') {
-          return 'chrome-local';
-        }
-      } catch (e) {
-        console.warn("[AI Service] Error checking local AI availability, falling back to cloud:", e);
-      }
-    }
-    return 'gemini-cloud';
-  }
-  return 'gemini-cloud';
-};
+import { getActiveAIProvider } from "./aiProvider";
 
 const cleanAndParseJson = (text: string) => {
   let cleaned = text.trim();
