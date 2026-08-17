@@ -1,7 +1,15 @@
 import { ReferenceDoc } from './staticKnowledgeBase';
 
 const DB_NAME = 'ooxml_explorer_db';
-const DB_VERSION = 1;
+/**
+ * v2 re-keys records on `domain:namespace:tag`.
+ *
+ * v1 keyed on `domain:tag`, which cannot distinguish elements that share a local
+ * name across namespaces - and 103 tags in the corpus do. `<a:bottom>` (a DrawingML
+ * border) and `<w:bottom>` (a paragraph border) are different elements with different
+ * attributes and parents, and v1 could only store one of them per domain.
+ */
+const DB_VERSION = 2;
 const STORE_NAME = 'rag_schemas';
 
 let dbInstance: IDBDatabase | null = null;
@@ -17,11 +25,15 @@ const getDB = (): Promise<IDBDatabase> => {
 
     request.onupgradeneeded = () => {
       const db = request.result;
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        const store = db.createObjectStore(STORE_NAME, { keyPath: 'id' });
-        store.createIndex('tag', 'tag', { unique: false });
-        store.createIndex('domain', 'domain', { unique: false });
+      // The key scheme changed in v2, so an existing store holds records under keys
+      // that can no longer be derived. Drop and repopulate rather than migrate -
+      // the data is a regenerable cache of /rag-data.json, not user content.
+      if (db.objectStoreNames.contains(STORE_NAME)) {
+        db.deleteObjectStore(STORE_NAME);
       }
+      const store = db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+      store.createIndex('tag', 'tag', { unique: false });
+      store.createIndex('domain', 'domain', { unique: false });
     };
 
     request.onsuccess = () => {
@@ -66,10 +78,11 @@ export const initStorageService = async (): Promise<void> => {
     const store = transaction.objectStore(STORE_NAME);
 
     for (const doc of data) {
-      // Create a unique composite key for the store
+      // Namespace is part of the key: the same local name means different elements
+      // in different namespaces (`a:bottom` vs `w:bottom` vs `x:bottom`).
       const record = {
         ...doc,
-        id: `${doc.domain}:${doc.tag}`
+        id: `${doc.domain}:${doc.namespace}:${doc.tag}`
       };
       store.put(record);
     }
@@ -85,11 +98,51 @@ export const initStorageService = async (): Promise<void> => {
 };
 
 /**
- * Queries a single tag schema from IndexedDB by tag name and domain.
+ * Selects the right record for a tag among same-named candidates.
+ *
+ * Exported for testing and reuse by the bundled offline fallback, which must apply
+ * exactly the same rule so that an offline user and an online user cannot get
+ * different answers for the same element.
+ *
+ * The namespace prefix is decisive when it matches. When it doesn't, this returns a
+ * record only if the choice is unambiguous - because handing back a same-named
+ * element from the wrong namespace would present a confidently wrong answer under a
+ * "Grounded" badge, which is worse than admitting the tag isn't covered.
+ */
+export const selectBestMatch = (
+  candidates: ReferenceDoc[],
+  domain: 'docx' | 'xlsx' | 'pptx' | 'shared',
+  namespace?: string
+): ReferenceDoc | null => {
+  const inScope = candidates.filter(m => m.domain === domain || m.domain === 'shared');
+  if (inScope.length === 0) return null;
+
+  if (namespace) {
+    const exact = inScope.filter(m => m.namespace === namespace);
+    if (exact.length > 0) {
+      // Prefer the record from the document's own domain over a `shared` one.
+      return exact.find(m => m.domain === domain) ?? exact[0];
+    }
+    // The prefix did not match any candidate. A document may legitimately bind an
+    // unconventional prefix, so fall through - but only when there is nothing to
+    // choose between.
+    return inScope.length === 1 ? inScope[0] : null;
+  }
+
+  return inScope.find(m => m.domain === domain) ?? inScope[0];
+};
+
+/**
+ * Queries a single tag schema from IndexedDB by tag name, domain and namespace prefix.
+ *
+ * `namespace` is optional only so callers that genuinely do not know it (a keyword
+ * search hit) can omit it. Callers that have it must pass it: 103 tags in the corpus
+ * exist under more than one namespace.
  */
 export const querySchemaFromStorage = async (
   tag: string,
-  domain: 'docx' | 'xlsx' | 'pptx' | 'shared'
+  domain: 'docx' | 'xlsx' | 'pptx' | 'shared',
+  namespace?: string
 ): Promise<ReferenceDoc | null> => {
   const db = await getDB();
 
@@ -101,9 +154,7 @@ export const querySchemaFromStorage = async (
 
     request.onsuccess = () => {
       const matches = request.result as (ReferenceDoc & { id: string })[];
-      // Filter by domain or shared
-      const bestMatch = matches.find(m => m.domain === domain || m.domain === 'shared');
-      resolve(bestMatch || null);
+      resolve(selectBestMatch(matches, domain, namespace));
     };
 
     request.onerror = () => {
