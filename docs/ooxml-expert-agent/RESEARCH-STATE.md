@@ -482,6 +482,36 @@ OpenXmlPowerTools `FormattingAssembler.cs` lines 2163–2192 encodes exactly thi
 
 ⚠️ **LibreOffice diverges from Word here** (`SwTextNode::AreListLevelIndentsApplicableImpl`): a paragraph style setting `w:ind` *suppresses* the list level's indent. Known interop bug class.
 
+## 8j. MS-OI29500 licensing — ✅ RESEARCH COMPLETE
+
+**Findings are in [`LICENSING.md`](./LICENSING.md)** — verbatim IPR notice (landing page and DOCX verified word-for-word identical), what is clearly permitted, what is genuinely ambiguous, verified precedent, contact routes, and **four questions a lawyer can be sent as-is**.
+
+### The three things that matter most
+1. ✅ **Patents are settled.** `[MS-OI29500]` is expressly covered by the Open Specification Promise — confirmed via the OSP page *and* the machine-readable Patent Map (`ows_Programs=";#OSP;#"`). Not the Community Promise.
+2. 🔴 **Copyright is not settled, and the OSP does not touch it.** Microsoft's own OSP FAQ: *"Copyrights in the Covered Specifications are not provided through the OSP."* ⚠️ **Apache POI cites the OSP as authority for a copyright question** — a widely-copied conflation, not a safe basis.
+3. 🔴 **The general Learn terms of use flatly prohibit this**, and the IPR notice is the only carve-out — *"Regardless of any other terms…"*. So the scope of that carve-out is load-bearing, not academic.
+
+**Precedent worth showing a lawyer:** Samba ships **52,098 lines** of bulk-scraped Open Specifications tables in a public GPL repo with the notice reproduced verbatim — further than we plan to go. ⚠️ But Samba holds a **separately negotiated PFIF agreement**, so show that fact at the same time. At the other end, python-docx has **zero** references and documents the same facts from its own observation of Word.
+
+**The asymmetry to notice in the notice itself:** schemas, IDLs and code samples get *"with or without modification, **any**"*; the prose gets only *"portions… as necessary"*. A structured transformation of the prose falls in that gap, and Reservation of Rights means silence is no.
+
+*(Original brief retained below in case the research is ever re-run.)*
+
+### What to establish
+1. **The verbatim IPR notice** on an actual [MS-OI29500] document (landing page, DOCX or PDF) — Copyrights, Patents, No Trade Secrets, Reservation of Rights, Trademarks, Tools. **Quote it exactly.** Paraphrasing a licence is the failure mode to avoid; a summary of licence terms is worth less than a URL.
+2. **The scope of "in order to develop implementations of the technologies described in this documentation"** — the load-bearing phrase. Does Microsoft publish any clarification? Does it distinguish a tool that *implements* a format from one that *teaches* it? Report what the text says and what is genuinely ambiguous; do not resolve the ambiguity.
+3. **Distributing portions in an implementation vs. republishing a derived database.** The notice permits distributing portions "in your implementations ... or in your documentation as necessary to properly document the implementation". A RAG knowledge base is arguably a *derived database* rather than a quotation. Anything addressing bulk extraction or structured transformation?
+4. **Patents are a separate question from copyright.** Open Specification Promise vs Community Promise, which applies here, and where the per-document mapping is published. Answering one does not settle the other.
+5. **Precedent.** Do real projects ingest or systematically reference Open Specifications content — python-docx, docx4j, Apache POI (an ASF project with a formal IP review), LibreOffice, sheetjs? **How do they attribute it, and do they quote or only cite?** Report what is observable in their source or docs.
+6. **The route to certainty.** Microsoft publishes a contact path for licensing questions on these documents. Find the current one, plus any public forum or documented process for scope questions.
+7. **Fallbacks if the answer is no.** Citing clause numbers without reproducing content (a pointer, not a copy); linking the public page; deriving equivalent facts independently by testing real Office output. Say honestly how much value each preserves.
+
+### Why it matters
+[MS-OI29500] is **1,895 clause-keyed entries** of "the standard says X, Office does Y" — the only source of that knowledge. It has already proved decisive twice in this project: it settled the toggle-reset question (§8i) and the Excel `cellXfs` question (§8f), both cases where building faithfully from ECMA would have produced code that disagrees with Office **and passed review**.
+
+### Deliverable
+Verbatim terms → clearly permitted → genuinely ambiguous → precedent → route to certainty → fallbacks, ending with **three or four questions a lawyer can be sent as-is**. Those questions are the most reusable output even if everything else is thin.
+
 ## 9. Next actions
 
 1. ~~Research (Word, architecture, tooling, storage)~~ — done.
