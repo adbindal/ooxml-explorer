@@ -27,13 +27,32 @@ To provide accurate explanations of XML elements with official ECMA-376 citation
 ```
 
 ### The Datasets
-*   `public/rag-data.json`: The **Golden Reference Dataset** — 1,521 records across `docx`, `xlsx`, `pptx` and `shared` (DrawingML). Every record carries verified structure: valid attributes, valid parent elements, the namespace prefix, and the Open XML SDK class name.
+*   `public/rag-data.json`: The **Golden Reference Dataset** — 1,899 records across `docx` (622), `xlsx` (419), `pptx` (212) and `shared` (646). Every record carries verified structure: valid attributes, valid parent elements, the namespace prefix, and the Open XML SDK class name.
 
     Records are one of two provenances, and the distinction is load-bearing:
     *   **`curated`** (29 records) — hand-written, carrying a `definition` and an ECMA-376 `citation`. These are the only records that describe what an element *means*.
-    *   **`schema`** (1,492 records) — generated from the Open XML SDK's published schema metadata. Structure only. They deliberately carry **no** `definition` and **no** `citation`, because the SDK's own `Summary` field is boilerplate (`"Defines the Table Class."`) and occasionally wrong — generating prose from it would manufacture authority the schema never conferred.
+    *   **`schema`** (1,870 records) — generated from the Open XML SDK's published schema metadata. Structure only. They deliberately carry **no** `definition` and **no** `citation`, because the SDK's own `Summary` field is boilerplate (`"Defines the Table Class."`) and occasionally wrong — generating prose from it would manufacture authority the schema never conferred.
 
 *   `services/staticKnowledgeBase.ts`: The **Static Offline Fallback Knowledge Base**. Auto-generated alongside the golden dataset and containing only the curated subset, so it stays small enough to bundle (~18 KB) rather than duplicating the full corpus in JavaScript. `ragRouter` consults it whenever IndexedDB has no answer — the store isn't populated yet, the fetch failed, or IndexedDB is unavailable outright. That last case matters under DLP mode, where no network call is permitted.
+
+#### Namespaces covered
+Eleven namespaces, keyed on **`domain:namespace:tag`** — the local name alone is not an identity. 43 records share a domain and local name and differ only by namespace (`w:start` vs `wp:start`, `x:row` vs `xdr:row`).
+
+| Prefix | Records | Domain | |
+|---|---:|---|---|
+| `w` | 603 | docx | WordprocessingML |
+| `x` | 383 | xlsx | SpreadsheetML |
+| `p` | 212 | pptx | PresentationML |
+| `a` | 318 | shared | DrawingML core |
+| `c` | 221 | shared | Charts |
+| `dgm` | 66 | shared | Diagrams |
+| `cdr` | 29 | shared | Chart drawing |
+| `pic` | 6 | shared | Pictures |
+| `lc` | 1 | shared | Locked canvas |
+| `wp` | 19 | **docx** | Word drawing anchors |
+| `xdr` | 36 | **xlsx** | Excel drawing anchors |
+
+`wp:` and `xdr:` sit in the document domains rather than `shared` because they are **positioning wrappers**, not payload: `wp:` anchors a drawing against a paginated document, `xdr:` against the cell grid. PowerPoint has no wrapper — absolute EMU in `p:spTree` replaces it. The payload underneath (`a:graphic` and below) is identical across all three, which is why `a:graphic` lists parents from five namespaces: `wp:anchor`, `wp:inline`, `xdr:graphicFrame`, `p:graphicFrame`, `cdr:graphicFrame`.
 
 ### Runtime Execution
 *   **[services/storageService.ts](./storageService.ts)**: On application start, initializes IndexedDB (`ooxml_explorer_db`) and populates the `rag_schemas` store by fetching `/rag-data.json`.

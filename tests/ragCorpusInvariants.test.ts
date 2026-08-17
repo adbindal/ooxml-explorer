@@ -41,15 +41,31 @@ describe('RAG corpus shape', () => {
     expect(docs.length).toBe(corpus.length);
   });
 
-  it('has no duplicate domain:tag keys', () => {
-    // storageService keys IndexedDB records on `${domain}:${tag}`, so a duplicate
-    // would silently drop a record on load.
-    const keys = docs.map(d => `${d.domain}:${d.tag}`);
+  it('has no duplicate domain:namespace:tag keys', () => {
+    // storageService keys IndexedDB records on `${domain}:${namespace}:${tag}`, so a
+    // duplicate would silently drop a record on load. Namespace is load-bearing here:
+    // 43 records share a domain and local name and differ only by namespace
+    // (`w:start` vs `wp:start`, `x:row` vs `xdr:row`), and the earlier domain:tag
+    // key merged them.
+    const keys = docs.map(d => `${d.domain}:${d.namespace}:${d.tag}`);
     expect(new Set(keys).size).toBe(keys.length);
   });
 
+  it('still contains same-named elements that differ only by namespace', () => {
+    // Guards the fix rather than the symptom: if keying regresses to domain:tag,
+    // these collapse and this fails.
+    const byDomainTag = new Map<string, Set<string>>();
+    for (const d of docs) {
+      const key = `${d.domain}:${d.tag}`;
+      if (!byDomainTag.has(key)) byDomainTag.set(key, new Set());
+      byDomainTag.get(key)!.add(d.namespace);
+    }
+    const multi = [...byDomainTag.values()].filter(ns => ns.size > 1);
+    expect(multi.length).toBeGreaterThan(20);
+  });
+
   it('covers substantially more than the original 29 curated tags', () => {
-    expect(docs.length).toBeGreaterThan(1000);
+    expect(docs.length).toBeGreaterThan(1800);
   });
 
   it('covers all four domains', () => {
@@ -69,10 +85,18 @@ describe('namespace correctness', () => {
     expect(wrong.map(d => d.tag)).toEqual([]);
   });
 
-  it('each document domain uses a single consistent prefix', () => {
-    const expected: Record<string, string> = { docx: 'w', xlsx: 'x', pptx: 'p' };
-    for (const [domain, prefix] of Object.entries(expected)) {
-      const offenders = docs.filter(d => d.domain === domain && d.namespace !== prefix);
+  it('each domain uses only its own markup prefix plus its drawing wrapper', () => {
+    // A domain is not single-prefix. Word and Excel each carry a DrawingML
+    // positioning wrapper - `wp:` anchors against a paginated document, `xdr:`
+    // against the cell grid - so those prefixes legitimately live in those domains.
+    // PowerPoint has no wrapper; absolute EMU in p:spTree replaces it.
+    const allowed: Record<string, string[]> = {
+      docx: ['w', 'wp'],
+      xlsx: ['x', 'xdr'],
+      pptx: ['p']
+    };
+    for (const [domain, prefixes] of Object.entries(allowed)) {
+      const offenders = docs.filter(d => d.domain === domain && !prefixes.includes(d.namespace));
       expect(offenders.map(d => `${d.namespace}:${d.tag}`)).toEqual([]);
     }
   });
@@ -109,9 +133,9 @@ describe('bundled offline fallback', () => {
   // IndexedDB has no answer. It was previously exported but imported by nothing, so
   // these tests exist to keep it both wired up and consistent with the full corpus.
   it('is a strict subset of the generated corpus', () => {
-    const corpusKeys = new Set(docs.map(d => `${d.domain}:${d.tag}`));
+    const corpusKeys = new Set(docs.map(d => `${d.domain}:${d.namespace}:${d.tag}`));
     const orphans = KNOWLEDGE_BASE
-      .map(d => `${d.domain}:${d.tag}`)
+      .map(d => `${d.domain}:${d.namespace}:${d.tag}`)
       .filter(key => !corpusKeys.has(key));
     expect(orphans).toEqual([]);
   });
@@ -119,9 +143,9 @@ describe('bundled offline fallback', () => {
   it('agrees with the corpus on every field it duplicates', () => {
     // Divergence here would mean an offline user and an online user get different
     // answers for the same tag - which the badge would present as equally grounded.
-    const byKey = new Map(docs.map(d => [`${d.domain}:${d.tag}`, d]));
+    const byKey = new Map(docs.map(d => [`${d.domain}:${d.namespace}:${d.tag}`, d]));
     for (const bundled of KNOWLEDGE_BASE) {
-      const canonical = byKey.get(`${bundled.domain}:${bundled.tag}`)!;
+      const canonical = byKey.get(`${bundled.domain}:${bundled.namespace}:${bundled.tag}`)!;
       expect(bundled.namespace, `${bundled.tag} namespace`).toBe(canonical.namespace);
       expect(bundled.definition, `${bundled.tag} definition`).toBe(canonical.definition);
       expect(bundled.citation, `${bundled.tag} citation`).toBe(canonical.citation);
