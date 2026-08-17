@@ -1,6 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { loadWordContext, analyzeParagraphAt } from '../services/wordFormattingAnalysis';
+import {
+  loadWordContext,
+  analyzeParagraphAt,
+  locateParagraphByMarkup,
+  computeEvidenceForMarkup
+} from '../services/wordFormattingAnalysis';
 import type { PackageParts } from '../services/packageIntegrity';
+import { selectEvidenceTier } from '../services/aiService';
 
 /**
  * End-to-end tests for the composition layer.
@@ -211,5 +217,109 @@ describe('honesty of the output', () => {
 
   it('returns null for a paragraph index that does not exist', () => {
     expect(analyzeParagraphAt(loadWordContext(pkg('<w:p/>')), 99)).toBeNull();
+  });
+});
+
+describe('locating a paragraph from a snippet', () => {
+  const doc = (body: string) => loadWordContext(pkg(body)).document!;
+
+  it('matches a paragraph given its own markup', () => {
+    const d = doc('<w:p><w:r><w:t>alpha</w:t></w:r></w:p>');
+    const found = locateParagraphByMarkup(d, '<w:p><w:r><w:t>alpha</w:t></w:r></w:p>');
+    expect(found?.paragraph.textContent).toBe('alpha');
+  });
+
+  it('tolerates the pretty-printing the editor applies', () => {
+    // The panel holds a formatted snippet; the document is parsed from raw text.
+    const d = doc('<w:p><w:r><w:t>alpha</w:t></w:r></w:p>');
+    const found = locateParagraphByMarkup(d, `<w:p>
+      <w:r>
+        <w:t>alpha</w:t>
+      </w:r>
+    </w:p>`);
+    expect(found?.paragraph.textContent).toBe('alpha');
+  });
+
+  it('finds the containing paragraph when given a run', () => {
+    const d = doc('<w:p><w:r><w:t>alpha</w:t></w:r></w:p><w:p><w:r><w:t>beta</w:t></w:r></w:p>');
+    const found = locateParagraphByMarkup(d, '<w:r><w:t>beta</w:t></w:r>');
+    expect(found?.paragraph.textContent).toBe('beta');
+    expect(found?.run).toBeDefined();
+  });
+
+  it('REFUSES to guess between identical paragraphs', () => {
+    // Empty paragraphs are everywhere in real documents. Picking one at random and
+    // reporting its formatting as Verified would be a confidently wrong answer.
+    const d = doc('<w:p/><w:p/><w:p/>');
+    expect(locateParagraphByMarkup(d, '<w:p/>')).toBeNull();
+  });
+
+  it('refuses when a snippet appears in several paragraphs', () => {
+    const d = doc('<w:p><w:r><w:t>same</w:t></w:r></w:p><w:p><w:r><w:t>same</w:t></w:r></w:p>');
+    expect(locateParagraphByMarkup(d, '<w:r><w:t>same</w:t></w:r>')).toBeNull();
+  });
+
+  it('returns the paragraph without a run when the run is ambiguous inside it', () => {
+    const d = doc('<w:p><w:r><w:t>x</w:t></w:r><w:r><w:t>x</w:t></w:r></w:p>');
+    const found = locateParagraphByMarkup(d, '<w:r><w:t>x</w:t></w:r>');
+    expect(found?.paragraph).toBeDefined();
+    expect(found?.run).toBeUndefined();
+  });
+
+  it('returns null for markup that is not in the document', () => {
+    expect(locateParagraphByMarkup(doc('<w:p/>'), '<w:tbl/>')).toBeNull();
+  });
+
+  it('returns null for an empty snippet', () => {
+    expect(locateParagraphByMarkup(doc('<w:p/>'), '   ')).toBeNull();
+  });
+});
+
+describe('computeEvidenceForMarkup', () => {
+  it('produces evidence lines and an unresolved list', () => {
+    const evidence = computeEvidenceForMarkup(
+      pkg('<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>Title</w:t></w:r></w:p>'),
+      '<w:r><w:t>Title</w:t></w:r>'
+    )!;
+    expect(evidence.lines.join('\n')).toContain('sz = 32 (from style:Heading1)');
+    expect(evidence.unresolved).toEqual([]);
+  });
+
+  it('returns null rather than empty evidence when the snippet cannot be located', () => {
+    // The caller must fall back to its ordinary path, not show a Verified answer
+    // built on nothing.
+    expect(computeEvidenceForMarkup(pkg('<w:p/>'), '<w:tbl/>')).toBeNull();
+  });
+
+  it('returns null for a package with no document part', () => {
+    const parts = pkg('<w:p/>');
+    delete parts['word/document.xml'];
+    expect(computeEvidenceForMarkup(parts, '<w:p/>')).toBeNull();
+  });
+})
+
+describe('the full chain: computed evidence earns the Verified tier', () => {
+  it('a resolvable element yields evidence that selects verified', () => {
+    // This is the assertion that proves the wiring closes. Anything weaker leaves
+    // "Verified tier shipped" true in the code and false for the user.
+    const evidence = computeEvidenceForMarkup(
+      pkg('<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>Title</w:t></w:r></w:p>'),
+      '<w:r><w:t>Title</w:t></w:r>'
+    )!;
+    expect(selectEvidenceTier(false, evidence)).toBe('verified');
+  });
+
+  it('an element whose numbering part is missing is capped at grounded', () => {
+    const parts = pkg('<w:p><w:pPr><w:numPr><w:numId w:val="1"/></w:numPr></w:pPr><w:r><w:t>Item</w:t></w:r></w:p>');
+    delete parts['word/numbering.xml'];
+    const evidence = computeEvidenceForMarkup(parts, '<w:r><w:t>Item</w:t></w:r>')!;
+    expect(evidence.unresolved.length).toBeGreaterThan(0);
+    expect(selectEvidenceTier(false, evidence)).toBe('grounded');
+  });
+
+  it('an unlocatable element falls back to unverified, not a hollow verified', () => {
+    const evidence = computeEvidenceForMarkup(pkg('<w:p/><w:p/>'), '<w:p/>');
+    expect(evidence).toBeNull();
+    expect(selectEvidenceTier(false, evidence)).toBe('unverified');
   });
 });
