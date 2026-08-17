@@ -63,7 +63,7 @@ Diverged before all the hardening on `main`. **Do not merge or rebase.** Extract
 | Source | Content | Size | License |
 |---|---|---|---|
 | **dotnet/Open-XML-SDK `/data`** | `schemas/*.json`: 155 files, 9.2 MB. **1,839 types** across 4 core namespaces. Per-attribute validators (max length, numeric range, required) + **Office-version gating**. `namespaces.json` 168 prefixes. `schematrons.json` 134 KB | 9.2 MB | **MIT** |
-| **[MS-OI29500]** | **1,895 clause-keyed entries**, each a literal *spec-says / Office-does* pair. Verified: toc.json = 2,152 nodes. Distribution: **Part 1 §18 (Spreadsheet) 534, §17 (Word) 529, §21 (DrawingML components) 264, §20 (DrawingML framework) 180, §22 (shared) 106, Part 4 §19 104, §19 (Presentation) 100** | 1.2 MB DOCX | **Needs counsel** |
+| **[MS-OI29500]** | **1,895 clause-keyed entries**, each a literal *spec-says / Office-does* pair. Verified: toc.json = 2,152 nodes. Distribution: **Part 1 §18 (Spreadsheet) 534, §17 (Word) 529, §21 (DrawingML components) 264, §20 (DrawingML framework) 180, §22 (shared) 106, Part 4 §19 104, §19 (Presentation) 100**. ⚠️ **The 534 is misleading**: 203 of them (38%) are per-function calculation notes in §18.17.7 *Function Reference* and say nothing about markup. Strip those and SpreadsheetML has **316 markup-level clauses against Word's 529** — on markup, **Word is the more deviant format by a wide margin**. Also note 534 counts *clauses*, not variations: each page holds lettered items a., b., c., averaging ~3.3 in a 59-page sample | 1.2 MB DOCX | **Needs counsel** |
 | **ECMA-376 XSDs** | Strict (21 files) + Transitional (26) + OPC (4) | ~1.8 MB | BSD-ish |
 | **ECMA-376 Part 3 (MCE)** | 43 pages. Non-optional — every modern file uses `mc:AlternateContent` | 865 KB | Free |
 | **ECMA-376 Part 1** | 5,039 pages reference manual. Chunk on element boundaries | 35 MB | Quote sparingly |
@@ -122,6 +122,58 @@ Within layers 2–5, each style resolves along its `w:basedOn` chain first, usin
 ### Units registry (partial — needs completion)
 twips (1 in = **1440**), half-points (`w:sz`), eighth-points (border `w:sz`, clamped 2–96), 240ths of a line (`w:spacing@line` when `lineRule="auto"`, else twips — **same attribute, two meanings**), fiftieths of a percent (`type="pct"`), EMU (1 in = **914400**, 1 cm = 360000, 1 pt = 12700), 1000ths of a percent (DrawingML colour transforms), hex byte as fraction (`themeTint`/`themeShade`).
 ❌ **"1/50th mm" does not exist in OOXML** — I invented it in a research brief; agent correctly refused to encode it. Only *fiftieths of a percent* is real.
+
+### SpreadsheetML — the cell format model (researched 2026-08-17, all [RAW] from ECMA-376 PDF + MS-OI29500 clause pages)
+
+🔴 **THE critical finding — Excel does not implement the cascade the spec describes.**
+ECMA §18.8.9/18.8.10: *"both the cell style xf records and cell xf records shall be read to understand the full set of formatting applied to a cell."*
+[MS-OI29500] §2.1.699 **and** §2.1.700, item b, identical text on both: *"In Office, **only the cell xf record defines the formatting applied to a cell**."*
+→ `cellXfs[c/@s]` is **complete and self-contained**. `xfId` is provenance metadata, not an inheritance pointer. **Any resolver that merges `cellStyleXfs[xfId]` under `cellXfs[s]` will disagree with Excel.** This invalidates the mental model the standard sets up, and it is the single most consequential deviation in the format.
+
+🔴 **`apply*` flags are NOT render gates.** [MS-OI29500] §2.1.721 (six items, a–f). In `cellXfs` they are **edit-time propagation/sticky bits**: `applyFont="0"` means "if the named style's font changes later, push it into this record", *not* "ignore this xf's fontId". Defaults are **asymmetric**: `true` in `cellStyleXfs`, `false` in `cellXfs`. The XSD declares no default for any of the six — the defaults exist only in the Microsoft document.
+
+**Precedence is fallback-to-a-single-index, not a merging cascade:** `c/@s` → `row/@s` (**only if `row/@customFormat="1"`**) → `col/@style` (**only for cells "not yet allocated"**) → `cellXfs[0]`. Whichever wins supplies the *whole* format. There is no per-property inheritance anywhere. ⚠️ Row-vs-column precedence when both apply and no `c` exists is **not resolved by any clause** — inferred, not cited.
+
+**The only true overlay layer in SpreadsheetML is `dxf`** (conditional formatting), which ECMA §18.8.15 explicitly defines as differential and applied *"on top of or in addition to"* existing formatting.
+
+Other high-impact: `cm`/`vm` are **one-based in Office, zero-based in the spec**; Excel writes `left`/`right` borders where the spec says `start`/`end` (and Strict has **no** `left`/`right` at all — no border markup is valid in both); `font` children need Excel's **fixed sequence** despite being an `xsd:choice`; built-in `numFmtId` 14 is **`m/d/yyyy` in Excel, `mm-dd-yy` in the spec**; custom number formats cap at **206** and *"Office persists files that contain more than 206 custom formats (which it cannot load)"*.
+
+**`t="s"` vs `t="str"`** is the format's most common misread: `s` means `v` is a **zero-based index into `sst/si`**; `str` means `v` is the string itself. And `sst` rich-text runs split exactly like Word's `w:r` — same mitigation (atomize, diff atoms, re-derive runs).
+
+**Sparse structure:** `dimension` is optional and routinely stale; `row/@spans` is a **16-row block union**, never a per-row bound; `c/@r` absent ⇒ previous column + 1.
+
+**Shared formulas are the corruption mechanism:** followers are *empty* `<f t="shared" si="N"/>` elements. Delete the master and the formulas exist nowhere. `calcChain.xml` is **pure cache and safely deletable** — ECMA §18.6 says the app *"is free to ignore"* it.
+
+### PresentationML + DrawingML (researched 2026-08-17, all [RAW], dual-sourced via MS-OI29500 HTML *and* the DOCX)
+
+**Sizing: DrawingML (444 variations) beats PresentationML (100) by 4.4× — and it is reusable across all three formats.** §21 = 264 (of which **charts alone = 172**), §20 = 180, §19 = 100 (of which **half, 49, are animation/timing** — the slide/shape model everyone asks about is only 18).
+
+🔴 **The PPTX cascade — placeholder correspondence.** Only ONE matching rule is documented anywhere, and it is in MS-OI29500, not ECMA (§19.3.1.36(b)):
+- **Slide shape → layout placeholder: match on `@idx`, never `@type`.** `@idx` defaults to 0.
+- **Notes slide → notes master: match on `@type`.** Different rule, different part. One matcher for both is wrong for one of them.
+- `idx = 0xffffffff` is a sentinel for "no correspondence" — legal `unsignedInt`, so **schema validation cannot catch its misuse**.
+- ⚠️ **Layout → master matching is undocumented.** Not in ECMA, not in MS-OI29500. What python-pptx and others do (match `@type`, folding `ctrTitle`→`title`, `subTitle`→`body`) is **observed practice, not spec**.
+- A master can only carry `title`, `body`, `dt`, `ftr`, `sldNum` — so it **cannot** be the shape-level ancestor of most layout placeholders. **Geometry inheritance stops at the master shape; `p:txStyles` contributes text only.**
+
+🔴 **`a:xfrm`/`off`/`ext` are all `minOccurs="0"` — absent means INHERIT, not zero.** Writing `<a:off x="0" y="0"/>` as a "default" silently pins the shape to the top-left and severs the cascade. Reported as the #1 way generated decks come out visually wrong.
+
+🔴 **Three disjoint colour alphabets.** `ST_SchemeColorVal` (17 values, what `schemeClr/@val` may say) vs `ST_ColorSchemeIndex` (12, the theme slot names) vs `p:clrMap` *attribute names* (12, the semantic keys). They overlap on `accent1-6`/`hlink`/`folHlink`, which is why the bug hides until a dark master. **The spec's own example makes `<a:schemeClr val="tx1"/>` resolve to `a:clrScheme/a:lt1`** — the *light* colour. `dk1/lt1/dk2/lt2` are the only four that bypass the map.
+
+🔴 **Style-reference indexing is NOT uniform.** `fillRef`/`bgRef`: 0 or 1000 = none, 1–999 = `fillStyleLst`, **1001+ = `bgFillStyleLst`, 1-based** (normative, ECMA §20.1.4.2.10 / §19.3.1.3). `lnRef`/`effectRef`: **no offset** — they address one list each. And **ECMA §20.1.4.2.19 names the wrong list for `lnRef`** (`fillStyleLst`; Office reads `lnStyleLst`). `ST_StyleMatrixColumnIndex` has **no bounds**, so out-of-range `idx` is a semantic check only.
+
+🔴 **`@rot` unit contradiction inside the standard.** ECMA §20.1.7.5 prose says **1/64000** degree; `ST_Angle` (§20.1.10.3), the schema, and Office all say **1/60000**. A 6.25% error that reads as a rendering artefact.
+
+**Group transform** (the "why is my shape in the wrong place" mechanism): `sx = ext.cx / chExt.cx` (1 if `chExt` absent/zero); `child_abs = grp.off + (child.off − grp.chOff) × s`. Resizing a group changes `ext` but not `chExt`, which is how children silently acquire a scale. `p:spTree` **is itself a group**, so the transform applies at the root too. Nests recursively.
+
+**`@lvl` is 0-based; `lvl1pPr`…`lvl9pPr` are 1-based.** `a:lvl1pPr` ↔ `@lvl="0"`. Nine levels, hard cap — exactly like `w:ilvl`.
+
+**`+mj-lt` token grammar is UNDOCUMENTED** — appears exactly once in 5,039 pages, inside an example. `ST_TextTypeface` is an unrestricted string. Word uses a *completely different* syntax (`w:rFonts/@asciiTheme="minorHAnsi"`) against the same theme part.
+
+🔴 **Three of the four inheritance hops are IMPLICIT relationships with zero XML reference** (slide→layout, layout→master, master→theme). You resolve them by opening the part's `.rels` and finding the relationship whose `Type` ends in `/slideLayout`. **`packageIntegrity.ts` cannot catch a missing one — there is no `rId` to dangle.** A slide with no layout relationship loses its entire inheritance chain and renders with defaults, silently. → task #13.
+
+**Better MS-OI29500 ingestion path:** the DOCX flattened to text gives all 1,895 variations in ~34k lines. Entries delimited by `^Part \d Se\w+ [\d.]+, `; sub-items by `^[a-z]\.\s{3}`. Beats 1,895 HTML fetches, and no summarizer in the loop. **~25% of §19/§20/§21 entries are pure cross-references** (`19.3.1.44 spPr → 20.5.2.30(a-c)`) and must be **resolved at ingest**, including sub-letter selection, or they store nothing.
+
+**Preset geometry**: the 187 `ST_ShapeType` definitions are NOT in the PDF — they ship as `OfficeOpenXML-DrawingMLGeometries.zip` (51,672 bytes) inside the ECMA Part 1 ZIP.
 
 ### Numbering (top bug source)
 `numPr` → `numId` → `w:num` → `abstractNumId` → `abstractNum` → `lvl[@ilvl]`.
@@ -229,6 +281,21 @@ Both sit **above** the provider branch — same string reaches `promptLocalModel
 
 ---
 
+## 7b. Date-system corrections (2026-08-17)
+
+Two things I had recorded as fact are **not supported by primary sources**:
+
+- ❌ **"Lotus 1-2-3 provenance of the leap-year bug"** — not in ECMA-376 Part 1 (all 5,039 pages grepped) and not in any MS-OI29500 clause opened. Widely repeated, no primary source found. **Do not encode as sourced.**
+- ❌ **"29 February 1900" is never named in ECMA-376.** The phantom day's *existence* is provable from serial arithmetic; its *identity* is not, from these sources. ECMA §18.17.7.344 (`WEEKDAY`) points at §18.17.4.1 for *"special handling of certain days in 1900"* — and §18.17.4.1 **contains no such handling**. That is a dangling cross-reference in the standard itself.
+
+✅ **What IS verified** (ECMA §18.17.4.1, verbatim): 1900 base = **1899-12-30** (serial 0); 1904 base = **1904-01-01**; offset **1462 days**, cross-checked two ways. Annex L defines a *third* base, 1900-backward-compat = **1899-12-31**. [MS-OI29500] §18.2.28(j): **Strict ⇒ true 1900 base; Transitional ⇒ compat base**, and *"Excel does not support negative serial numbers"* — so the spec's entire pre-1900 range is unreachable.
+
+⚠️ Also unresolved: ECMA Annex L §L.2.16.9.3 contradicts normative §18.17.4.3 on whether serial 1.5 or 2.5 is 1900-01-01T12:00. Trust the normative clause.
+
+⚠️ The **"numFmtId 0–163 reserved, custom starts at 164" rule has no normative basis** — no such statement exists in ECMA-376 Part 1. Attested only by the spec's own examples and Excel behaviour. **Convention, not law.**
+
+⚠️ The [MS-OI29500] Excel column-width formula **appears to contain an error** (`+ (… MOD 8)` where the intent looks like `−`). Quoted verbatim, not corrected. Needs empirical testing against real Excel before being encoded.
+
 ## 8. Honesty ledger — what is contested, unverified, or was retracted
 
 **Retracted during a citation-repair pass** (an agent disclosed it had cited papers it never opened):
@@ -314,7 +381,7 @@ Format-agnostic by construction (packaging is fully shared across the three form
 
 Everything researched so far is **WordprocessingML-heavy**. For the tri-format ambition these remain thin:
 
-- **SpreadsheetML semantics** — the `cellXfs`/`cellStyleXfs`/`xfId` resolution chain, `apply*` flags, number-format application, 1900 vs 1904 date systems, the column-width character formula, shared formulas via `@si`/`@ref`, calc chain authority. Note: **534 MS-OI29500 variations for Part 1 §18 — more than Word's 529.**
+- ~~SpreadsheetML semantics~~ — **DONE**, see §4. 
 - **PresentationML semantics** — placeholder inheritance via `p:ph/@type` and `@idx`, `clrMap`/`clrMapOvr` resolution, `p:txStyles` list-style chain, `a:fmtScheme` style references and their indexing convention, group transform math (`chOff`/`chExt`).
 - **DrawingML** — the biggest blind spot. Shared across all three formats; ~475 element declarations; **264 variations for Part 1 §21 plus 180 for §20.**
 
