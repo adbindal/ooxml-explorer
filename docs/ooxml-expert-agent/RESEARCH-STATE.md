@@ -1,6 +1,6 @@
 # OOXML Expert Agent — Research State & Resume Point
 
-**Status:** research complete; build plan published; **Stage 0 shipped; Stage 1a + 1c shipped** (see §8b).
+**Status:** research complete; build plan published; **Stage 0 and Stage 1 both COMPLETE** (see §8b).
 **Last updated:** 2026-08-17
 **Purpose:** durable record so this work can resume after a session ends. If you are picking this up cold, read this file top to bottom before doing anything else.
 
@@ -288,7 +288,13 @@ Format-agnostic by construction (packaging is fully shared across the three form
 
 ✅ **Wired up** (`af11bf5`, Stage 1c). `readPackageParts()` in `zipService.ts` adapts JSZip to the checker's path→content map (binary parts map to `''` — presence is all the checks need). A "Check Package Integrity" action in the Validator reports findings into the existing log console, styled apart from the AI actions because nothing on that path is generated, retrieved, or networked. Verified against a real 107-part package.
 
-**Remaining in Stage 1:** MCE preprocessing (task #8) — the last piece. Naive walkers double-count every textbox, because Word writes shapes twice — DrawingML in `mc:Choice`, VML in `mc:Fallback`. Required before the Stage 2 resolvers. The seam is clean: `packageIntegrity` consumes a path→content map, so MCE slots in as a transform over that map.
+**Stage 1b — MCE preprocessing** shipped (`2ad039f`). `services/markupCompatibility.ts` + 18 tests.
+- Resolves `mc:AlternateContent` to exactly one branch. Without it a reader double-counts (every shape twice, since Word writes DrawingML in `Choice` and VML in `Fallback`) or zero-counts. Both fail silently.
+- Understood-namespace set is a **parameter**, with `LEGACY_CONSUMER_NAMESPACES` and `MODERN_CONSUMER_NAMESPACES` presets. Resolving both ways answers "why does this look different in an older Word?" — the Validator reports when they diverge.
+- Namespace URIs taken from the SDK's `namespaces.json`, not memory. `w15` = `.../2012/wordml` but ships in Office **2013**; a test pins it.
+- `Requires` prefixes resolve against **in-scope** declarations, all-not-any, first match wins. Nesting iterates to a fixed point, bounded.
+- **Integrity checks deliberately run against UNRESOLVED markup** and are reported separately: a broken relationship inside an `mc:Fallback` is still broken for whoever takes that branch.
+- ⚠️ Real-file check found `mc:Ignorable="w14 w15 wp14"` but **zero** `AlternateContent` (a text-only spec document). So the `AlternateContent` paths are unit-tested on synthetic fixtures only — **not yet exercised against a real file containing shapes.** Worth doing with a real .docx that has a text box. Naive walkers double-count every textbox, because Word writes shapes twice — DrawingML in `mc:Choice`, VML in `mc:Fallback`. Required before the Stage 2 resolvers. The seam is clean: `packageIntegrity` consumes a path→content map, so MCE slots in as a transform over that map.
 
 ## 9. Next actions
 
@@ -298,10 +304,11 @@ Format-agnostic by construction (packaging is fully shared across the three form
 4. ~~Stage 0~~ — done, see §8b. **All work is consolidated on the single branch `feat/schema-derived-rag-corpus`; `main` is untouched.**
 5. ~~Stage 1a — package integrity~~ — done, `1a7905f`. See §8c.
 6. ~~Stage 1c — surface findings in the UI~~ — done, `af11bf5`.
-7. **Stage 1b — MCE preprocessing** (task #8). The last piece of Stage 1, and a prerequisite for the Stage 2 resolvers.
-8. Decide: which format goes first (recommend sequencing, not parallelising — resolvers are genuinely different per format).
-9. Decide: MS-OI29500 licensing — ask or not. Gates Stage 3 only.
-10. Decide: audience (self vs onboarding engineers). If mentoring is primary, Stage 5 moves up.
+7. ~~Stage 1b — MCE preprocessing~~ — done, `2ad039f`. **Stage 1 complete.**
+8. **Stage 2 — the three resolvers.** The centrepiece and the largest item. Word: 6-layer cascade + 4 `basedOn` merge semantics + 12 toggles (settle the contested truth table against real Word first). Excel: `cellXfs`/`cellStyleXfs` + number-format application. PowerPoint: placeholder matching + `clrMap` + theme. Shared: DrawingML theme/colour/font resolution.
+9. Decide: which format goes first (recommend sequencing, not parallelising — resolvers are genuinely different per format).
+10. Decide: MS-OI29500 licensing — ask or not. Gates Stage 3 only.
+11. Decide: audience (self vs onboarding engineers). If mentoring is primary, Stage 5 moves up.
 
 ## 10. Known gaps at time of writing
 

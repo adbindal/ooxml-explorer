@@ -8,6 +8,11 @@ import { ThemeClasses } from '../types';
 import { runSystemChecks, LogEntry, CoverageModule } from '../services/testService';
 import { loadZipFile, readPackageParts } from '../services/zipService';
 import { checkPackageIntegrity } from '../services/packageIntegrity';
+import {
+    resolveAlternateContent,
+    MODERN_CONSUMER_NAMESPACES,
+    LEGACY_CONSUMER_NAMESPACES
+} from '../services/markupCompatibility';
 import { getApiKey, testConnection } from '../services/geminiService';
 
 import { useAppStore } from '../store/appStore';
@@ -104,6 +109,38 @@ const ValidatorView: React.FC<ValidatorViewProps> = ({ themeClasses }) => {
             const findings = checkPackageIntegrity(parts);
 
             addLog(`Inspected ${Object.keys(parts).length} parts.`, 'info');
+
+            // Markup compatibility is reported separately from integrity on purpose.
+            // The integrity checks deliberately run against the *unresolved* markup,
+            // because a broken relationship inside an mc:Fallback branch is still a
+            // broken file for whichever consumer takes that branch.
+            const alternateContent = Object.entries(parts)
+                .filter(([path, content]) => path.endsWith('.xml') && content.includes('AlternateContent'))
+                .map(([path, content]) => {
+                    const doc = new DOMParser().parseFromString(content, 'application/xml');
+                    const modern = resolveAlternateContent(
+                        doc, MODERN_CONSUMER_NAMESPACES
+                    ).selections;
+                    const legacy = resolveAlternateContent(
+                        new DOMParser().parseFromString(content, 'application/xml'),
+                        LEGACY_CONSUMER_NAMESPACES
+                    ).selections;
+                    return { path, modern, legacy };
+                })
+                .filter(entry => entry.modern.length > 0);
+
+            if (alternateContent.length > 0) {
+                const total = alternateContent.reduce((n, e) => n + e.modern.length, 0);
+                addLog(`ℹ️ ${total} block(s) of alternate content across ${alternateContent.length} part(s) — content written more than once for different Office versions.`, 'info');
+                for (const entry of alternateContent) {
+                    const divergent = entry.modern.filter((sel, i) => sel.chose !== entry.legacy[i]?.chose).length;
+                    addLog(
+                        `  ${entry.path}: ${entry.modern.length} block(s)` +
+                        (divergent > 0 ? ` — ${divergent} render differently in a pre-2010 Office build.` : ''),
+                        'info'
+                    );
+                }
+            }
 
             if (findings.length === 0) {
                 addLog('✅ No integrity problems found. Content types and relationships are internally consistent.', 'success');
