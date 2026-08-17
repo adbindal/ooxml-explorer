@@ -86,7 +86,9 @@ describe('the noise problem this module exists for', () => {
     const after = pkg('<w:p w:rsidR="00BB22"><w:r><w:t>x</w:t></w:r></w:p>');
     const result = diffPackages(before, after);
     expect(result.normalized.find(n => n.rule.includes('revision-save'))?.count).toBe(2);
-    expect(explainDiff(result).join(' ')).toContain('ignored as rendering-irrelevant');
+    // Reported through the equivalence verdict, which names the filtered noise and
+    // says explicitly that a line-by-line diff will show it as a change.
+    expect(explainDiff(result).join(' ')).toContain('only in ways that carry no meaning');
   });
 
   it('reports NO changes when identical text is split across different runs', () => {
@@ -193,5 +195,87 @@ describe('the payload shape, for agent-to-agent handoff', () => {
 
   it('lists the parts it examined', () => {
     expect(diffPackages(pkg(para('a')), pkg(para('b'))).parts).toEqual(['word/document.xml']);
+  });
+});
+
+describe('the equivalence verdict — the answer a human most needs', () => {
+  it('states plainly that a re-saved file is equivalent', () => {
+    // Someone staring at a red-covered textual diff needs to be told this, not left
+    // to infer it from an empty findings list.
+    const before = pkg('<w:p w:rsidR="00AA11"><w:r w:rsidR="00AA11"><w:t>Same</w:t></w:r></w:p>');
+    const after = pkg('<w:p w:rsidR="00BB22"><w:r w:rsidR="00CC33"><w:t>Same</w:t></w:r></w:p>');
+    const result = diffPackages(before, after);
+    expect(result.equivalent).toBe(true);
+    const prose = explainDiff(result).join('\n');
+    expect(prose).toContain('SEMANTICALLY EQUIVALENT');
+    expect(prose).toContain('Word will treat them identically');
+  });
+
+  it('shows what a line-by-line diff would have flagged, and says it is not a change', () => {
+    const before = pkg('<w:p w:rsidR="00AA11"><w:r><w:t>x</w:t></w:r></w:p>');
+    const after = pkg('<w:p w:rsidR="00BB22"><w:r><w:t>x</w:t></w:r></w:p>');
+    const prose = explainDiff(diffPackages(before, after)).join('\n');
+    expect(prose).toContain('revision-save id removed');
+    expect(prose).toContain('They are not.');
+  });
+
+  it('calls equivalent the case where formatting moved but resolves the same', () => {
+    // A style on one side, direct formatting on the other, identical effect. This is
+    // the case a textual diff gets most wrong.
+    const result = diffPackages(
+      pkg(para('x', '<w:pPr><w:pStyle w:val="Indented"/></w:pPr>')),
+      pkg(para('x', '<w:pPr><w:ind w:left="720"/></w:pPr>'))
+    );
+    expect(result.equivalent).toBe(true);
+  });
+
+  it('is not equivalent when something real changed', () => {
+    expect(diffPackages(pkg(para('a')), pkg(para('b'))).equivalent).toBe(false);
+  });
+});
+
+describe('remediation — "what do I do to make them the same"', () => {
+  it('tells you to remove inserted text', () => {
+    const result = diffPackages(pkg(para('Hello')), pkg(para('Hello there')));
+    const record = result.records.find(r => r.kind === 'content-inserted')!;
+    expect(record.remediation).toContain('Remove the text " there"');
+  });
+
+  it('tells you to re-insert deleted text', () => {
+    const result = diffPackages(pkg(para('Hello there')), pkg(para('Hello')));
+    expect(result.records.find(r => r.kind === 'content-deleted')!.remediation)
+      .toContain('Re-insert the text " there"');
+  });
+
+  it('names the effective value to restore, not the markup to edit', () => {
+    // The same effective value can be reached through a style, a document default or
+    // direct properties. Which route to take is the author's call.
+    const result = diffPackages(
+      pkg(para('x', '<w:pPr><w:jc w:val="left"/></w:pPr>')),
+      pkg(para('x', '<w:pPr><w:jc w:val="center"/></w:pPr>'))
+    );
+    const jc = result.records.find(r => r.property === 'jc')!;
+    expect(jc.remediation).toContain('from "center" back to "left"');
+  });
+
+  it('mentions the content type and relationship when a part must come back', () => {
+    const before = { ...pkg(para('x')), 'word/footer1.xml': doc(para('f')) };
+    const record = diffPackages(before, pkg(para('x'))).records.find(r => r.kind === 'part-removed')!;
+    expect(record.remediation).toContain('content-type declaration');
+    expect(record.remediation).toContain('relationship');
+  });
+
+  it('collects every remediation into an ordered plan', () => {
+    const result = diffPackages(pkg(para('Hello')), pkg(para('Hello there')));
+    const prose = explainDiff(result).join('\n');
+    expect(prose).toContain('To make the second file match the first:');
+  });
+
+  it('gives every record a remediation, with no gaps', () => {
+    const before = { ...pkg(para('Hello', '<w:pPr><w:jc w:val="left"/></w:pPr>')), 'word/footer1.xml': doc(para('f')) };
+    const after = pkg(para('Hello there', '<w:pPr><w:jc w:val="center"/></w:pPr>'));
+    for (const record of diffPackages(before, after).records) {
+      expect(record.remediation, `${record.kind} ${record.property ?? ''}`).toBeTruthy();
+    }
   });
 });

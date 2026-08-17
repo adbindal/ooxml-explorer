@@ -148,9 +148,26 @@ export interface ChangeRecord {
    * filter on this rather than re-deriving it.
    */
   visible: boolean;
+  /**
+   * What to change to make the two sides match, phrased as an instruction.
+   *
+   * Direction is always "make the second package match the first", so a caller can
+   * apply the list without having to work out which way round each item runs.
+   */
+  remediation: string;
 }
 
 export interface DiffResult {
+  /**
+   * True when the two packages will render identically, whatever a textual diff says.
+   *
+   * This is the most useful single answer the module produces for a human staring at a
+   * raw XML diff full of red. Two files can differ in thousands of bytes - rewritten
+   * revision ids, text redistributed across runs, formatting moved between a style and
+   * direct properties - and be treated identically by Word. Saying so plainly is worth
+   * more than listing what differs textually.
+   */
+  equivalent: boolean;
   records: ChangeRecord[];
   /** Parts examined, in order. */
   parts: string[];
@@ -287,7 +304,16 @@ const diffFormatting = (
           property: name,
           before: beforeValue,
           after: afterValue,
-          visible: true
+          visible: true,
+          // Names the effective value to restore rather than the markup to edit,
+          // because the same effective value can be reached several ways - through a
+          // style, a document default, or direct properties - and which route to take
+          // is the author's call, not this module's.
+          remediation: beforeValue === null
+            ? `Remove the ${name} formatting from paragraph ${index} of ${part}; it was not set before.`
+            : afterValue === null
+              ? `Restore ${name} to "${beforeValue}" on paragraph ${index} of ${part}, by whichever route suits - a style, a document default, or direct formatting.`
+              : `Change the effective ${name} on paragraph ${index} of ${part} from "${afterValue}" back to "${beforeValue}".`
         });
       }
     }
@@ -312,11 +338,17 @@ export const diffPackages = (before: PackageParts, after: PackageParts): DiffRes
 
   for (const path of [...allPaths].sort()) {
     if (!(path in after)) {
-      records.push({ kind: 'part-removed', part: path, location: path, before: path, after: null, visible: true });
+      records.push({
+        kind: 'part-removed', part: path, location: path, before: path, after: null, visible: true,
+        remediation: `Add the part ${path} back, along with its content-type declaration and any relationship that referenced it.`
+      });
       continue;
     }
     if (!(path in before)) {
-      records.push({ kind: 'part-added', part: path, location: path, before: null, after: path, visible: true });
+      records.push({
+        kind: 'part-added', part: path, location: path, before: null, after: path, visible: true,
+        remediation: `Remove the part ${path}, together with its content-type declaration and any relationship pointing at it.`
+      });
       continue;
     }
     if (!bodyPartPattern.test(path)) continue;
@@ -340,13 +372,15 @@ export const diffPackages = (before: PackageParts, after: PackageParts): DiffRes
     for (const group of groupAtoms(deleted)) {
       records.push({
         kind: 'content-deleted', part: path, location: `paragraph[${group.paragraph}]`,
-        before: group.text, after: null, visible: true
+        before: group.text, after: null, visible: true,
+        remediation: `Re-insert the text "${group.text}" in paragraph ${group.paragraph} of ${path}.`
       });
     }
     for (const group of groupAtoms(inserted)) {
       records.push({
         kind: 'content-inserted', part: path, location: `paragraph[${group.paragraph}]`,
-        before: null, after: group.text, visible: true
+        before: null, after: group.text, visible: true,
+        remediation: `Remove the text "${group.text}" from paragraph ${group.paragraph} of ${path}.`
       });
     }
 
@@ -358,6 +392,7 @@ export const diffPackages = (before: PackageParts, after: PackageParts): DiffRes
   for (const entry of normalized) merged.set(entry.rule, (merged.get(entry.rule) ?? 0) + entry.count);
 
   return {
+    equivalent: records.length === 0,
     records,
     parts,
     normalized: [...merged.entries()].map(([rule, count]) => ({ rule, count })),
@@ -372,16 +407,27 @@ export const diffPackages = (before: PackageParts, after: PackageParts): DiffRes
  * payload stays the source of truth and the two cannot drift apart.
  */
 export const explainDiff = (result: DiffResult): string[] => {
-  if (result.records.length === 0) {
-    return [
-      'No semantic differences found.',
-      ...(result.normalized.length > 0
-        ? [`(${result.normalized.map(n => `${n.count} × ${n.rule}`).join(', ')} were ignored as rendering-irrelevant.)`]
-        : [])
-    ];
+  if (result.equivalent) {
+    // The answer worth leading with. A textual diff can show thousands of changed
+    // bytes between two files Word treats identically, and someone staring at that
+    // diff needs to be told so plainly rather than left to infer it from an empty list.
+    const lines = ['These two files are SEMANTICALLY EQUIVALENT - Word will treat them identically.'];
+    if (result.normalized.length > 0) {
+      lines.push(
+        'They do differ textually, but only in ways that carry no meaning:',
+        ...result.normalized.map(n => `  ${n.count} × ${n.rule}`),
+        'A line-by-line diff will show these as changes. They are not.'
+      );
+    } else {
+      lines.push('No textual noise was filtered either - the parts compared are the same.');
+    }
+    if (result.unresolved.length > 0) {
+      lines.push('Not established (do not assert these):', ...result.unresolved.map(u => `  ${u}`));
+    }
+    return lines;
   }
 
-  const lines = [`${result.records.length} change(s) across ${result.parts.length} part(s):`];
+  const lines = [`${result.records.length} semantic change(s) across ${result.parts.length} part(s):`];
   for (const record of result.records) {
     const where = `${record.part} ${record.location}`;
     switch (record.kind) {
@@ -395,6 +441,8 @@ export const explainDiff = (result: DiffResult): string[] => {
   if (result.normalized.length > 0) {
     lines.push(`Ignored as rendering-irrelevant: ${result.normalized.map(n => `${n.count} × ${n.rule}`).join(', ')}.`);
   }
+  lines.push('', 'To make the second file match the first:');
+  for (const record of result.records) lines.push(`  · ${record.remediation}`);
   if (result.unresolved.length > 0) {
     lines.push('Not established (do not assert these):', ...result.unresolved.map(u => `  ${u}`));
   }
