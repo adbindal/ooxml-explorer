@@ -482,6 +482,25 @@ OpenXmlPowerTools `FormattingAssembler.cs` lines 2163–2192 encodes exactly thi
 
 ⚠️ **LibreOffice diverges from Word here** (`SwTextNode::AreListLevelIndentsApplicableImpl`): a paragraph style setting `w:ind` *suppresses* the list level's indent. Known interop bug class.
 
+## 8j. MS-OI29500 licensing — research brief (re-run this if the report was lost)
+
+A research pass was in flight when the session ran low on context. **If no findings appear below this heading, it was lost — re-run using this brief.** It is cheap to repeat and the question gates the highest-value asset in the project.
+
+### What to establish
+1. **The verbatim IPR notice** on an actual [MS-OI29500] document (landing page, DOCX or PDF) — Copyrights, Patents, No Trade Secrets, Reservation of Rights, Trademarks, Tools. **Quote it exactly.** Paraphrasing a licence is the failure mode to avoid; a summary of licence terms is worth less than a URL.
+2. **The scope of "in order to develop implementations of the technologies described in this documentation"** — the load-bearing phrase. Does Microsoft publish any clarification? Does it distinguish a tool that *implements* a format from one that *teaches* it? Report what the text says and what is genuinely ambiguous; do not resolve the ambiguity.
+3. **Distributing portions in an implementation vs. republishing a derived database.** The notice permits distributing portions "in your implementations ... or in your documentation as necessary to properly document the implementation". A RAG knowledge base is arguably a *derived database* rather than a quotation. Anything addressing bulk extraction or structured transformation?
+4. **Patents are a separate question from copyright.** Open Specification Promise vs Community Promise, which applies here, and where the per-document mapping is published. Answering one does not settle the other.
+5. **Precedent.** Do real projects ingest or systematically reference Open Specifications content — python-docx, docx4j, Apache POI (an ASF project with a formal IP review), LibreOffice, sheetjs? **How do they attribute it, and do they quote or only cite?** Report what is observable in their source or docs.
+6. **The route to certainty.** Microsoft publishes a contact path for licensing questions on these documents. Find the current one, plus any public forum or documented process for scope questions.
+7. **Fallbacks if the answer is no.** Citing clause numbers without reproducing content (a pointer, not a copy); linking the public page; deriving equivalent facts independently by testing real Office output. Say honestly how much value each preserves.
+
+### Why it matters
+[MS-OI29500] is **1,895 clause-keyed entries** of "the standard says X, Office does Y" — the only source of that knowledge. It has already proved decisive twice in this project: it settled the toggle-reset question (§8i) and the Excel `cellXfs` question (§8f), both cases where building faithfully from ECMA would have produced code that disagrees with Office **and passed review**.
+
+### Deliverable
+Verbatim terms → clearly permitted → genuinely ambiguous → precedent → route to certainty → fallbacks, ending with **three or four questions a lawyer can be sent as-is**. Those questions are the most reusable output even if everything else is thin.
+
 ## 9. Next actions
 
 1. ~~Research (Word, architecture, tooling, storage)~~ — done.
