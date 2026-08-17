@@ -182,14 +182,17 @@ describe('toggle properties', () => {
     }
   });
 
-  it('toggles OFF when two style layers both assert bold', () => {
-    // The classic surprise: bold from a paragraph style plus bold from a character
-    // style yields NOT bold, because toggles XOR across style types.
+  it('stays ON when two style layers both assert bold, because Word resets', () => {
+    // [MS-OI29500] §2.1.258 and §2.1.246: Word "resets the value of the toggle
+    // property to the value specified by the style", it does not toggle. A strict
+    // ECMA §17.7.3 XOR reading would give NOT bold here - that divergence is
+    // reported rather than silently chosen.
     const sheet = styles(`
       <w:style w:type="paragraph" w:styleId="P"><w:rPr><w:b/></w:rPr></w:style>
       <w:style w:type="character" w:styleId="C"><w:rPr><w:b/></w:rPr></w:style>`);
     const resolved = resolveRunProperties(sheet, { paragraphStyleId: 'P', characterStyleId: 'C' });
-    expect(resolved.isOn('b')).toBe(false);
+    expect(resolved.isOn('b')).toBe(true);
+    expect(resolved.properties.get('b')!.divergence).toContain('XOR');
   });
 
   it('does NOT toggle for direct formatting, which is absolute', () => {
@@ -217,20 +220,22 @@ describe('toggle properties', () => {
     expect(resolveRunProperties(sheet, { directRPr: frag('<w:rPr><w:b w:val="false"/></w:rPr>') }).isOn('b')).toBe(false);
   });
 
-  it('flags the one case where the spec and Word\'s reference implementation disagree', () => {
-    // A style turning bold off over an inherited bold. Rather than silently picking
-    // a winner, the resolver marks the result uncertain.
+  it('turns bold OFF when a style sets it off over an inherited on', () => {
+    // Word resets to the style's value. The previously-shipped code marked this
+    // uncertain; it is documented behaviour, so it is now asserted.
     const sheet = styles(`
       <w:style w:type="paragraph" w:styleId="P"><w:rPr><w:b/></w:rPr></w:style>
       <w:style w:type="character" w:styleId="C"><w:rPr><w:b w:val="0"/></w:rPr></w:style>`);
     const resolved = resolveRunProperties(sheet, { paragraphStyleId: 'P', characterStyleId: 'C' });
-    expect(resolved.properties.get('b')!.uncertain).toBe(true);
+    expect(resolved.isOn('b')).toBe(false);
+    // A strict XOR reading would leave it on, so the divergence is reported.
+    expect(resolved.properties.get('b')!.divergence).toContain('XOR');
   });
 
-  it('does not flag uncertainty when nothing was inherited', () => {
+  it('reports no divergence where Word and the standard agree', () => {
     const sheet = styles(`<w:style w:type="character" w:styleId="C"><w:rPr><w:b w:val="0"/></w:rPr></w:style>`);
     const resolved = resolveRunProperties(sheet, { characterStyleId: 'C' });
-    expect(resolved.properties.get('b')!.uncertain).toBeUndefined();
+    expect(resolved.properties.get('b')!.divergence).toBeUndefined();
   });
 });
 
@@ -334,11 +339,11 @@ describe('explanation output', () => {
     expect(lines.join('\n')).toContain('sz = 32 (from style:Heading1)');
   });
 
-  it('surfaces the uncertainty marker in prose', () => {
+  it('surfaces the divergence in prose', () => {
     const sheet = styles(`
       <w:style w:type="paragraph" w:styleId="P"><w:rPr><w:b/></w:rPr></w:style>
       <w:style w:type="character" w:styleId="C"><w:rPr><w:b w:val="0"/></w:rPr></w:style>`);
     const lines = explainResolution(resolveRunProperties(sheet, { paragraphStyleId: 'P', characterStyleId: 'C' }));
-    expect(lines.join('\n')).toContain('uncertain');
+    expect(lines.join('\n')).toContain('XOR');
   });
 });

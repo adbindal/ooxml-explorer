@@ -116,14 +116,14 @@ export interface ResolvedProperty {
   /** Human-readable origin, e.g. `docDefaults`, `style:Heading1`, `direct`. */
   source: string;
   /**
-   * True when the effective value depends on the disputed toggle rule.
+   * Set when Word's behaviour and a strict reading of the standard disagree.
    *
-   * The specification's prose and Microsoft's own OpenXmlPowerTools implementation
-   * disagree for exactly one combination (a style setting the property off over an
-   * inherited on). Rather than silently picking a winner, the resolver flags it — a
-   * caller can then say the value is uncertain instead of asserting it.
+   * Not an uncertainty — the value reported is what Word does, which [MS-OI29500]
+   * states plainly. This records that a strictly conformant consumer would render the
+   * same markup differently, which is exactly the kind of thing someone porting OOXML
+   * to another renderer needs to know.
    */
-  uncertain?: boolean;
+  divergence?: string;
 }
 
 export interface ResolutionTrace {
@@ -285,30 +285,46 @@ const applyLayers = (layers: LayerInput[]): { properties: Map<string, ResolvedPr
         const incomingOn = toggleIsOn(element);
         const previouslyOn = previous ? previous.element !== null : false;
 
-        let effectiveOn: boolean;
-        let uncertain = false;
+        // Word RESETS a toggle to the value the level specifies; it does not toggle.
+        // [MS-OI29500] says so twice, naming the standard's rule and rejecting it:
+        //
+        //   §2.1.258 (Part 1 §17.7.8, Paragraph Styles) and §2.1.246 (§17.7.6, Table
+        //   Styles), both: "The standard specifies that the resolved value of the
+        //   toggle properties will toggle the previous level (True) or leave it
+        //   unchanged (False) ... Word resets the value of the toggle property to the
+        //   value specified by the [paragraph|table] style if a value is present."
+        //
+        // So a style layer behaves exactly like direct formatting here, which is why
+        // this branch no longer distinguishes them.
+        //
+        // Caveat worth keeping: those two notes cover paragraph and table styles.
+        // [MS-OI29500] has no equivalent note for character styles, so applying the
+        // same rule there is inference from the pattern rather than a quoted
+        // statement.
+        const effectiveOn = incomingOn;
 
-        if (!layer.isStyleLayer) {
-          // Direct formatting states an absolute value; no toggling.
-          effectiveOn = incomingOn;
-        } else if (incomingOn) {
-          // A style asserting the property toggles the inherited state.
-          effectiveOn = !previouslyOn;
-        } else {
-          // A style setting it off over an inherited on. The specification's prose
-          // ("setting it to false shall result in the current setting remaining
-          // unchanged") and Microsoft's OpenXmlPowerTools implementation disagree
-          // here. Flag rather than pick, so a caller can report the uncertainty.
-          effectiveOn = false;
-          uncertain = previouslyOn;
-        }
+        // Strict ECMA-376 §17.7.3 instead combines levels with XOR:
+        //   value_effective = val_table XOR val_paragraph XOR val_character
+        // Where that disagrees with Word, report it as a *divergence* rather than as
+        // uncertainty. Which value Word produces is documented and not in doubt; what
+        // is worth telling a reader is that a strictly conformant consumer would
+        // render this differently.
+        const strictEcmaOn = layer.isStyleLayer
+          ? (incomingOn ? !previouslyOn : previouslyOn)
+          : incomingOn;
 
         properties.set(name, {
           name,
           element: effectiveOn ? element : null,
           value: effectiveOn ? valOf(element) : null,
           source: layer.label,
-          ...(uncertain ? { uncertain: true } : {})
+          ...(strictEcmaOn !== effectiveOn
+            ? {
+                divergence:
+                  `Word applies ${effectiveOn ? 'on' : 'off'} here; a strictly conformant consumer ` +
+                  `following ECMA-376 §17.7.3's XOR rule would apply ${strictEcmaOn ? 'on' : 'off'}`
+              }
+            : {})
         });
         contributed.push(name);
         continue;
@@ -485,7 +501,7 @@ export const explainResolution = (resolved: ResolvedFormatting): string[] => {
       : property.value === null ? 'applied' : property.value;
     lines.push(
       `${property.name} = ${state} (from ${property.source})` +
-      (property.uncertain ? ' [uncertain: the specification and Word\'s reference implementation disagree for this case]' : '')
+      (property.divergence ? ` [${property.divergence}]` : '')
     );
   }
   return lines;
