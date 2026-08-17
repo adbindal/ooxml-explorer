@@ -69,7 +69,10 @@ export const explainElement = async (
     namespace = parts[0];
     tagNameOnly = parts[1];
   } else {
-    namespace = fileType === 'docx' ? 'w' : fileType === 'xlsx' ? 'r' : 'p';
+    // Canonical prefixes, matching the corpus. Note xlsx is 'x' - SpreadsheetML's
+    // main namespace. It was previously 'r', the *relationships* namespace, which
+    // made every unprefixed spreadsheet tag miss its record.
+    namespace = fileType === 'docx' ? 'w' : fileType === 'xlsx' ? 'x' : 'p';
   }
 
   // Retrieve RAG context. The curated database only covers a small subset of

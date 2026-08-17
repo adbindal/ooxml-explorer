@@ -1,5 +1,5 @@
 import { KNOWLEDGE_BASE, ReferenceDoc } from './staticKnowledgeBase';
-import { querySchemaFromStorage, searchSchemasInStorage } from './storageService';
+import { querySchemaFromStorage, searchSchemasInStorage, selectBestMatch } from './storageService';
 
 /**
  * Looks a tag up in the bundled fallback knowledge base.
@@ -9,14 +9,16 @@ import { querySchemaFromStorage, searchSchemasInStorage } from './storageService
  * a failed fetch). Without this, the common tags would come back ungrounded in exactly
  * the offline situations the app is meant to handle - and under DLP mode, where no
  * network call is permitted, that is the situation.
+ *
+ * Uses the same selection rule as the IndexedDB path so an offline user and an online
+ * user cannot get different answers for the same element.
  */
 const queryStaticKnowledgeBase = (
   tag: string,
-  domain: 'docx' | 'xlsx' | 'pptx'
+  domain: 'docx' | 'xlsx' | 'pptx',
+  namespace?: string
 ): ReferenceDoc | null =>
-  KNOWLEDGE_BASE.find(
-    doc => doc.tag === tag && (doc.domain === domain || doc.domain === 'shared')
-  ) ?? null;
+  selectBestMatch(KNOWLEDGE_BASE.filter(doc => doc.tag === tag), domain, namespace);
 
 /**
  * Uses the local Gemini Nano model (if available) to extract 1-2 search keywords
@@ -89,14 +91,17 @@ export const getRagContext = async (
   // Storage access is wrapped because IndexedDB can be unavailable rather than merely
   // empty; letting that reject would fail the whole explanation instead of degrading
   // to the offline knowledge base.
+  // The namespace prefix is part of the identity, not decoration: 103 tags in the
+  // corpus exist under more than one namespace, so <a:bottom> in a .docx must not
+  // resolve to <w:bottom>.
   let match: ReferenceDoc | null = null;
   try {
-    match = await querySchemaFromStorage(cleanTagName, context.fileType);
+    match = await querySchemaFromStorage(cleanTagName, context.fileType, context.namespace);
   } catch (e) {
     console.warn('[RAG Router] IndexedDB lookup failed; using bundled knowledge base:', e);
   }
   if (!match) {
-    match = queryStaticKnowledgeBase(cleanTagName, context.fileType);
+    match = queryStaticKnowledgeBase(cleanTagName, context.fileType, context.namespace);
   }
 
   // 3. Fallback: If not found and looks like a natural language query, run LLM keyword search
