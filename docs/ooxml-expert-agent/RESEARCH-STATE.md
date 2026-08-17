@@ -1,6 +1,6 @@
 # OOXML Expert Agent — Research State & Resume Point
 
-**Status:** research complete; build plan published; **Stages 0, 1 and 2 all complete — Word, Excel and PowerPoint** (see §8b).
+**Status:** Stages 0–2 complete (Word, Excel, PowerPoint); structured semantic diff shipped; **toggle conflict fixed, numbering conflict settled but NOT yet fixed — see §8i** (see §8b).
 **Last updated:** 2026-08-17
 **Purpose:** durable record so this work can resume after a session ends. If you are picking this up cold, read this file top to bottom before doing anything else.
 
@@ -441,6 +441,46 @@ All three reach the **Verified** tier through one table in `AIPanel`, keyed on *
 **This is the precondition for the embeddings decision, not a step toward it.** Embeddings, vector DB, re-ranking and fine-tuning were all *ruled out* in Parts 1–2 with reasons — they are not pending work. The only genuinely open retrieval item is that the NL fallback still takes the **first substring hit with no ranking**, and the evidence-backed fix is **BM25** (pure JS, works under DLP), not embeddings. Task #21.
 
 Counts only, never query text — a search log is precisely what DLP mode exists to prevent.
+
+## 8i. Both Word conflicts SETTLED (2026-08-18) — and my premises were wrong
+
+Research found both answers already documented. **Prefer [MS-OI29500] over ECMA prose without hesitation** — it is Microsoft's normative statement of what Word does, and on both questions it is corroborated by independent code.
+
+### Toggles — Word RESETS, it does not toggle. ✅ FIXED (`services/wordStyleResolver.ts`)
+
+[MS-OI29500] **§2.1.258** (Part 1 §17.7.8, Paragraph Styles) and **§2.1.246** (§17.7.6, Table Styles), identical wording: *"The standard specifies that the resolved value of the toggle properties will toggle the previous level (True) or leave it unchanged (False) ... Word resets the value of the toggle property to the value specified by the [paragraph|table] style if a value is present."*
+
+**Three premises I had wrong:**
+1. The ECMA sentence I cited is from the **withdrawn 2006 1st edition** — removed in the 5th. The current rule is XOR in **§17.7.3**, not the per-element prose.
+2. **OpenXmlPowerTools is not a model of Word.** It matches neither — differs from the spec in one cell and from Word in a *different* one.
+3. So the code was **uncertain about the cell it got right and confident about the cell it got wrong**.
+
+| higher | lower | ECMA XOR | **Word (reset)** | OXPT |
+|---|---|---|---|---|
+| T | F | T | **T** | T |
+| F | T | T | **F** | F |
+| T | T | F | **T** | F ← old code was here, wrong |
+| F | F | F | **F** | F |
+
+Now reports a **divergence** ("Word applies on; a strictly conformant consumer would apply off") rather than an uncertainty. ⚠️ Caveat: reset notes cover paragraph and table styles only — no equivalent note for **character** styles, so applying it there is inference.
+
+### Numbering — conditional on provenance. 🔴 NOT YET FIXED
+
+[MS-OI29500] **§2.1.229** (Part 1 §17.7.2, Style Hierarchy): *"Word applies the properties from a paragraph style applied to a paragraph before it applies the properties from a numbering style applied to a paragraph **via numbering properties**."*
+
+That qualifier is load-bearing:
+- Numbering via **`w:numPr` on the paragraph** → **numbering wins** (apply AFTER the style chain)
+- Numbering via the **paragraph style** → **paragraph style wins** (current ECMA order is correct)
+
+OpenXmlPowerTools `FormattingAssembler.cs` lines 2163–2192 encodes exactly this conditional (`lii.FromParagraph` vs `lii.FromStyle`), which is strong corroboration.
+
+**My §17.9.22 citation was misattributed** — that clause only says direct formatting beats numbering, which both readings already agree on.
+
+**ECMA contradicts itself:** §17.7.2's prose puts numbering at layer 3, but the **figure on the same page** orders it Document Defaults → Table → **Paragraph → Numbering** → Character → Direct. Verified by coordinate extraction *and* by rasterising the page. The figure sides with Word, and the contradiction has been there since 2006.
+
+**TO FIX:** `ParagraphResolutionInput` must carry numbering provenance; when direct, push numbering after the style chain. `wordFormattingAnalysis` already computes provenance (it falls back to the style only when `pPr` has no `numPr`) — it just needs threading through. Also worth adding: restrict numbering-level `pPr` to `jc`/`ind`/`tabs` per §17.9.22(b), and drop style-hierarchy `w:ind` when `numId` is 0.
+
+⚠️ **LibreOffice diverges from Word here** (`SwTextNode::AreListLevelIndentsApplicableImpl`): a paragraph style setting `w:ind` *suppresses* the list level's indent. Known interop bug class.
 
 ## 9. Next actions
 
