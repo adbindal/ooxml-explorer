@@ -1,6 +1,6 @@
 # OOXML Expert Agent — Research State & Resume Point
 
-**Status:** research complete; build plan published; **Stages 0 and 1 complete; Stage 2 complete for Word and Excel** (see §8b).
+**Status:** research complete; build plan published; **Stages 0, 1 and 2 all complete — Word, Excel and PowerPoint** (see §8b).
 **Last updated:** 2026-08-17
 **Purpose:** durable record so this work can resume after a session ends. If you are picking this up cold, read this file top to bottom before doing anything else.
 
@@ -419,6 +419,28 @@ Value interpretation is where most of the care went, because it is easier to get
 - Shared-string runs are concatenated — same run-splitting problem as Word's `w:r`.
 - A date is a number *plus a date-shaped format*; nothing in the cell says so.
 - A formula with no cached `<v>` is flagged; libraries write these routinely and the cell renders blank everywhere except Excel.
+
+## 8g. Stage 2 COMPLETE — all three formats (2026-08-18)
+
+| Format | Resolver | Composition | Commits |
+|---|---|---|---|
+| Word | `wordStyleResolver` + `wordNumbering` + `wordTableStyles` | `wordFormattingAnalysis` | `e8aa678`, `ab6d091`, `a42c4d1`, `641434d` |
+| Excel | `excelStyleResolver` | `excelFormattingAnalysis` | `5874a3c`, `ad0abb0` |
+| PowerPoint | `powerpointResolver` | `powerpointFormattingAnalysis` | `962cc01`, `1717bb3` |
+
+All three reach the **Verified** tier through one table in `AIPanel`, keyed on *which part is open* rather than file extension. Word covers every story — document, headers, footers, footnotes, endnotes, comments — but deliberately **not** sub-folders: `word/glossary/document.xml` has its own `styles.xml`, and resolving it against the main one would report formatting Word never applies.
+
+**PowerPoint's structural difference:** the whole inheritance chain is implicit relationships. Nothing in `slide1.xml` points at its layout. `resolveSlideChain` walks slide → layout → master → theme and names whichever hop broke — the failure that otherwise renders with defaults and no error.
+
+**Three bugs caught by tests during PPTX work**, each a case where the code looked right: geometry reported `master` without checking the master carried a transform; the empty-element normalizer collapsed the wrong tag pair (`<p:spPr/></p:sp>` → name `p:sp` + `Pr/`); and the shape was located in one parsed DOM while the chain re-parsed the slide independently, so identity comparison always failed and every shape read as "not a placeholder".
+
+## 8h. Retrieval — measured, not guessed (2026-08-18)
+
+`services/retrievalMetrics.ts` (`b839eb9`) counts which of six paths answered each lookup, surfaced in the Validator.
+
+**This is the precondition for the embeddings decision, not a step toward it.** Embeddings, vector DB, re-ranking and fine-tuning were all *ruled out* in Parts 1–2 with reasons — they are not pending work. The only genuinely open retrieval item is that the NL fallback still takes the **first substring hit with no ranking**, and the evidence-backed fix is **BM25** (pure JS, works under DLP), not embeddings. Task #21.
+
+Counts only, never query text — a search log is precisely what DLP mode exists to prevent.
 
 ## 9. Next actions
 
