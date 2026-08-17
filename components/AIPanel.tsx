@@ -38,7 +38,14 @@ import MarkdownContent from './MarkdownContent';
  */
 const ANALYSIS_TARGETS = [
   {
-    matches: (path: string) => path.endsWith('word/document.xml'),
+    // Every Word story, not just the main document. A paragraph in a header or a
+    // footnote resolves against the same styles.xml and numbering.xml, so limiting
+    // this to document.xml showed Unverified for markup the app resolves completely.
+    // Sub-folders are excluded deliberately: word/glossary/document.xml has its own
+    // stylesheet, and resolving it against the main one would report formatting Word
+    // never applies.
+    matches: (path: string) =>
+      /^word\/(?:document\d*|header[^/]*|footer[^/]*|footnotes\d*|endnotes\d*|comments\d*)\.xml$/.test(path),
     siblings: ['word/styles.xml', 'word/numbering.xml'],
     compute: computeEvidenceForMarkup
   },

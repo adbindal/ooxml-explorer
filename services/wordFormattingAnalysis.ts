@@ -43,11 +43,50 @@ const STYLES_PART = 'word/styles.xml';
 const NUMBERING_PART = 'word/numbering.xml';
 const DOCUMENT_PART = 'word/document.xml';
 
+/**
+ * Matches the parts of a `.docx` that carry `w:p` content.
+ *
+ * Body text is only one of several stories in a Word file: headers, footers, footnotes,
+ * endnotes and comments are sibling parts holding paragraphs of their own. All of them
+ * resolve against the *same* `word/styles.xml` and `word/numbering.xml`, so nothing
+ * about the cascade changes — but a part that is never loaded can never be searched,
+ * and a selection inside one silently produces no evidence at all.
+ *
+ * Matched by shape rather than by a fixed list of names. The `header1.xml` numbering is
+ * only a producer convention; the part name a relationship actually points at is free
+ * to be anything, and a file that uses an unusual but legal name should still resolve
+ * rather than fall back to guesswork.
+ *
+ * Two deliberate exclusions. Sub-folders (`word/glossary/document.xml`) are left out
+ * because a glossary document has its *own* `word/glossary/styles.xml`, so resolving it
+ * against the main stylesheet would report formatting Word never applies. And the
+ * `comments` family is held to a digits-only suffix so that the w15/w16 side-cars —
+ * `commentsExtended.xml`, `commentsIds.xml` — stay out; they carry no paragraphs and
+ * would only add parse cost.
+ */
+const BODY_PART_PATTERN =
+  /^word\/(?:document\d*|header[^/]*|footer[^/]*|footnotes\d*|endnotes\d*|comments\d*)\.xml$/;
+
+/** A story within the document, with markup compatibility already resolved. */
+export interface WordBodyPart {
+  /** The part path as it appears in the package, e.g. `word/header1.xml`. */
+  path: string;
+  document: Document;
+}
+
 export interface WordDocumentContext {
   styles: StyleSheet;
   numbering: NumberingDefinitions | null;
-  /** `word/document.xml`, with markup compatibility already resolved. */
+  /**
+   * `word/document.xml` specifically, kept for callers that mean the main story.
+   * Null when the package has no such part, even if other body parts loaded.
+   */
   document: Document | null;
+  /**
+   * Every body part that parsed, `word/document.xml` first and the rest in path order.
+   * Ordering is fixed so that anything indexing into it is stable across runs.
+   */
+  bodyParts: WordBodyPart[];
   /** Parts that were expected but absent, so a caller can say what it could not use. */
   unresolved: string[];
 }
@@ -77,22 +116,39 @@ export const loadWordContext = (parts: PackageParts): WordDocumentContext => {
     unresolved.push(`${NUMBERING_PART} is not in the package; list formatting cannot be resolved`);
   }
 
-  const documentXml = parts[DOCUMENT_PART];
-  let document: Document | null = null;
-  if (documentXml === undefined) {
-    unresolved.push(`${DOCUMENT_PART} is not in the package`);
-  } else {
-    const parsed = new DOMParser().parseFromString(documentXml, 'application/xml');
+  const bodyPaths = Object.keys(parts)
+    .filter(path => BODY_PART_PATTERN.test(path))
+    .sort((a, b) => (a === DOCUMENT_PART ? -1 : b === DOCUMENT_PART ? 1 : a.localeCompare(b)));
+
+  const bodyParts: WordBodyPart[] = [];
+  for (const path of bodyPaths) {
+    const parsed = new DOMParser().parseFromString(parts[path], 'application/xml');
     if (parsed.getElementsByTagName('parsererror').length > 0) {
-      unresolved.push(`${DOCUMENT_PART} is not well-formed XML`);
-    } else {
-      // Resolve mc:AlternateContent before anything walks the tree, or a shape
-      // written twice is counted twice. See ./markupCompatibility.
-      document = resolveAlternateContent(parsed, MODERN_CONSUMER_NAMESPACES).document;
+      // A malformed header is not fatal to the rest of the analysis, but it must be
+      // reported: it caps the tier below Verified rather than letting an answer rest on
+      // a story that was quietly skipped.
+      unresolved.push(`${path} is not well-formed XML`);
+      continue;
     }
+    // Resolve mc:AlternateContent before anything walks the tree, or a shape
+    // written twice is counted twice. Applies to every story, not just the body —
+    // a text box in a header is written exactly the same way. See ./markupCompatibility.
+    bodyParts.push({ path, document: resolveAlternateContent(parsed, MODERN_CONSUMER_NAMESPACES).document });
   }
 
-  return { styles, numbering, document, unresolved };
+  // Only a total absence of stories is worth reporting. A missing `document.xml` on its
+  // own is not: a header paragraph resolves against `styles.xml` and `numbering.xml`
+  // alone, so noting the body part it never consulted would cap a fully computed answer
+  // below Verified for a gap that had no bearing on it.
+  if (bodyParts.length === 0) {
+    unresolved.push(
+      `${DOCUMENT_PART} is not in the package, and neither is any header, footer or notes part; there is no paragraph content to resolve`
+    );
+  }
+
+  const document = bodyParts.find(part => part.path === DOCUMENT_PART)?.document ?? null;
+
+  return { styles, numbering, document, bodyParts, unresolved };
 };
 
 const childOf = (parent: Element | null | undefined, localName: string): Element | null => {
@@ -255,6 +311,12 @@ export const analyzeParagraphFormatting = (
     : null;
 
   const explanation: string[] = [];
+  // Which story the paragraph belongs to is part of the answer, not decoration: the
+  // same style renders differently in a header (different section, different defaults
+  // in the reader's head), and a reader told only "sz = 32" cannot tell whether the
+  // analysis looked at the paragraph they had selected.
+  const ownerPart = context.bodyParts.find(part => part.document === paragraph.ownerDocument);
+  if (ownerPart) explanation.push(`Paragraph is in ${ownerPart.path}.`);
   if (position) {
     explanation.push(
       `Paragraph is in a table at row ${position.row + 1} of ${position.rowCount}, column ${position.col + 1} of ${position.colCount}.`,
@@ -290,7 +352,16 @@ export const analyzeParagraphFormatting = (
 };
 
 /**
- * Convenience entry point: analyze the nth paragraph of a loaded package.
+ * Convenience entry point: analyze the nth paragraph of `word/document.xml`.
+ *
+ * **Deliberately the main story only**, even though the context now holds headers,
+ * footers and notes. An index is only meaningful over a sequence a caller can see, and
+ * there is no such thing as "the 4th paragraph of the document" once five stories are
+ * concatenated in an order the file itself does not define — the number would silently
+ * mean something different as soon as a header were added. Callers that need a
+ * paragraph in another part locate it by markup (`locateParagraphByMarkup`) or walk
+ * `context.bodyParts` themselves and call `analyzeParagraphFormatting` directly, which
+ * resolves any story's paragraph exactly the same way.
  *
  * Paragraph order is document order after markup-compatibility resolution, so the
  * index is stable against the same input.
@@ -327,39 +398,70 @@ const normalizeMarkup = (xml: string): string =>
     .replace(/\s+/g, ' ')
     .trim();
 
+export interface LocatedParagraph {
+  paragraph: Element;
+  run?: Element;
+  /**
+   * The body part the paragraph was found in. Null when a bare `Document` was searched,
+   * because then there is no package to name the part from — reported as null rather
+   * than defaulted to `word/document.xml`, which would be a guess presented as fact.
+   */
+  part: string | null;
+}
+
 /**
  * Finds the paragraph a snippet of markup belongs to, and the run inside it if the
  * snippet is one.
+ *
+ * Searches every loaded body part, not just the body: a header paragraph is as
+ * selectable as any other, and searching only `document.xml` means the caller sees
+ * "Unverified" for markup that was fully resolvable.
  *
  * Returns null unless the match is **unambiguous**. A document routinely contains many
  * identical paragraphs — empty ones especially — and resolving the formatting of the
  * wrong one would produce a confidently wrong answer under a "Verified" badge. Refusing
  * to guess costs a fallback to the ordinary explanation; guessing costs correctness.
+ * Ambiguity is counted across parts, not within one: the same empty paragraph in
+ * `document.xml` and in `header1.xml` is exactly as unresolvable as two of them in the
+ * body, and widening the search would otherwise quietly turn refusals into coin flips.
+ *
+ * Accepts a whole context (all stories) or a single `Document` for callers that already
+ * hold one.
  */
 export const locateParagraphByMarkup = (
-  doc: Document,
+  source: Document | WordDocumentContext,
   rawXml: string
-): { paragraph: Element; run?: Element } | null => {
+): LocatedParagraph | null => {
   const needle = normalizeMarkup(rawXml);
   if (needle === '') return null;
 
-  const paragraphs = Array.from(doc.getElementsByTagNameNS(W_NAMESPACE, 'p'));
+  const stories: { path: string | null; document: Document }[] =
+    'bodyParts' in source ? source.bodyParts : [{ path: null, document: source }];
+
   const serialize = (el: Element) => normalizeMarkup(new XMLSerializer().serializeToString(el));
+  const candidates = stories.flatMap(story =>
+    Array.from(story.document.getElementsByTagNameNS(W_NAMESPACE, 'p')).map(paragraph => ({
+      part: story.path,
+      paragraph,
+      markup: serialize(paragraph)
+    }))
+  );
 
   // The snippet may itself be a paragraph.
-  const exact = paragraphs.filter(p => serialize(p) === needle);
-  if (exact.length === 1) return { paragraph: exact[0] };
+  const exact = candidates.filter(c => c.markup === needle);
+  if (exact.length === 1) return { paragraph: exact[0].paragraph, part: exact[0].part };
   if (exact.length > 1) return null;
 
-  const containing = paragraphs.filter(p => serialize(p).includes(needle));
+  const containing = candidates.filter(c => c.markup.includes(needle));
   if (containing.length !== 1) return null;
 
-  const paragraph = containing[0];
+  const { paragraph, part } = containing[0];
   const runs = Array.from(paragraph.getElementsByTagNameNS(W_NAMESPACE, 'r'));
   const matchingRuns = runs.filter(r => serialize(r) === needle || serialize(r).includes(needle));
 
   return {
     paragraph,
+    part,
     // Only attach a run when it is unambiguous; otherwise resolve the paragraph alone.
     run: matchingRuns.length === 1 ? matchingRuns[0] : undefined
   };
@@ -369,6 +471,10 @@ export const locateParagraphByMarkup = (
  * One-call entry point for a UI: given the package parts and a snippet of markup,
  * produce evidence ready to hand to the AI layer.
  *
+ * The package may hold any mix of body parts — a header on its own is enough, since
+ * headers resolve against the same stylesheet as the body. What matters is that at
+ * least one story parsed; `document.xml` in particular is not required.
+ *
  * Returns null when nothing could be computed — a non-Word package, an unlocatable
  * snippet — so the caller falls back to its ordinary path rather than showing an empty
  * "Verified" answer.
@@ -376,13 +482,13 @@ export const locateParagraphByMarkup = (
 export const computeEvidenceForMarkup = (
   parts: PackageParts,
   rawXml: string
-): { lines: string[]; unresolved: string[] } | null => {
+): { lines: string[]; unresolved: string[]; part: string | null } | null => {
   const context = loadWordContext(parts);
-  if (!context.document) return null;
+  if (context.bodyParts.length === 0) return null;
 
-  const located = locateParagraphByMarkup(context.document, rawXml);
+  const located = locateParagraphByMarkup(context, rawXml);
   if (!located) return null;
 
   const analysis = analyzeParagraphFormatting(context, located.paragraph, located.run);
-  return { lines: analysis.explanation, unresolved: analysis.unresolved };
+  return { lines: analysis.explanation, unresolved: analysis.unresolved, part: located.part };
 };
