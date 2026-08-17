@@ -400,6 +400,20 @@ The chain now closes end to end: **selected element → cascade resolved over th
 
 **Still Word-only and `word/document.xml`-only.** Headers, footers and footnotes are not yet covered, and Excel/PowerPoint have no resolver, so those paths never reach `verified`.
 
+## 8f. Stage 2 — Excel resolver shipped (2026-08-17)
+
+`services/excelStyleResolver.ts` + 31 tests, commit `5874a3c`.
+
+**Built to what Excel does, not what the spec says.** The trace states on every resolution that `xfId` is provenance and is *not* merged in, so nobody "fixes" it back toward the standard later.
+
+- **Fallback chain, never a merge:** `c/@s` → `row/@s` (only when `customFormat="1"`) → `col/@style` (only for unallocated cells) → `cellXfs[0]`. Whichever wins supplies the whole format.
+- **`apply*` flags ignored for rendering**, with a note explaining they are edit-time propagation bits with asymmetric defaults that exist only in the Microsoft document.
+- **`numFmts` keyed by explicit `numFmtId`**, unlike every other component table, which is positional.
+- **Built-in format table carries both readings** where Excel and the standard disagree (14, 22, 37–40, 47). Excel's is reported by default.
+- **All three date epochs**, including the 1900 compatibility system's phantom day. Existence is provable from the standard's own arithmetic; identity is never stated in ECMA-376, so the code does not claim one.
+
+⚠️ **Not yet wired to the UI.** No composition layer equivalent to `wordFormattingAnalysis.ts` exists for Excel, so `.xlsx` never reaches the Verified tier. That is the next hop, and it is the same shape as the Word one.
+
 ## 9. Next actions
 
 1. ~~Research (Word, architecture, tooling, storage)~~ — done.
@@ -411,7 +425,7 @@ The chain now closes end to end: **selected element → cascade resolved over th
 7. ~~Stage 1b — MCE preprocessing~~ — done, `2ad039f`. **Stage 1 complete.**
 8. ~~Stage 2 — Word~~ — done, see §8d.
 9. **Extend Verified coverage in Word** — headers, footers, footnotes and endnotes each have their own part and their own `.rels`; the panel currently only computes for `word/document.xml`.
-10. **Stage 2 — Excel resolver.** ⚠️ Do NOT build the cascade the spec describes: MS-OI29500 §2.1.699/700 say *only* the `cellXfs` record defines a cell's formatting. `xfId` is provenance, not inheritance. `apply*` flags are edit-time propagation bits, not render gates. Precedence is fallback-to-a-single-index: `c/@s` → `row/@s` (only if `customFormat="1"`) → `col/@style` (only for unallocated cells) → `cellXfs[0]`. The only true overlay layer is `dxf`.
+10. ~~Stage 2 — Excel resolver~~ — done, see §8f. **Next: the Excel composition layer**, mirroring `wordFormattingAnalysis.ts`, so `.xlsx` can reach the Verified tier. Needs `xl/styles.xml`, `xl/workbook.xml` (for the date system) and the sheet part; the `sharedStrings` hop matters for reading values but not for formatting.
 11. **Stage 2 — PowerPoint resolver.** Placeholder match on `@idx` (slide→layout) and `@type` (notesSlide→notesMaster); layout→master matching is **undocumented**. `clrMap`/`clrMapOvr` with three disjoint colour alphabets. `a:xfrm` absent = inherit, never zero. Group transform `sx = ext.cx / chExt.cx`.
 12. Decide: which format goes next (Word done) (recommend sequencing, not parallelising — resolvers are genuinely different per format).
 13. Decide: MS-OI29500 licensing — ask or not. Gates Stage 3 only.
