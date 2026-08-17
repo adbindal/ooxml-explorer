@@ -1376,7 +1376,9 @@
     "namespace": "w",
     "domain": "docx",
     "attributes": [],
-    "parents": [],
+    "parents": [
+      "a:graphicData"
+    ],
     "sdkClass": "Comments",
     "provenance": "schema"
   },
@@ -2422,7 +2424,9 @@
     "attributes": [
       "w:conformance"
     ],
-    "parents": [],
+    "parents": [
+      "a:graphicData"
+    ],
     "sdkClass": "Document",
     "provenance": "curated",
     "definition": "Specifies the root element for the main document part of a WordprocessingML document. It contains the body element, which holds the primary document content such as paragraphs, tables, and sections.",
@@ -3229,7 +3233,9 @@
     "namespace": "w",
     "domain": "docx",
     "attributes": [],
-    "parents": [],
+    "parents": [
+      "a:graphicData"
+    ],
     "sdkClass": "Endnotes",
     "provenance": "schema"
   },
@@ -3426,7 +3432,9 @@
     "namespace": "w",
     "domain": "docx",
     "attributes": [],
-    "parents": [],
+    "parents": [
+      "a:graphicData"
+    ],
     "sdkClass": "Fonts",
     "provenance": "schema"
   },
@@ -3514,7 +3522,9 @@
     "namespace": "w",
     "domain": "docx",
     "attributes": [],
-    "parents": [],
+    "parents": [
+      "a:graphicData"
+    ],
     "sdkClass": "Footnotes",
     "provenance": "schema"
   },
@@ -3660,7 +3670,9 @@
     "namespace": "w",
     "domain": "docx",
     "attributes": [],
-    "parents": [],
+    "parents": [
+      "a:graphicData"
+    ],
     "sdkClass": "Footer",
     "provenance": "schema"
   },
@@ -3682,7 +3694,9 @@
     "namespace": "w",
     "domain": "docx",
     "attributes": [],
-    "parents": [],
+    "parents": [
+      "a:graphicData"
+    ],
     "sdkClass": "GlossaryDocument",
     "provenance": "schema"
   },
@@ -3793,7 +3807,9 @@
     "namespace": "w",
     "domain": "docx",
     "attributes": [],
-    "parents": [],
+    "parents": [
+      "a:graphicData"
+    ],
     "sdkClass": "Header",
     "provenance": "schema"
   },
@@ -5414,7 +5430,9 @@
     "namespace": "w",
     "domain": "docx",
     "attributes": [],
-    "parents": [],
+    "parents": [
+      "a:graphicData"
+    ],
     "sdkClass": "Numbering",
     "provenance": "schema"
   },
@@ -6342,7 +6360,9 @@
     "namespace": "w",
     "domain": "docx",
     "attributes": [],
-    "parents": [],
+    "parents": [
+      "a:graphicData"
+    ],
     "sdkClass": "Recipients",
     "provenance": "schema"
   },
@@ -6892,7 +6912,9 @@
     "namespace": "w",
     "domain": "docx",
     "attributes": [],
-    "parents": [],
+    "parents": [
+      "a:graphicData"
+    ],
     "sdkClass": "Settings",
     "provenance": "schema"
   },
@@ -7388,7 +7410,9 @@
     "namespace": "w",
     "domain": "docx",
     "attributes": [],
-    "parents": [],
+    "parents": [
+      "a:graphicData"
+    ],
     "sdkClass": "Styles",
     "provenance": "schema"
   },
@@ -8422,7 +8446,9 @@
     "namespace": "w",
     "domain": "docx",
     "attributes": [],
-    "parents": [],
+    "parents": [
+      "a:graphicData"
+    ],
     "sdkClass": "TextBoxContent",
     "provenance": "schema"
   },
@@ -8833,7 +8859,9 @@
     "namespace": "w",
     "domain": "docx",
     "attributes": [],
-    "parents": [],
+    "parents": [
+      "a:graphicData"
+    ],
     "sdkClass": "WebSettings",
     "provenance": "schema"
   },
@@ -8965,6 +8993,293 @@
       "w:settings"
     ],
     "sdkClass": "Zoom",
+    "provenance": "schema"
+  },
+  {
+    "tag": "align",
+    "namespace": "wp",
+    "domain": "docx",
+    "attributes": [],
+    "parents": [
+      "wp:positionH",
+      "wp:positionV"
+    ],
+    "sdkClass": "HorizontalAlignment",
+    "provenance": "schema"
+  },
+  {
+    "tag": "anchor",
+    "namespace": "wp",
+    "domain": "docx",
+    "attributes": [
+      ":allowOverlap",
+      ":behindDoc",
+      ":distB",
+      ":distL",
+      ":distR",
+      ":distT",
+      ":hidden",
+      ":layoutInCell",
+      ":locked",
+      ":relativeHeight",
+      ":simplePos",
+      "wp14:anchorId",
+      "wp14:editId"
+    ],
+    "parents": [
+      "a:graphicData",
+      "w:drawing"
+    ],
+    "sdkClass": "Anchor",
+    "provenance": "schema"
+  },
+  {
+    "tag": "cNvGraphicFramePr",
+    "namespace": "wp",
+    "domain": "docx",
+    "attributes": [],
+    "parents": [
+      "wp:anchor",
+      "wp:inline"
+    ],
+    "sdkClass": "NonVisualGraphicFrameDrawingProperties",
+    "provenance": "schema"
+  },
+  {
+    "tag": "docPr",
+    "namespace": "wp",
+    "domain": "docx",
+    "attributes": [
+      ":descr",
+      ":hidden",
+      ":id",
+      ":name",
+      ":title"
+    ],
+    "parents": [
+      "wp:anchor",
+      "wp:inline"
+    ],
+    "sdkClass": "DocProperties",
+    "provenance": "schema"
+  },
+  {
+    "tag": "effectExtent",
+    "namespace": "wp",
+    "domain": "docx",
+    "attributes": [
+      ":b",
+      ":l",
+      ":r",
+      ":t"
+    ],
+    "parents": [
+      "wp:anchor",
+      "wp:inline",
+      "wp:wrapSquare",
+      "wp:wrapTopAndBottom"
+    ],
+    "sdkClass": "EffectExtent",
+    "provenance": "schema"
+  },
+  {
+    "tag": "extent",
+    "namespace": "wp",
+    "domain": "docx",
+    "attributes": [
+      ":cx",
+      ":cy"
+    ],
+    "parents": [
+      "wp:anchor",
+      "wp:inline"
+    ],
+    "sdkClass": "Extent",
+    "provenance": "schema"
+  },
+  {
+    "tag": "inline",
+    "namespace": "wp",
+    "domain": "docx",
+    "attributes": [
+      ":distB",
+      ":distL",
+      ":distR",
+      ":distT",
+      "wp14:anchorId",
+      "wp14:editId"
+    ],
+    "parents": [
+      "a:graphicData",
+      "w:drawing"
+    ],
+    "sdkClass": "Inline",
+    "provenance": "schema"
+  },
+  {
+    "tag": "lineTo",
+    "namespace": "wp",
+    "domain": "docx",
+    "attributes": [
+      ":x",
+      ":y"
+    ],
+    "parents": [
+      "wp:wrapPolygon"
+    ],
+    "sdkClass": "LineTo",
+    "provenance": "schema"
+  },
+  {
+    "tag": "positionH",
+    "namespace": "wp",
+    "domain": "docx",
+    "attributes": [
+      ":relativeFrom"
+    ],
+    "parents": [
+      "wp:anchor"
+    ],
+    "sdkClass": "HorizontalPosition",
+    "provenance": "schema"
+  },
+  {
+    "tag": "positionV",
+    "namespace": "wp",
+    "domain": "docx",
+    "attributes": [
+      ":relativeFrom"
+    ],
+    "parents": [
+      "wp:anchor"
+    ],
+    "sdkClass": "VerticalPosition",
+    "provenance": "schema"
+  },
+  {
+    "tag": "posOffset",
+    "namespace": "wp",
+    "domain": "docx",
+    "attributes": [],
+    "parents": [
+      "wp:positionH",
+      "wp:positionV"
+    ],
+    "sdkClass": "PositionOffset",
+    "provenance": "schema"
+  },
+  {
+    "tag": "simplePos",
+    "namespace": "wp",
+    "domain": "docx",
+    "attributes": [
+      ":x",
+      ":y"
+    ],
+    "parents": [
+      "wp:anchor"
+    ],
+    "sdkClass": "SimplePosition",
+    "provenance": "schema"
+  },
+  {
+    "tag": "start",
+    "namespace": "wp",
+    "domain": "docx",
+    "attributes": [
+      ":x",
+      ":y"
+    ],
+    "parents": [
+      "wp:wrapPolygon"
+    ],
+    "sdkClass": "StartPoint",
+    "provenance": "schema"
+  },
+  {
+    "tag": "wrapNone",
+    "namespace": "wp",
+    "domain": "docx",
+    "attributes": [],
+    "parents": [
+      "wp:anchor"
+    ],
+    "sdkClass": "WrapNone",
+    "provenance": "schema"
+  },
+  {
+    "tag": "wrapPolygon",
+    "namespace": "wp",
+    "domain": "docx",
+    "attributes": [
+      ":edited"
+    ],
+    "parents": [
+      "wp:wrapThrough",
+      "wp:wrapTight"
+    ],
+    "sdkClass": "WrapPolygon",
+    "provenance": "schema"
+  },
+  {
+    "tag": "wrapSquare",
+    "namespace": "wp",
+    "domain": "docx",
+    "attributes": [
+      ":distB",
+      ":distL",
+      ":distR",
+      ":distT",
+      ":wrapText"
+    ],
+    "parents": [
+      "wp:anchor"
+    ],
+    "sdkClass": "WrapSquare",
+    "provenance": "schema"
+  },
+  {
+    "tag": "wrapThrough",
+    "namespace": "wp",
+    "domain": "docx",
+    "attributes": [
+      ":distL",
+      ":distR",
+      ":wrapText"
+    ],
+    "parents": [
+      "wp:anchor"
+    ],
+    "sdkClass": "WrapThrough",
+    "provenance": "schema"
+  },
+  {
+    "tag": "wrapTight",
+    "namespace": "wp",
+    "domain": "docx",
+    "attributes": [
+      ":distL",
+      ":distR",
+      ":wrapText"
+    ],
+    "parents": [
+      "wp:anchor"
+    ],
+    "sdkClass": "WrapTight",
+    "provenance": "schema"
+  },
+  {
+    "tag": "wrapTopAndBottom",
+    "namespace": "wp",
+    "domain": "docx",
+    "attributes": [
+      ":distB",
+      ":distT"
+    ],
+    "parents": [
+      "wp:anchor"
+    ],
+    "sdkClass": "WrapTopBottom",
     "provenance": "schema"
   },
   {
@@ -9528,7 +9843,9 @@
     "namespace": "p",
     "domain": "pptx",
     "attributes": [],
-    "parents": [],
+    "parents": [
+      "a:graphicData"
+    ],
     "sdkClass": "CommentAuthorList",
     "provenance": "schema"
   },
@@ -9569,7 +9886,9 @@
     "namespace": "p",
     "domain": "pptx",
     "attributes": [],
-    "parents": [],
+    "parents": [
+      "a:graphicData"
+    ],
     "sdkClass": "CommentList",
     "provenance": "schema"
   },
@@ -9692,6 +10011,7 @@
       "r:id"
     ],
     "parents": [
+      "a:graphicData",
       "p:grpSp",
       "p:spTree"
     ],
@@ -10248,7 +10568,9 @@
     "namespace": "p",
     "domain": "pptx",
     "attributes": [],
-    "parents": [],
+    "parents": [
+      "a:graphicData"
+    ],
     "sdkClass": "HandoutMaster",
     "provenance": "schema"
   },
@@ -10495,7 +10817,9 @@
       ":showMasterPhAnim",
       ":showMasterSp"
     ],
-    "parents": [],
+    "parents": [
+      "a:graphicData"
+    ],
     "sdkClass": "NotesSlide",
     "provenance": "schema"
   },
@@ -10504,7 +10828,9 @@
     "namespace": "p",
     "domain": "pptx",
     "attributes": [],
-    "parents": [],
+    "parents": [
+      "a:graphicData"
+    ],
     "sdkClass": "NotesMaster",
     "provenance": "schema"
   },
@@ -10680,7 +11006,9 @@
       ":spid",
       "r:id"
     ],
-    "parents": [],
+    "parents": [
+      "a:graphicData"
+    ],
     "sdkClass": "OleObject",
     "provenance": "schema"
   },
@@ -10845,7 +11173,9 @@
       ":showSpecialPlsOnTitleSld",
       ":strictFirstAndLastChars"
     ],
-    "parents": [],
+    "parents": [
+      "a:graphicData"
+    ],
     "sdkClass": "Presentation",
     "provenance": "curated",
     "definition": "Specifies the root element for a PresentationML document, containing presentation-wide properties such as slide size, notes size, default text styles, and references to slide masters and slides.",
@@ -10856,7 +11186,9 @@
     "namespace": "p",
     "domain": "pptx",
     "attributes": [],
-    "parents": [],
+    "parents": [
+      "a:graphicData"
+    ],
     "sdkClass": "PresentationProperties",
     "provenance": "schema"
   },
@@ -11114,6 +11446,7 @@
       "r:id"
     ],
     "parents": [
+      "a:graphicData",
       "p:sldLst"
     ],
     "sdkClass": "OutlineViewSlideListEntry",
@@ -11170,7 +11503,9 @@
       ":type",
       ":userDrawn"
     ],
-    "parents": [],
+    "parents": [
+      "a:graphicData"
+    ],
     "sdkClass": "SlideLayout",
     "provenance": "curated",
     "definition": "This element specifies an instance of a slide layout. It contains a template slide design that can be applied to any slide in a presentation, defining the default positioning and formatting of placeholders and other shapes.",
@@ -11220,7 +11555,9 @@
     "attributes": [
       ":preserve"
     ],
-    "parents": [],
+    "parents": [
+      "a:graphicData"
+    ],
     "sdkClass": "SlideMaster",
     "provenance": "curated",
     "definition": "Specifies an instance of a slide master slide. It contains all elements that describe the objects and their corresponding formatting for slides within a presentation, including shapes, text styles, color maps, and transitions.",
@@ -11275,7 +11612,9 @@
       ":serverSldId",
       ":serverSldModifiedTime"
     ],
-    "parents": [],
+    "parents": [
+      "a:graphicData"
+    ],
     "sdkClass": "SlideSyncProperties",
     "provenance": "schema"
   },
@@ -11546,7 +11885,9 @@
     "namespace": "p",
     "domain": "pptx",
     "attributes": [],
-    "parents": [],
+    "parents": [
+      "a:graphicData"
+    ],
     "sdkClass": "TagList",
     "provenance": "schema"
   },
@@ -11816,7 +12157,9 @@
       ":lastView",
       ":showComments"
     ],
-    "parents": [],
+    "parents": [
+      "a:graphicData"
+    ],
     "sdkClass": "ViewProperties",
     "provenance": "schema"
   },
@@ -12210,7 +12553,9 @@
     "namespace": "a",
     "domain": "shared",
     "attributes": [],
-    "parents": [],
+    "parents": [
+      "p:nvPr"
+    ],
     "sdkClass": "AudioFromCD",
     "provenance": "schema"
   },
@@ -12221,7 +12566,9 @@
     "attributes": [
       "r:link"
     ],
-    "parents": [],
+    "parents": [
+      "p:nvPr"
+    ],
     "sdkClass": "AudioFromFile",
     "provenance": "schema"
   },
@@ -12244,7 +12591,8 @@
     "domain": "shared",
     "attributes": [],
     "parents": [
-      "a:scene3d"
+      "a:scene3d",
+      "dgm:scene3d"
     ],
     "sdkClass": "Backdrop",
     "provenance": "schema"
@@ -12330,7 +12678,8 @@
       ":w"
     ],
     "parents": [
-      "a:sp3d"
+      "a:sp3d",
+      "dgm:sp3d"
     ],
     "sdkClass": "BevelBottom",
     "provenance": "schema"
@@ -12345,7 +12694,8 @@
       ":w"
     ],
     "parents": [
-      "a:sp3d"
+      "a:sp3d",
+      "dgm:sp3d"
     ],
     "sdkClass": "BevelTop",
     "provenance": "schema"
@@ -12395,7 +12745,9 @@
       ":animBg",
       ":bld"
     ],
-    "parents": [],
+    "parents": [
+      "p:bldSub"
+    ],
     "sdkClass": "BuildChart",
     "provenance": "schema"
   },
@@ -12407,7 +12759,9 @@
       ":bld",
       ":rev"
     ],
-    "parents": [],
+    "parents": [
+      "p:bldSub"
+    ],
     "sdkClass": "BuildDiagram",
     "provenance": "schema"
   },
@@ -12437,7 +12791,11 @@
     "parents": [
       "a:blipFill",
       "a:buBlip",
-      "a:graphicData"
+      "a:graphicData",
+      "cdr:blipFill",
+      "p:blipFill",
+      "pic:blipFill",
+      "xdr:blipFill"
     ],
     "sdkClass": "Blip",
     "provenance": "schema"
@@ -12463,7 +12821,18 @@
       "a:spPr",
       "a:tblPr",
       "a:tcPr",
-      "a:uFill"
+      "a:uFill",
+      "c:spPr",
+      "cdr:grpSpPr",
+      "cdr:spPr",
+      "dgm:bg",
+      "dgm:spPr",
+      "p:bgPr",
+      "p:grpSpPr",
+      "p:spPr",
+      "pic:spPr",
+      "xdr:grpSpPr",
+      "xdr:spPr"
     ],
     "sdkClass": "BlipFill",
     "provenance": "schema"
@@ -12568,7 +12937,13 @@
       "a:lnDef",
       "a:spDef",
       "a:txBody",
-      "a:txDef"
+      "a:txDef",
+      "c:rich",
+      "c:txPr",
+      "cdr:txBody",
+      "dgm:t",
+      "p:txBody",
+      "xdr:txBody"
     ],
     "sdkClass": "BodyProperties",
     "provenance": "schema"
@@ -12850,7 +13225,8 @@
       ":zoom"
     ],
     "parents": [
-      "a:scene3d"
+      "a:scene3d",
+      "dgm:scene3d"
     ],
     "sdkClass": "Camera",
     "provenance": "schema"
@@ -12878,7 +13254,9 @@
       ":categoryIdx",
       ":seriesIdx"
     ],
-    "parents": [],
+    "parents": [
+      "p:graphicEl"
+    ],
     "sdkClass": "Chart",
     "provenance": "schema"
   },
@@ -13129,7 +13507,8 @@
     "domain": "shared",
     "attributes": [],
     "parents": [
-      "a:sp3d"
+      "a:sp3d",
+      "dgm:sp3d"
     ],
     "sdkClass": "ContourColor",
     "provenance": "schema"
@@ -13214,7 +13593,13 @@
     "domain": "shared",
     "attributes": [],
     "parents": [
-      "a:spPr"
+      "a:spPr",
+      "c:spPr",
+      "cdr:spPr",
+      "dgm:spPr",
+      "p:spPr",
+      "pic:spPr",
+      "xdr:spPr"
     ],
     "sdkClass": "CustomGeometry",
     "provenance": "schema"
@@ -13249,7 +13634,8 @@
     "domain": "shared",
     "attributes": [],
     "parents": [
-      "a:grpSp"
+      "a:grpSp",
+      "lc:lockedCanvas"
     ],
     "sdkClass": "ConnectionShape",
     "provenance": "schema"
@@ -13271,26 +13657,13 @@
       ":noSelect"
     ],
     "parents": [
-      "a:cNvCxnSpPr"
+      "a:cNvCxnSpPr",
+      "cdr:cNvCxnSpPr",
+      "p:cNvCxnSpPr",
+      "xdr:cNvCxnSpPr"
     ],
     "sdkClass": "ConnectionShapeLocks",
     "provenance": "schema"
-  },
-  {
-    "tag": "Default",
-    "namespace": "r",
-    "domain": "shared",
-    "definition": "Specifies a default content type that will be associated with all parts in the package that have the extension specified in the Extension attribute.",
-    "attributes": [
-      "Extension",
-      "ContentType"
-    ],
-    "parents": [
-      "Types"
-    ],
-    "citation": "ECMA-376 Part 2, Section 9.1.2.2",
-    "sdkClass": "DefaultType",
-    "provenance": "curated"
   },
   {
     "tag": "defPPr",
@@ -13310,7 +13683,12 @@
       ":rtl"
     ],
     "parents": [
-      "a:lstStyle"
+      "a:lstStyle",
+      "p:bodyStyle",
+      "p:defaultTextStyle",
+      "p:notesStyle",
+      "p:otherStyle",
+      "p:titleStyle"
     ],
     "sdkClass": "DefaultParagraphProperties",
     "provenance": "schema"
@@ -13364,7 +13742,9 @@
       ":bldStep",
       ":id"
     ],
-    "parents": [],
+    "parents": [
+      "p:graphicEl"
+    ],
     "sdkClass": "Diagram",
     "provenance": "schema"
   },
@@ -13469,7 +13849,19 @@
       "a:grpSpPr",
       "a:rPr",
       "a:spPr",
-      "a:tblPr"
+      "a:tblPr",
+      "c:spPr",
+      "cdr:grpSpPr",
+      "cdr:spPr",
+      "dgm:bg",
+      "dgm:spPr",
+      "dgm:whole",
+      "p:bgPr",
+      "p:grpSpPr",
+      "p:spPr",
+      "pic:spPr",
+      "xdr:grpSpPr",
+      "xdr:spPr"
     ],
     "sdkClass": "EffectDag",
     "provenance": "schema"
@@ -13487,7 +13879,19 @@
       "a:grpSpPr",
       "a:rPr",
       "a:spPr",
-      "a:tblPr"
+      "a:tblPr",
+      "c:spPr",
+      "cdr:grpSpPr",
+      "cdr:spPr",
+      "dgm:bg",
+      "dgm:spPr",
+      "dgm:whole",
+      "p:bgPr",
+      "p:grpSpPr",
+      "p:spPr",
+      "pic:spPr",
+      "xdr:grpSpPr",
+      "xdr:spPr"
     ],
     "sdkClass": "EffectList",
     "provenance": "schema"
@@ -13501,7 +13905,11 @@
     ],
     "parents": [
       "a:style",
-      "a:tblBg"
+      "a:tblBg",
+      "cdr:style",
+      "dgm:style",
+      "p:style",
+      "xdr:style"
     ],
     "sdkClass": "EffectReference",
     "provenance": "schema"
@@ -13551,7 +13959,10 @@
       ":idx"
     ],
     "parents": [
-      "a:cNvCxnSpPr"
+      "a:cNvCxnSpPr",
+      "cdr:cNvCxnSpPr",
+      "p:cNvCxnSpPr",
+      "xdr:cNvCxnSpPr"
     ],
     "sdkClass": "EndConnection",
     "provenance": "schema"
@@ -13598,7 +14009,11 @@
     ],
     "parents": [
       "a:extLst",
-      "a:xfrm"
+      "a:xfrm",
+      "cdr:xfrm",
+      "dgm:extLst",
+      "p:xfrm",
+      "xdr:xfrm"
     ],
     "sdkClass": "BlipExtension",
     "provenance": "schema"
@@ -13685,7 +14100,48 @@
       "a:txDef",
       "a:txSp",
       "a:uLn",
-      "a:videoFile"
+      "a:videoFile",
+      "c:clrMapOvr",
+      "c:spPr",
+      "cdr:cNvCxnSpPr",
+      "cdr:cNvGraphicFramePr",
+      "cdr:cNvGrpSpPr",
+      "cdr:cNvPicPr",
+      "cdr:cNvPr",
+      "cdr:cNvSpPr",
+      "cdr:grpSpPr",
+      "cdr:spPr",
+      "dgm:scene3d",
+      "dgm:sp3d",
+      "dgm:spPr",
+      "lc:lockedCanvas",
+      "p:bodyStyle",
+      "p:cNvCxnSpPr",
+      "p:cNvGraphicFramePr",
+      "p:cNvGrpSpPr",
+      "p:cNvPicPr",
+      "p:cNvPr",
+      "p:cNvSpPr",
+      "p:clrMap",
+      "p:defaultTextStyle",
+      "p:grpSpPr",
+      "p:notesStyle",
+      "p:otherStyle",
+      "p:spPr",
+      "p:titleStyle",
+      "pic:cNvPicPr",
+      "pic:cNvPr",
+      "pic:spPr",
+      "wp:cNvGraphicFramePr",
+      "wp:docPr",
+      "xdr:cNvCxnSpPr",
+      "xdr:cNvGraphicFramePr",
+      "xdr:cNvGrpSpPr",
+      "xdr:cNvPicPr",
+      "xdr:cNvPr",
+      "xdr:cNvSpPr",
+      "xdr:grpSpPr",
+      "xdr:spPr"
     ],
     "sdkClass": "BlipExtensionList",
     "provenance": "schema"
@@ -13718,7 +14174,8 @@
     "domain": "shared",
     "attributes": [],
     "parents": [
-      "a:sp3d"
+      "a:sp3d",
+      "dgm:sp3d"
     ],
     "sdkClass": "ExtrusionColor",
     "provenance": "schema"
@@ -13790,7 +14247,11 @@
     "parents": [
       "a:style",
       "a:tblBg",
-      "a:tcStyle"
+      "a:tcStyle",
+      "cdr:style",
+      "dgm:style",
+      "p:style",
+      "xdr:style"
     ],
     "sdkClass": "FillReference",
     "provenance": "schema"
@@ -13854,7 +14315,8 @@
       ":z"
     ],
     "parents": [
-      "a:bodyPr"
+      "a:bodyPr",
+      "dgm:txPr"
     ],
     "sdkClass": "FlatText",
     "provenance": "schema"
@@ -13924,7 +14386,11 @@
     ],
     "parents": [
       "a:style",
-      "a:tcTxStyle"
+      "a:tcTxStyle",
+      "cdr:style",
+      "dgm:style",
+      "p:style",
+      "xdr:style"
     ],
     "sdkClass": "FontReference",
     "provenance": "schema"
@@ -14028,7 +14494,18 @@
       "a:tblPr",
       "a:tcPr",
       "a:uFill",
-      "a:uLn"
+      "a:uLn",
+      "c:spPr",
+      "cdr:grpSpPr",
+      "cdr:spPr",
+      "dgm:bg",
+      "dgm:spPr",
+      "p:bgPr",
+      "p:grpSpPr",
+      "p:spPr",
+      "pic:spPr",
+      "xdr:grpSpPr",
+      "xdr:spPr"
     ],
     "sdkClass": "GradientFill",
     "provenance": "schema"
@@ -14041,7 +14518,12 @@
     "parents": [
       "a:ext",
       "a:graphicData",
-      "a:graphicFrame"
+      "a:graphicFrame",
+      "cdr:graphicFrame",
+      "p:graphicFrame",
+      "wp:anchor",
+      "wp:inline",
+      "xdr:graphicFrame"
     ],
     "sdkClass": "Graphic",
     "provenance": "schema"
@@ -14065,7 +14547,8 @@
     "domain": "shared",
     "attributes": [],
     "parents": [
-      "a:grpSp"
+      "a:grpSp",
+      "lc:lockedCanvas"
     ],
     "sdkClass": "GraphicFrame",
     "provenance": "schema"
@@ -14083,7 +14566,11 @@
       ":noSelect"
     ],
     "parents": [
-      "a:cNvGraphicFramePr"
+      "a:cNvGraphicFramePr",
+      "cdr:cNvGraphicFramePr",
+      "p:cNvGraphicFramePr",
+      "wp:cNvGraphicFramePr",
+      "xdr:cNvGraphicFramePr"
     ],
     "sdkClass": "GraphicFrameLocks",
     "provenance": "schema"
@@ -14201,7 +14688,17 @@
       "a:spPr",
       "a:tblPr",
       "a:tcPr",
-      "a:uFill"
+      "a:uFill",
+      "c:spPr",
+      "cdr:grpSpPr",
+      "cdr:spPr",
+      "dgm:bg",
+      "dgm:spPr",
+      "p:grpSpPr",
+      "p:spPr",
+      "pic:spPr",
+      "xdr:grpSpPr",
+      "xdr:spPr"
     ],
     "sdkClass": "GroupFill",
     "provenance": "schema"
@@ -14212,7 +14709,8 @@
     "domain": "shared",
     "attributes": [],
     "parents": [
-      "a:grpSp"
+      "a:grpSp",
+      "lc:lockedCanvas"
     ],
     "sdkClass": "GroupShape",
     "provenance": "schema"
@@ -14231,7 +14729,10 @@
       ":noUngrp"
     ],
     "parents": [
-      "a:cNvGrpSpPr"
+      "a:cNvGrpSpPr",
+      "cdr:cNvGrpSpPr",
+      "p:cNvGrpSpPr",
+      "xdr:cNvGrpSpPr"
     ],
     "sdkClass": "GroupShapeLocks",
     "provenance": "schema"
@@ -14244,7 +14745,8 @@
       ":bwMode"
     ],
     "parents": [
-      "a:grpSp"
+      "a:grpSp",
+      "lc:lockedCanvas"
     ],
     "sdkClass": "VisualGroupShapeProperties",
     "provenance": "schema"
@@ -14337,7 +14839,12 @@
       "a:cNvPr",
       "a:defRPr",
       "a:endParaRPr",
-      "a:rPr"
+      "a:rPr",
+      "cdr:cNvPr",
+      "p:cNvPr",
+      "pic:cNvPr",
+      "wp:docPr",
+      "xdr:cNvPr"
     ],
     "sdkClass": "HyperlinkOnClick",
     "provenance": "schema"
@@ -14357,7 +14864,12 @@
       "r:id"
     ],
     "parents": [
-      "a:cNvPr"
+      "a:cNvPr",
+      "cdr:cNvPr",
+      "p:cNvPr",
+      "pic:cNvPr",
+      "wp:docPr",
+      "xdr:cNvPr"
     ],
     "sdkClass": "HyperlinkOnHover",
     "provenance": "schema"
@@ -14445,7 +14957,19 @@
       "a:outerShdw",
       "a:prstShdw",
       "a:solidFill",
-      "a:tcTxStyle"
+      "a:tcTxStyle",
+      "dgm:effectClrLst",
+      "dgm:fillClrLst",
+      "dgm:linClrLst",
+      "dgm:txEffectClrLst",
+      "dgm:txFillClrLst",
+      "dgm:txLinClrLst",
+      "p:bgRef",
+      "p:clrMru",
+      "p:clrVal",
+      "p:from",
+      "p:penClr",
+      "p:to"
     ],
     "sdkClass": "HslColor",
     "provenance": "schema"
@@ -14641,7 +15165,8 @@
     ],
     "parents": [
       "a:cell3D",
-      "a:scene3d"
+      "a:scene3d",
+      "dgm:scene3d"
     ],
     "sdkClass": "LightRig",
     "provenance": "schema"
@@ -14683,7 +15208,14 @@
       "a:spPr",
       "a:tl2br",
       "a:top",
-      "a:tr2bl"
+      "a:tr2bl",
+      "c:spPr",
+      "cdr:spPr",
+      "dgm:spPr",
+      "dgm:whole",
+      "p:spPr",
+      "pic:spPr",
+      "xdr:spPr"
     ],
     "sdkClass": "Outline",
     "provenance": "schema"
@@ -14779,7 +15311,11 @@
       "a:style",
       "a:tl2br",
       "a:top",
-      "a:tr2bl"
+      "a:tr2bl",
+      "cdr:style",
+      "dgm:style",
+      "p:style",
+      "xdr:style"
     ],
     "sdkClass": "LineReference",
     "provenance": "schema"
@@ -14868,7 +15404,13 @@
       "a:lnDef",
       "a:spDef",
       "a:txBody",
-      "a:txDef"
+      "a:txDef",
+      "c:rich",
+      "c:txPr",
+      "cdr:txBody",
+      "dgm:t",
+      "p:txBody",
+      "xdr:txBody"
     ],
     "sdkClass": "ListStyle",
     "provenance": "schema"
@@ -14972,7 +15514,12 @@
       ":rtl"
     ],
     "parents": [
-      "a:lstStyle"
+      "a:lstStyle",
+      "p:bodyStyle",
+      "p:defaultTextStyle",
+      "p:notesStyle",
+      "p:otherStyle",
+      "p:titleStyle"
     ],
     "sdkClass": "Level1ParagraphProperties",
     "provenance": "schema"
@@ -14995,7 +15542,12 @@
       ":rtl"
     ],
     "parents": [
-      "a:lstStyle"
+      "a:lstStyle",
+      "p:bodyStyle",
+      "p:defaultTextStyle",
+      "p:notesStyle",
+      "p:otherStyle",
+      "p:titleStyle"
     ],
     "sdkClass": "Level2ParagraphProperties",
     "provenance": "schema"
@@ -15018,7 +15570,12 @@
       ":rtl"
     ],
     "parents": [
-      "a:lstStyle"
+      "a:lstStyle",
+      "p:bodyStyle",
+      "p:defaultTextStyle",
+      "p:notesStyle",
+      "p:otherStyle",
+      "p:titleStyle"
     ],
     "sdkClass": "Level3ParagraphProperties",
     "provenance": "schema"
@@ -15041,7 +15598,12 @@
       ":rtl"
     ],
     "parents": [
-      "a:lstStyle"
+      "a:lstStyle",
+      "p:bodyStyle",
+      "p:defaultTextStyle",
+      "p:notesStyle",
+      "p:otherStyle",
+      "p:titleStyle"
     ],
     "sdkClass": "Level4ParagraphProperties",
     "provenance": "schema"
@@ -15064,7 +15626,12 @@
       ":rtl"
     ],
     "parents": [
-      "a:lstStyle"
+      "a:lstStyle",
+      "p:bodyStyle",
+      "p:defaultTextStyle",
+      "p:notesStyle",
+      "p:otherStyle",
+      "p:titleStyle"
     ],
     "sdkClass": "Level5ParagraphProperties",
     "provenance": "schema"
@@ -15087,7 +15654,12 @@
       ":rtl"
     ],
     "parents": [
-      "a:lstStyle"
+      "a:lstStyle",
+      "p:bodyStyle",
+      "p:defaultTextStyle",
+      "p:notesStyle",
+      "p:otherStyle",
+      "p:titleStyle"
     ],
     "sdkClass": "Level6ParagraphProperties",
     "provenance": "schema"
@@ -15110,7 +15682,12 @@
       ":rtl"
     ],
     "parents": [
-      "a:lstStyle"
+      "a:lstStyle",
+      "p:bodyStyle",
+      "p:defaultTextStyle",
+      "p:notesStyle",
+      "p:otherStyle",
+      "p:titleStyle"
     ],
     "sdkClass": "Level7ParagraphProperties",
     "provenance": "schema"
@@ -15133,7 +15710,12 @@
       ":rtl"
     ],
     "parents": [
-      "a:lstStyle"
+      "a:lstStyle",
+      "p:bodyStyle",
+      "p:defaultTextStyle",
+      "p:notesStyle",
+      "p:otherStyle",
+      "p:titleStyle"
     ],
     "sdkClass": "Level8ParagraphProperties",
     "provenance": "schema"
@@ -15156,7 +15738,12 @@
       ":rtl"
     ],
     "parents": [
-      "a:lstStyle"
+      "a:lstStyle",
+      "p:bodyStyle",
+      "p:defaultTextStyle",
+      "p:notesStyle",
+      "p:otherStyle",
+      "p:titleStyle"
     ],
     "sdkClass": "Level9ParagraphProperties",
     "provenance": "schema"
@@ -15177,7 +15764,9 @@
     "namespace": "a",
     "domain": "shared",
     "attributes": [],
-    "parents": [],
+    "parents": [
+      "p:clrMapOvr"
+    ],
     "sdkClass": "MasterColorMapping",
     "provenance": "schema"
   },
@@ -15271,7 +15860,18 @@
       "a:tblPr",
       "a:tcPr",
       "a:uFill",
-      "a:uLn"
+      "a:uLn",
+      "c:spPr",
+      "cdr:grpSpPr",
+      "cdr:spPr",
+      "dgm:bg",
+      "dgm:spPr",
+      "p:bgPr",
+      "p:grpSpPr",
+      "p:spPr",
+      "pic:spPr",
+      "xdr:grpSpPr",
+      "xdr:spPr"
     ],
     "sdkClass": "NoFill",
     "provenance": "schema"
@@ -15333,7 +15933,8 @@
     "domain": "shared",
     "attributes": [],
     "parents": [
-      "a:grpSp"
+      "a:grpSp",
+      "lc:lockedCanvas"
     ],
     "sdkClass": "NonVisualGroupShapeProperties",
     "provenance": "schema"
@@ -15392,7 +15993,10 @@
       ":y"
     ],
     "parents": [
-      "a:xfrm"
+      "a:xfrm",
+      "cdr:xfrm",
+      "p:xfrm",
+      "xdr:xfrm"
     ],
     "sdkClass": "Offset",
     "provenance": "schema"
@@ -15421,22 +16025,6 @@
     "provenance": "schema"
   },
   {
-    "tag": "Override",
-    "namespace": "r",
-    "domain": "shared",
-    "definition": "Content Type Override. Specifies the content type of a specific part inside the ZIP package, overriding defaults.",
-    "attributes": [
-      "PartName",
-      "ContentType"
-    ],
-    "parents": [
-      "Types"
-    ],
-    "citation": "ECMA-376 Part 2, Section 9.1.2.3",
-    "sdkClass": "Override",
-    "provenance": "curated"
-  },
-  {
     "tag": "overrideClrMapping",
     "namespace": "a",
     "domain": "shared",
@@ -15454,7 +16042,9 @@
       ":tx1",
       ":tx2"
     ],
-    "parents": [],
+    "parents": [
+      "p:clrMapOvr"
+    ],
     "sdkClass": "OverrideColorMapping",
     "provenance": "schema"
   },
@@ -15464,7 +16054,13 @@
     "domain": "shared",
     "attributes": [],
     "parents": [
-      "a:txBody"
+      "a:txBody",
+      "c:rich",
+      "c:txPr",
+      "cdr:txBody",
+      "dgm:t",
+      "p:txBody",
+      "xdr:txBody"
     ],
     "sdkClass": "Paragraph",
     "provenance": "schema"
@@ -15526,7 +16122,18 @@
       "a:tblPr",
       "a:tcPr",
       "a:uFill",
-      "a:uLn"
+      "a:uLn",
+      "c:spPr",
+      "cdr:grpSpPr",
+      "cdr:spPr",
+      "dgm:bg",
+      "dgm:spPr",
+      "p:bgPr",
+      "p:grpSpPr",
+      "p:spPr",
+      "pic:spPr",
+      "xdr:grpSpPr",
+      "xdr:spPr"
     ],
     "sdkClass": "PatternFill",
     "provenance": "schema"
@@ -15537,7 +16144,8 @@
     "domain": "shared",
     "attributes": [],
     "parents": [
-      "a:grpSp"
+      "a:grpSp",
+      "lc:lockedCanvas"
     ],
     "sdkClass": "Picture",
     "provenance": "schema"
@@ -15560,7 +16168,11 @@
       ":noSelect"
     ],
     "parents": [
-      "a:cNvPicPr"
+      "a:cNvPicPr",
+      "cdr:cNvPicPr",
+      "p:cNvPicPr",
+      "pic:cNvPicPr",
+      "xdr:cNvPicPr"
     ],
     "sdkClass": "PictureLocks",
     "provenance": "schema"
@@ -15647,7 +16259,19 @@
       "a:outerShdw",
       "a:prstShdw",
       "a:solidFill",
-      "a:tcTxStyle"
+      "a:tcTxStyle",
+      "dgm:effectClrLst",
+      "dgm:fillClrLst",
+      "dgm:linClrLst",
+      "dgm:txEffectClrLst",
+      "dgm:txFillClrLst",
+      "dgm:txLinClrLst",
+      "p:bgRef",
+      "p:clrMru",
+      "p:clrVal",
+      "p:from",
+      "p:penClr",
+      "p:to"
     ],
     "sdkClass": "PresetColor",
     "provenance": "schema"
@@ -15680,7 +16304,13 @@
       ":prst"
     ],
     "parents": [
-      "a:spPr"
+      "a:spPr",
+      "c:spPr",
+      "cdr:spPr",
+      "dgm:spPr",
+      "p:spPr",
+      "pic:spPr",
+      "xdr:spPr"
     ],
     "sdkClass": "PresetGeometry",
     "provenance": "schema"
@@ -15750,7 +16380,9 @@
     "attributes": [
       "r:link"
     ],
-    "parents": [],
+    "parents": [
+      "p:nvPr"
+    ],
     "sdkClass": "QuickTimeFromFile",
     "provenance": "schema"
   },
@@ -15862,35 +16494,6 @@
     ],
     "sdkClass": "Reflection",
     "provenance": "schema"
-  },
-  {
-    "tag": "Relationship",
-    "namespace": "r",
-    "domain": "shared",
-    "definition": "Defines a single relationship between a source package or part and a target resource. It specifies a unique identifier, the relationship type (defining its role), and the target URI.",
-    "attributes": [
-      "Id",
-      "Type",
-      "Target",
-      "TargetMode"
-    ],
-    "parents": [
-      "Relationships"
-    ],
-    "citation": "ECMA-376 Part 2, Section 9.3",
-    "sdkClass": "System.IO.Packaging.PackageRelationship",
-    "provenance": "curated"
-  },
-  {
-    "tag": "Relationships",
-    "namespace": "r",
-    "domain": "shared",
-    "definition": "The Relationships element is the root element of a relationship part (.rels) in an Open Packaging Conventions (OPC) package. It acts as a container for one or more Relationship elements that define associations between a source part and target resources.",
-    "attributes": [],
-    "parents": [],
-    "citation": "ECMA-376 Part 2, Section 9.3.1",
-    "sdkClass": "PackageRelationshipCollection",
-    "provenance": "curated"
   },
   {
     "tag": "relOff",
@@ -16063,7 +16666,16 @@
       "a:bodyPr",
       "a:effectStyle",
       "a:grpSpPr",
-      "a:spPr"
+      "a:spPr",
+      "c:spPr",
+      "cdr:grpSpPr",
+      "cdr:spPr",
+      "dgm:spPr",
+      "p:grpSpPr",
+      "p:spPr",
+      "pic:spPr",
+      "xdr:grpSpPr",
+      "xdr:spPr"
     ],
     "sdkClass": "Scene3DType",
     "provenance": "schema"
@@ -16098,7 +16710,19 @@
       "a:outerShdw",
       "a:prstShdw",
       "a:solidFill",
-      "a:tcTxStyle"
+      "a:tcTxStyle",
+      "dgm:effectClrLst",
+      "dgm:fillClrLst",
+      "dgm:linClrLst",
+      "dgm:txEffectClrLst",
+      "dgm:txFillClrLst",
+      "dgm:txLinClrLst",
+      "p:bgRef",
+      "p:clrMru",
+      "p:clrVal",
+      "p:from",
+      "p:penClr",
+      "p:to"
     ],
     "sdkClass": "SchemeColor",
     "provenance": "schema"
@@ -16147,7 +16771,19 @@
       "a:outerShdw",
       "a:prstShdw",
       "a:solidFill",
-      "a:tcTxStyle"
+      "a:tcTxStyle",
+      "dgm:effectClrLst",
+      "dgm:fillClrLst",
+      "dgm:linClrLst",
+      "dgm:txEffectClrLst",
+      "dgm:txFillClrLst",
+      "dgm:txLinClrLst",
+      "p:bgRef",
+      "p:clrMru",
+      "p:clrVal",
+      "p:from",
+      "p:penClr",
+      "p:to"
     ],
     "sdkClass": "RgbColorModelPercentage",
     "provenance": "schema"
@@ -16239,7 +16875,18 @@
       "a:tblPr",
       "a:tcPr",
       "a:uFill",
-      "a:uLn"
+      "a:uLn",
+      "c:spPr",
+      "cdr:grpSpPr",
+      "cdr:spPr",
+      "dgm:bg",
+      "dgm:spPr",
+      "p:bgPr",
+      "p:grpSpPr",
+      "p:spPr",
+      "pic:spPr",
+      "xdr:grpSpPr",
+      "xdr:spPr"
     ],
     "sdkClass": "SolidFill",
     "provenance": "schema"
@@ -16250,7 +16897,8 @@
     "domain": "shared",
     "attributes": [],
     "parents": [
-      "a:grpSp"
+      "a:grpSp",
+      "lc:lockedCanvas"
     ],
     "sdkClass": "Shape",
     "provenance": "schema"
@@ -16268,7 +16916,14 @@
     "parents": [
       "a:bodyPr",
       "a:effectStyle",
-      "a:spPr"
+      "a:spPr",
+      "c:spPr",
+      "cdr:spPr",
+      "dgm:spPr",
+      "dgm:txPr",
+      "p:spPr",
+      "pic:spPr",
+      "xdr:spPr"
     ],
     "sdkClass": "Shape3DType",
     "provenance": "schema"
@@ -16385,7 +17040,10 @@
       ":noTextEdit"
     ],
     "parents": [
-      "a:cNvSpPr"
+      "a:cNvSpPr",
+      "cdr:cNvSpPr",
+      "p:cNvSpPr",
+      "xdr:cNvSpPr"
     ],
     "sdkClass": "ShapeLocks",
     "provenance": "schema"
@@ -16419,7 +17077,11 @@
       ":t"
     ],
     "parents": [
-      "a:blipFill"
+      "a:blipFill",
+      "cdr:blipFill",
+      "p:blipFill",
+      "pic:blipFill",
+      "xdr:blipFill"
     ],
     "sdkClass": "SourceRectangle",
     "provenance": "schema"
@@ -16467,7 +17129,19 @@
       "a:outerShdw",
       "a:prstShdw",
       "a:solidFill",
-      "a:tcTxStyle"
+      "a:tcTxStyle",
+      "dgm:effectClrLst",
+      "dgm:fillClrLst",
+      "dgm:linClrLst",
+      "dgm:txEffectClrLst",
+      "dgm:txFillClrLst",
+      "dgm:txLinClrLst",
+      "p:bgRef",
+      "p:clrMru",
+      "p:clrVal",
+      "p:from",
+      "p:penClr",
+      "p:to"
     ],
     "sdkClass": "RgbColorModelHex",
     "provenance": "schema"
@@ -16495,7 +17169,10 @@
       ":idx"
     ],
     "parents": [
-      "a:cNvCxnSpPr"
+      "a:cNvCxnSpPr",
+      "cdr:cNvCxnSpPr",
+      "p:cNvCxnSpPr",
+      "xdr:cNvCxnSpPr"
     ],
     "sdkClass": "StartConnection",
     "provenance": "schema"
@@ -16506,7 +17183,11 @@
     "domain": "shared",
     "attributes": [],
     "parents": [
-      "a:blipFill"
+      "a:blipFill",
+      "cdr:blipFill",
+      "p:blipFill",
+      "pic:blipFill",
+      "xdr:blipFill"
     ],
     "sdkClass": "Stretch",
     "provenance": "schema"
@@ -16547,7 +17228,9 @@
       ":d",
       ":n"
     ],
-    "parents": [],
+    "parents": [
+      "p:scale"
+    ],
     "sdkClass": "ScaleX",
     "provenance": "schema"
   },
@@ -16559,7 +17242,9 @@
       ":d",
       ":n"
     ],
-    "parents": [],
+    "parents": [
+      "p:scale"
+    ],
     "sdkClass": "ScaleY",
     "provenance": "schema"
   },
@@ -16624,7 +17309,19 @@
       "a:outerShdw",
       "a:prstShdw",
       "a:solidFill",
-      "a:tcTxStyle"
+      "a:tcTxStyle",
+      "dgm:effectClrLst",
+      "dgm:fillClrLst",
+      "dgm:linClrLst",
+      "dgm:txEffectClrLst",
+      "dgm:txFillClrLst",
+      "dgm:txLinClrLst",
+      "p:bgRef",
+      "p:clrMru",
+      "p:clrVal",
+      "p:from",
+      "p:penClr",
+      "p:to"
     ],
     "sdkClass": "SystemColor",
     "provenance": "schema"
@@ -16959,7 +17656,11 @@
       ":ty"
     ],
     "parents": [
-      "a:blipFill"
+      "a:blipFill",
+      "cdr:blipFill",
+      "p:blipFill",
+      "pic:blipFill",
+      "xdr:blipFill"
     ],
     "sdkClass": "Tile",
     "provenance": "schema"
@@ -17079,21 +17780,11 @@
     "attributes": [],
     "parents": [
       "a:grpSp",
-      "a:sp"
+      "a:sp",
+      "lc:lockedCanvas"
     ],
     "sdkClass": "TextShape",
     "provenance": "schema"
-  },
-  {
-    "tag": "Types",
-    "namespace": "r",
-    "domain": "shared",
-    "definition": "The Types element is the root element of the Content Types stream ([Content_Types].xml) in an OPC package. It contains the default and override content type mappings that define the media types for all parts in the package.",
-    "attributes": [],
-    "parents": [],
-    "citation": "ECMA-376 Part 2, Section 9.1.2",
-    "sdkClass": "Types",
-    "provenance": "curated"
   },
   {
     "tag": "uFill",
@@ -17185,7 +17876,9 @@
     "attributes": [
       "r:link"
     ],
-    "parents": [],
+    "parents": [
+      "p:nvPr"
+    ],
     "sdkClass": "VideoFromFile",
     "provenance": "schema"
   },
@@ -17198,7 +17891,9 @@
       ":name",
       "r:embed"
     ],
-    "parents": [],
+    "parents": [
+      "p:nvPr"
+    ],
     "sdkClass": "WaveAudioFile",
     "provenance": "schema"
   },
@@ -17235,10 +17930,4591 @@
       "a:graphicFrame",
       "a:grpSpPr",
       "a:spPr",
-      "a:txSp"
+      "a:txSp",
+      "c:spPr",
+      "cdr:grpSpPr",
+      "cdr:spPr",
+      "dgm:spPr",
+      "p:grpSpPr",
+      "p:spPr",
+      "pic:spPr",
+      "xdr:grpSpPr",
+      "xdr:spPr"
     ],
     "sdkClass": "TransformGroup",
     "provenance": "schema"
+  },
+  {
+    "tag": "applyToEnd",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:pictureOptions"
+    ],
+    "sdkClass": "ApplyToEnd",
+    "provenance": "schema"
+  },
+  {
+    "tag": "applyToFront",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:pictureOptions"
+    ],
+    "sdkClass": "ApplyToFront",
+    "provenance": "schema"
+  },
+  {
+    "tag": "applyToSides",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:pictureOptions"
+    ],
+    "sdkClass": "ApplyToSides",
+    "provenance": "schema"
+  },
+  {
+    "tag": "area3DChart",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:plotArea"
+    ],
+    "sdkClass": "Area3DChart",
+    "provenance": "schema"
+  },
+  {
+    "tag": "areaChart",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:plotArea"
+    ],
+    "sdkClass": "AreaChart",
+    "provenance": "schema"
+  },
+  {
+    "tag": "auto",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:catAx",
+      "c:dateAx"
+    ],
+    "sdkClass": "AutoLabeled",
+    "provenance": "schema"
+  },
+  {
+    "tag": "autoTitleDeleted",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:chart"
+    ],
+    "sdkClass": "AutoTitleDeleted",
+    "provenance": "schema"
+  },
+  {
+    "tag": "autoUpdate",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:externalData"
+    ],
+    "sdkClass": "AutoUpdate",
+    "provenance": "schema"
+  },
+  {
+    "tag": "axId",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:area3DChart",
+      "c:areaChart",
+      "c:bar3DChart",
+      "c:barChart",
+      "c:bubbleChart",
+      "c:catAx",
+      "c:dateAx",
+      "c:line3DChart",
+      "c:lineChart",
+      "c:radarChart",
+      "c:scatterChart",
+      "c:serAx",
+      "c:stockChart",
+      "c:surface3DChart",
+      "c:surfaceChart",
+      "c:valAx"
+    ],
+    "sdkClass": "AxisId",
+    "provenance": "schema"
+  },
+  {
+    "tag": "axPos",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:catAx",
+      "c:dateAx",
+      "c:serAx",
+      "c:valAx"
+    ],
+    "sdkClass": "AxisPosition",
+    "provenance": "schema"
+  },
+  {
+    "tag": "backWall",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:chart"
+    ],
+    "sdkClass": "BackWall",
+    "provenance": "schema"
+  },
+  {
+    "tag": "backward",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:trendline"
+    ],
+    "sdkClass": "Backward",
+    "provenance": "schema"
+  },
+  {
+    "tag": "bandFmt",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:bandFmts"
+    ],
+    "sdkClass": "BandFormat",
+    "provenance": "schema"
+  },
+  {
+    "tag": "bandFmts",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:surface3DChart",
+      "c:surfaceChart"
+    ],
+    "sdkClass": "BandFormats",
+    "provenance": "schema"
+  },
+  {
+    "tag": "bar3DChart",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:plotArea"
+    ],
+    "sdkClass": "Bar3DChart",
+    "provenance": "schema"
+  },
+  {
+    "tag": "barChart",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:plotArea"
+    ],
+    "sdkClass": "BarChart",
+    "provenance": "schema"
+  },
+  {
+    "tag": "barDir",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:bar3DChart",
+      "c:barChart"
+    ],
+    "sdkClass": "BarDirection",
+    "provenance": "schema"
+  },
+  {
+    "tag": "baseTimeUnit",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:dateAx"
+    ],
+    "sdkClass": "BaseTimeUnit",
+    "provenance": "schema"
+  },
+  {
+    "tag": "bubble3D",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:bubbleChart",
+      "c:dPt",
+      "c:ser"
+    ],
+    "sdkClass": "Bubble3D",
+    "provenance": "schema"
+  },
+  {
+    "tag": "bubbleChart",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:plotArea"
+    ],
+    "sdkClass": "BubbleChart",
+    "provenance": "schema"
+  },
+  {
+    "tag": "bubbleScale",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:bubbleChart"
+    ],
+    "sdkClass": "BubbleScale",
+    "provenance": "schema"
+  },
+  {
+    "tag": "bubbleSize",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:ser"
+    ],
+    "sdkClass": "BubbleSize",
+    "provenance": "schema"
+  },
+  {
+    "tag": "builtInUnit",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:dispUnits"
+    ],
+    "sdkClass": "BuiltInUnit",
+    "provenance": "schema"
+  },
+  {
+    "tag": "cat",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:ser"
+    ],
+    "sdkClass": "CategoryAxisData",
+    "provenance": "schema"
+  },
+  {
+    "tag": "catAx",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:plotArea"
+    ],
+    "sdkClass": "CategoryAxis",
+    "provenance": "schema"
+  },
+  {
+    "tag": "chart",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      "r:id"
+    ],
+    "parents": [
+      "a:graphicData",
+      "c:chartSpace"
+    ],
+    "sdkClass": "Chart",
+    "provenance": "schema"
+  },
+  {
+    "tag": "chartObject",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:protection"
+    ],
+    "sdkClass": "ChartObject",
+    "provenance": "schema"
+  },
+  {
+    "tag": "chartSpace",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":fallbackImg",
+      ":featureList",
+      ":version"
+    ],
+    "parents": [
+      "a:graphicData"
+    ],
+    "sdkClass": "ChartSpace",
+    "provenance": "schema"
+  },
+  {
+    "tag": "clrMapOvr",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":accent1",
+      ":accent2",
+      ":accent3",
+      ":accent4",
+      ":accent5",
+      ":accent6",
+      ":bg1",
+      ":bg2",
+      ":folHlink",
+      ":hlink",
+      ":tx1",
+      ":tx2"
+    ],
+    "parents": [
+      "c:chartSpace"
+    ],
+    "sdkClass": "ColorMapOverride",
+    "provenance": "schema"
+  },
+  {
+    "tag": "crossAx",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:catAx",
+      "c:dateAx",
+      "c:serAx",
+      "c:valAx"
+    ],
+    "sdkClass": "CrossingAxis",
+    "provenance": "schema"
+  },
+  {
+    "tag": "crossBetween",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:valAx"
+    ],
+    "sdkClass": "CrossBetween",
+    "provenance": "schema"
+  },
+  {
+    "tag": "crosses",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:catAx",
+      "c:dateAx",
+      "c:serAx",
+      "c:valAx"
+    ],
+    "sdkClass": "Crosses",
+    "provenance": "schema"
+  },
+  {
+    "tag": "crossesAt",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:catAx",
+      "c:dateAx",
+      "c:serAx",
+      "c:valAx"
+    ],
+    "sdkClass": "CrossesAt",
+    "provenance": "schema"
+  },
+  {
+    "tag": "custSplit",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:ofPieChart"
+    ],
+    "sdkClass": "CustomSplit",
+    "provenance": "schema"
+  },
+  {
+    "tag": "custUnit",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:dispUnits"
+    ],
+    "sdkClass": "CustomDisplayUnit",
+    "provenance": "schema"
+  },
+  {
+    "tag": "data",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:protection"
+    ],
+    "sdkClass": "Data",
+    "provenance": "schema"
+  },
+  {
+    "tag": "date1904",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:chartSpace"
+    ],
+    "sdkClass": "Date1904",
+    "provenance": "schema"
+  },
+  {
+    "tag": "dateAx",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:plotArea"
+    ],
+    "sdkClass": "DateAxis",
+    "provenance": "schema"
+  },
+  {
+    "tag": "delete",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:catAx",
+      "c:dLbl",
+      "c:dLbls",
+      "c:dateAx",
+      "c:legendEntry",
+      "c:serAx",
+      "c:valAx"
+    ],
+    "sdkClass": "Delete",
+    "provenance": "schema"
+  },
+  {
+    "tag": "depthPercent",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:view3D"
+    ],
+    "sdkClass": "DepthPercent",
+    "provenance": "schema"
+  },
+  {
+    "tag": "dispBlanksAs",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:chart"
+    ],
+    "sdkClass": "DisplayBlanksAs",
+    "provenance": "schema"
+  },
+  {
+    "tag": "dispEq",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:trendline"
+    ],
+    "sdkClass": "DisplayEquation",
+    "provenance": "schema"
+  },
+  {
+    "tag": "dispRSqr",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:trendline"
+    ],
+    "sdkClass": "DisplayRSquaredValue",
+    "provenance": "schema"
+  },
+  {
+    "tag": "dispUnits",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:valAx"
+    ],
+    "sdkClass": "DisplayUnits",
+    "provenance": "schema"
+  },
+  {
+    "tag": "dispUnitsLbl",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:dispUnits"
+    ],
+    "sdkClass": "DisplayUnitsLabel",
+    "provenance": "schema"
+  },
+  {
+    "tag": "dLbl",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:dLbls",
+      "c:pivotFmt"
+    ],
+    "sdkClass": "DataLabel",
+    "provenance": "schema"
+  },
+  {
+    "tag": "dLblPos",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:dLbl",
+      "c:dLbls"
+    ],
+    "sdkClass": "DataLabelPosition",
+    "provenance": "schema"
+  },
+  {
+    "tag": "dLbls",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:area3DChart",
+      "c:areaChart",
+      "c:bar3DChart",
+      "c:barChart",
+      "c:bubbleChart",
+      "c:doughnutChart",
+      "c:line3DChart",
+      "c:lineChart",
+      "c:ofPieChart",
+      "c:pie3DChart",
+      "c:pieChart",
+      "c:radarChart",
+      "c:scatterChart",
+      "c:ser",
+      "c:stockChart"
+    ],
+    "sdkClass": "DataLabels",
+    "provenance": "schema"
+  },
+  {
+    "tag": "doughnutChart",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:plotArea"
+    ],
+    "sdkClass": "DoughnutChart",
+    "provenance": "schema"
+  },
+  {
+    "tag": "downBars",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:upDownBars"
+    ],
+    "sdkClass": "DownBars",
+    "provenance": "schema"
+  },
+  {
+    "tag": "dPt",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:ser"
+    ],
+    "sdkClass": "DataPoint",
+    "provenance": "schema"
+  },
+  {
+    "tag": "dropLines",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:area3DChart",
+      "c:areaChart",
+      "c:line3DChart",
+      "c:lineChart",
+      "c:stockChart"
+    ],
+    "sdkClass": "DropLines",
+    "provenance": "schema"
+  },
+  {
+    "tag": "dTable",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:plotArea"
+    ],
+    "sdkClass": "DataTable",
+    "provenance": "schema"
+  },
+  {
+    "tag": "errBars",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:ser"
+    ],
+    "sdkClass": "ErrorBars",
+    "provenance": "schema"
+  },
+  {
+    "tag": "errBarType",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:errBars"
+    ],
+    "sdkClass": "ErrorBarType",
+    "provenance": "schema"
+  },
+  {
+    "tag": "errDir",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:errBars"
+    ],
+    "sdkClass": "ErrorDirection",
+    "provenance": "schema"
+  },
+  {
+    "tag": "errValType",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:errBars"
+    ],
+    "sdkClass": "ErrorBarValueType",
+    "provenance": "schema"
+  },
+  {
+    "tag": "evenFooter",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:headerFooter"
+    ],
+    "sdkClass": "EvenFooter",
+    "provenance": "schema"
+  },
+  {
+    "tag": "evenHeader",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:headerFooter"
+    ],
+    "sdkClass": "EvenHeader",
+    "provenance": "schema"
+  },
+  {
+    "tag": "explosion",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:dPt",
+      "c:ser"
+    ],
+    "sdkClass": "Explosion",
+    "provenance": "schema"
+  },
+  {
+    "tag": "ext",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":uri"
+    ],
+    "parents": [
+      "c:extLst"
+    ],
+    "sdkClass": "ChartSpaceExtension",
+    "provenance": "schema"
+  },
+  {
+    "tag": "externalData",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      "r:id"
+    ],
+    "parents": [
+      "c:chartSpace"
+    ],
+    "sdkClass": "ExternalData",
+    "provenance": "schema"
+  },
+  {
+    "tag": "extLst",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:area3DChart",
+      "c:areaChart",
+      "c:backWall",
+      "c:bar3DChart",
+      "c:barChart",
+      "c:bubbleChart",
+      "c:catAx",
+      "c:chart",
+      "c:chartSpace",
+      "c:dLbl",
+      "c:dLbls",
+      "c:dPt",
+      "c:dTable",
+      "c:dateAx",
+      "c:dispUnits",
+      "c:doughnutChart",
+      "c:errBars",
+      "c:floor",
+      "c:layout",
+      "c:legend",
+      "c:legendEntry",
+      "c:line3DChart",
+      "c:lineChart",
+      "c:manualLayout",
+      "c:marker",
+      "c:multiLvlStrCache",
+      "c:multiLvlStrRef",
+      "c:numCache",
+      "c:numLit",
+      "c:numRef",
+      "c:ofPieChart",
+      "c:pie3DChart",
+      "c:pieChart",
+      "c:pivotFmt",
+      "c:pivotSource",
+      "c:plotArea",
+      "c:radarChart",
+      "c:scaling",
+      "c:scatterChart",
+      "c:ser",
+      "c:serAx",
+      "c:sideWall",
+      "c:stockChart",
+      "c:strCache",
+      "c:strLit",
+      "c:strRef",
+      "c:surface3DChart",
+      "c:surfaceChart",
+      "c:title",
+      "c:trendline",
+      "c:trendlineLbl",
+      "c:upDownBars",
+      "c:valAx",
+      "c:view3D"
+    ],
+    "sdkClass": "ChartSpaceExtensionList",
+    "provenance": "schema"
+  },
+  {
+    "tag": "f",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:multiLvlStrRef",
+      "c:numRef",
+      "c:strRef"
+    ],
+    "sdkClass": "Formula",
+    "provenance": "schema"
+  },
+  {
+    "tag": "firstFooter",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:headerFooter"
+    ],
+    "sdkClass": "FirstFooter",
+    "provenance": "schema"
+  },
+  {
+    "tag": "firstHeader",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:headerFooter"
+    ],
+    "sdkClass": "FirstHeader",
+    "provenance": "schema"
+  },
+  {
+    "tag": "firstSliceAng",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:doughnutChart",
+      "c:pieChart"
+    ],
+    "sdkClass": "FirstSliceAngle",
+    "provenance": "schema"
+  },
+  {
+    "tag": "floor",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:chart"
+    ],
+    "sdkClass": "Floor",
+    "provenance": "schema"
+  },
+  {
+    "tag": "fmtId",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:pivotSource"
+    ],
+    "sdkClass": "FormatId",
+    "provenance": "schema"
+  },
+  {
+    "tag": "formatCode",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:numCache",
+      "c:numLit"
+    ],
+    "sdkClass": "FormatCode",
+    "provenance": "schema"
+  },
+  {
+    "tag": "formatting",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:protection"
+    ],
+    "sdkClass": "Formatting",
+    "provenance": "schema"
+  },
+  {
+    "tag": "forward",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:trendline"
+    ],
+    "sdkClass": "Forward",
+    "provenance": "schema"
+  },
+  {
+    "tag": "gapDepth",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:area3DChart",
+      "c:bar3DChart",
+      "c:line3DChart"
+    ],
+    "sdkClass": "GapDepth",
+    "provenance": "schema"
+  },
+  {
+    "tag": "gapWidth",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:bar3DChart",
+      "c:barChart",
+      "c:ofPieChart",
+      "c:upDownBars"
+    ],
+    "sdkClass": "GapWidth",
+    "provenance": "schema"
+  },
+  {
+    "tag": "grouping",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:area3DChart",
+      "c:areaChart",
+      "c:bar3DChart",
+      "c:barChart",
+      "c:line3DChart",
+      "c:lineChart"
+    ],
+    "sdkClass": "BarGrouping",
+    "provenance": "schema"
+  },
+  {
+    "tag": "h",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:manualLayout"
+    ],
+    "sdkClass": "Height",
+    "provenance": "schema"
+  },
+  {
+    "tag": "headerFooter",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":alignWithMargins",
+      ":differentFirst",
+      ":differentOddEven"
+    ],
+    "parents": [
+      "c:printSettings"
+    ],
+    "sdkClass": "HeaderFooter",
+    "provenance": "schema"
+  },
+  {
+    "tag": "hiLowLines",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:lineChart",
+      "c:stockChart"
+    ],
+    "sdkClass": "HighLowLines",
+    "provenance": "schema"
+  },
+  {
+    "tag": "hMode",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:manualLayout"
+    ],
+    "sdkClass": "HeightMode",
+    "provenance": "schema"
+  },
+  {
+    "tag": "holeSize",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:doughnutChart"
+    ],
+    "sdkClass": "HoleSize",
+    "provenance": "schema"
+  },
+  {
+    "tag": "hPercent",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:view3D"
+    ],
+    "sdkClass": "HeightPercent",
+    "provenance": "schema"
+  },
+  {
+    "tag": "idx",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:bandFmt",
+      "c:dLbl",
+      "c:dPt",
+      "c:legendEntry",
+      "c:pivotFmt",
+      "c:ser"
+    ],
+    "sdkClass": "Index",
+    "provenance": "schema"
+  },
+  {
+    "tag": "intercept",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:trendline"
+    ],
+    "sdkClass": "Intercept",
+    "provenance": "schema"
+  },
+  {
+    "tag": "invertIfNegative",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:dPt",
+      "c:ser"
+    ],
+    "sdkClass": "InvertIfNegative",
+    "provenance": "schema"
+  },
+  {
+    "tag": "lang",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:chartSpace"
+    ],
+    "sdkClass": "EditingLanguage",
+    "provenance": "schema"
+  },
+  {
+    "tag": "layout",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:dLbl",
+      "c:dispUnitsLbl",
+      "c:legend",
+      "c:plotArea",
+      "c:title",
+      "c:trendlineLbl"
+    ],
+    "sdkClass": "Layout",
+    "provenance": "schema"
+  },
+  {
+    "tag": "layoutTarget",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:manualLayout"
+    ],
+    "sdkClass": "LayoutTarget",
+    "provenance": "schema"
+  },
+  {
+    "tag": "lblAlgn",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:catAx"
+    ],
+    "sdkClass": "LabelAlignment",
+    "provenance": "schema"
+  },
+  {
+    "tag": "lblOffset",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:catAx",
+      "c:dateAx"
+    ],
+    "sdkClass": "LabelOffset",
+    "provenance": "schema"
+  },
+  {
+    "tag": "leaderLines",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:dLbls"
+    ],
+    "sdkClass": "LeaderLines",
+    "provenance": "schema"
+  },
+  {
+    "tag": "legacyDrawingHF",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      "r:id"
+    ],
+    "parents": [
+      "c:printSettings"
+    ],
+    "sdkClass": "LegacyDrawingHeaderFooter",
+    "provenance": "schema"
+  },
+  {
+    "tag": "legend",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:chart"
+    ],
+    "sdkClass": "Legend",
+    "provenance": "schema"
+  },
+  {
+    "tag": "legendEntry",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:legend"
+    ],
+    "sdkClass": "LegendEntry",
+    "provenance": "schema"
+  },
+  {
+    "tag": "legendPos",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:legend"
+    ],
+    "sdkClass": "LegendPosition",
+    "provenance": "schema"
+  },
+  {
+    "tag": "line3DChart",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:plotArea"
+    ],
+    "sdkClass": "Line3DChart",
+    "provenance": "schema"
+  },
+  {
+    "tag": "lineChart",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:plotArea"
+    ],
+    "sdkClass": "LineChart",
+    "provenance": "schema"
+  },
+  {
+    "tag": "logBase",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:scaling"
+    ],
+    "sdkClass": "LogBase",
+    "provenance": "schema"
+  },
+  {
+    "tag": "lvl",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:multiLvlStrCache"
+    ],
+    "sdkClass": "Level",
+    "provenance": "schema"
+  },
+  {
+    "tag": "majorGridlines",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:catAx",
+      "c:dateAx",
+      "c:serAx",
+      "c:valAx"
+    ],
+    "sdkClass": "MajorGridlines",
+    "provenance": "schema"
+  },
+  {
+    "tag": "majorTickMark",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:catAx",
+      "c:dateAx",
+      "c:serAx",
+      "c:valAx"
+    ],
+    "sdkClass": "MajorTickMark",
+    "provenance": "schema"
+  },
+  {
+    "tag": "majorTimeUnit",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:dateAx"
+    ],
+    "sdkClass": "MajorTimeUnit",
+    "provenance": "schema"
+  },
+  {
+    "tag": "majorUnit",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:dateAx",
+      "c:valAx"
+    ],
+    "sdkClass": "MajorUnit",
+    "provenance": "schema"
+  },
+  {
+    "tag": "manualLayout",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:layout"
+    ],
+    "sdkClass": "ManualLayout",
+    "provenance": "schema"
+  },
+  {
+    "tag": "marker",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:dPt",
+      "c:lineChart",
+      "c:pivotFmt",
+      "c:ser"
+    ],
+    "sdkClass": "Marker",
+    "provenance": "schema"
+  },
+  {
+    "tag": "max",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:scaling"
+    ],
+    "sdkClass": "MaxAxisValue",
+    "provenance": "schema"
+  },
+  {
+    "tag": "min",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:scaling"
+    ],
+    "sdkClass": "MinAxisValue",
+    "provenance": "schema"
+  },
+  {
+    "tag": "minorGridlines",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:catAx",
+      "c:dateAx",
+      "c:serAx",
+      "c:valAx"
+    ],
+    "sdkClass": "MinorGridlines",
+    "provenance": "schema"
+  },
+  {
+    "tag": "minorTickMark",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:catAx",
+      "c:dateAx",
+      "c:serAx",
+      "c:valAx"
+    ],
+    "sdkClass": "MinorTickMark",
+    "provenance": "schema"
+  },
+  {
+    "tag": "minorTimeUnit",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:dateAx"
+    ],
+    "sdkClass": "MinorTimeUnit",
+    "provenance": "schema"
+  },
+  {
+    "tag": "minorUnit",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:dateAx",
+      "c:valAx"
+    ],
+    "sdkClass": "MinorUnit",
+    "provenance": "schema"
+  },
+  {
+    "tag": "minus",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:errBars"
+    ],
+    "sdkClass": "Minus",
+    "provenance": "schema"
+  },
+  {
+    "tag": "multiLvlStrCache",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:multiLvlStrRef"
+    ],
+    "sdkClass": "MultiLevelStringCache",
+    "provenance": "schema"
+  },
+  {
+    "tag": "multiLvlStrRef",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:cat",
+      "c:xVal"
+    ],
+    "sdkClass": "MultiLevelStringReference",
+    "provenance": "schema"
+  },
+  {
+    "tag": "name",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:pivotSource",
+      "c:trendline"
+    ],
+    "sdkClass": "PivotTableName",
+    "provenance": "schema"
+  },
+  {
+    "tag": "noEndCap",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:errBars"
+    ],
+    "sdkClass": "NoEndCap",
+    "provenance": "schema"
+  },
+  {
+    "tag": "noMultiLvlLbl",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:catAx"
+    ],
+    "sdkClass": "NoMultiLevelLabels",
+    "provenance": "schema"
+  },
+  {
+    "tag": "numCache",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:numRef"
+    ],
+    "sdkClass": "NumberingCache",
+    "provenance": "schema"
+  },
+  {
+    "tag": "numFmt",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":formatCode",
+      ":sourceLinked"
+    ],
+    "parents": [
+      "c:catAx",
+      "c:dLbl",
+      "c:dLbls",
+      "c:dateAx",
+      "c:serAx",
+      "c:trendlineLbl",
+      "c:valAx"
+    ],
+    "sdkClass": "NumberingFormat",
+    "provenance": "schema"
+  },
+  {
+    "tag": "numLit",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:bubbleSize",
+      "c:cat",
+      "c:minus",
+      "c:plus",
+      "c:val",
+      "c:xVal",
+      "c:yVal"
+    ],
+    "sdkClass": "NumberLiteral",
+    "provenance": "schema"
+  },
+  {
+    "tag": "numRef",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:bubbleSize",
+      "c:cat",
+      "c:minus",
+      "c:plus",
+      "c:val",
+      "c:xVal",
+      "c:yVal"
+    ],
+    "sdkClass": "NumberReference",
+    "provenance": "schema"
+  },
+  {
+    "tag": "oddFooter",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:headerFooter"
+    ],
+    "sdkClass": "OddFooter",
+    "provenance": "schema"
+  },
+  {
+    "tag": "oddHeader",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:headerFooter"
+    ],
+    "sdkClass": "OddHeader",
+    "provenance": "schema"
+  },
+  {
+    "tag": "ofPieChart",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:plotArea"
+    ],
+    "sdkClass": "OfPieChart",
+    "provenance": "schema"
+  },
+  {
+    "tag": "ofPieType",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:ofPieChart"
+    ],
+    "sdkClass": "OfPieType",
+    "provenance": "schema"
+  },
+  {
+    "tag": "order",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:ser",
+      "c:trendline"
+    ],
+    "sdkClass": "PolynomialOrder",
+    "provenance": "schema"
+  },
+  {
+    "tag": "orientation",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:scaling"
+    ],
+    "sdkClass": "Orientation",
+    "provenance": "schema"
+  },
+  {
+    "tag": "overlap",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:barChart"
+    ],
+    "sdkClass": "Overlap",
+    "provenance": "schema"
+  },
+  {
+    "tag": "overlay",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:legend",
+      "c:title"
+    ],
+    "sdkClass": "Overlay",
+    "provenance": "schema"
+  },
+  {
+    "tag": "pageMargins",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":b",
+      ":footer",
+      ":header",
+      ":l",
+      ":r",
+      ":t"
+    ],
+    "parents": [
+      "c:printSettings"
+    ],
+    "sdkClass": "PageMargins",
+    "provenance": "schema"
+  },
+  {
+    "tag": "pageSetup",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":blackAndWhite",
+      ":copies",
+      ":draft",
+      ":firstPageNumber",
+      ":horizontalDpi",
+      ":orientation",
+      ":paperSize",
+      ":useFirstPageNumber",
+      ":verticalDpi"
+    ],
+    "parents": [
+      "c:printSettings"
+    ],
+    "sdkClass": "PageSetup",
+    "provenance": "schema"
+  },
+  {
+    "tag": "period",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:trendline"
+    ],
+    "sdkClass": "Period",
+    "provenance": "schema"
+  },
+  {
+    "tag": "perspective",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:view3D"
+    ],
+    "sdkClass": "Perspective",
+    "provenance": "schema"
+  },
+  {
+    "tag": "pictureFormat",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:pictureOptions"
+    ],
+    "sdkClass": "PictureFormat",
+    "provenance": "schema"
+  },
+  {
+    "tag": "pictureOptions",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:backWall",
+      "c:dPt",
+      "c:floor",
+      "c:ser",
+      "c:sideWall"
+    ],
+    "sdkClass": "PictureOptions",
+    "provenance": "schema"
+  },
+  {
+    "tag": "pictureStackUnit",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:pictureOptions"
+    ],
+    "sdkClass": "PictureStackUnit",
+    "provenance": "schema"
+  },
+  {
+    "tag": "pie3DChart",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:plotArea"
+    ],
+    "sdkClass": "Pie3DChart",
+    "provenance": "schema"
+  },
+  {
+    "tag": "pieChart",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:plotArea"
+    ],
+    "sdkClass": "PieChart",
+    "provenance": "schema"
+  },
+  {
+    "tag": "pivotFmt",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:pivotFmts"
+    ],
+    "sdkClass": "PivotFormat",
+    "provenance": "schema"
+  },
+  {
+    "tag": "pivotFmts",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:chart"
+    ],
+    "sdkClass": "PivotFormats",
+    "provenance": "schema"
+  },
+  {
+    "tag": "pivotSource",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:chartSpace"
+    ],
+    "sdkClass": "PivotSource",
+    "provenance": "schema"
+  },
+  {
+    "tag": "plotArea",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:chart"
+    ],
+    "sdkClass": "PlotArea",
+    "provenance": "schema"
+  },
+  {
+    "tag": "plotVisOnly",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:chart"
+    ],
+    "sdkClass": "PlotVisibleOnly",
+    "provenance": "schema"
+  },
+  {
+    "tag": "plus",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:errBars"
+    ],
+    "sdkClass": "Plus",
+    "provenance": "schema"
+  },
+  {
+    "tag": "printSettings",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:chartSpace"
+    ],
+    "sdkClass": "PrintSettings",
+    "provenance": "schema"
+  },
+  {
+    "tag": "protection",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:chartSpace"
+    ],
+    "sdkClass": "Protection",
+    "provenance": "schema"
+  },
+  {
+    "tag": "pt",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":formatCode",
+      ":idx"
+    ],
+    "parents": [
+      "c:lvl",
+      "c:numCache",
+      "c:numLit",
+      "c:strCache",
+      "c:strLit"
+    ],
+    "sdkClass": "StringPoint",
+    "provenance": "schema"
+  },
+  {
+    "tag": "ptCount",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:multiLvlStrCache",
+      "c:numCache",
+      "c:numLit",
+      "c:strCache",
+      "c:strLit"
+    ],
+    "sdkClass": "PointCount",
+    "provenance": "schema"
+  },
+  {
+    "tag": "radarChart",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:plotArea"
+    ],
+    "sdkClass": "RadarChart",
+    "provenance": "schema"
+  },
+  {
+    "tag": "radarStyle",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:radarChart"
+    ],
+    "sdkClass": "RadarStyle",
+    "provenance": "schema"
+  },
+  {
+    "tag": "rAngAx",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:view3D"
+    ],
+    "sdkClass": "RightAngleAxes",
+    "provenance": "schema"
+  },
+  {
+    "tag": "rich",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:tx"
+    ],
+    "sdkClass": "RichText",
+    "provenance": "schema"
+  },
+  {
+    "tag": "rotX",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:view3D"
+    ],
+    "sdkClass": "RotateX",
+    "provenance": "schema"
+  },
+  {
+    "tag": "rotY",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:view3D"
+    ],
+    "sdkClass": "RotateY",
+    "provenance": "schema"
+  },
+  {
+    "tag": "roundedCorners",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:chartSpace"
+    ],
+    "sdkClass": "RoundedCorners",
+    "provenance": "schema"
+  },
+  {
+    "tag": "scaling",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:catAx",
+      "c:dateAx",
+      "c:serAx",
+      "c:valAx"
+    ],
+    "sdkClass": "Scaling",
+    "provenance": "schema"
+  },
+  {
+    "tag": "scatterChart",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:plotArea"
+    ],
+    "sdkClass": "ScatterChart",
+    "provenance": "schema"
+  },
+  {
+    "tag": "scatterStyle",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:scatterChart"
+    ],
+    "sdkClass": "ScatterStyle",
+    "provenance": "schema"
+  },
+  {
+    "tag": "secondPiePt",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:custSplit"
+    ],
+    "sdkClass": "SecondPiePoint",
+    "provenance": "schema"
+  },
+  {
+    "tag": "secondPieSize",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:ofPieChart"
+    ],
+    "sdkClass": "SecondPieSize",
+    "provenance": "schema"
+  },
+  {
+    "tag": "selection",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:protection"
+    ],
+    "sdkClass": "Selection",
+    "provenance": "schema"
+  },
+  {
+    "tag": "separator",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:dLbl",
+      "c:dLbls"
+    ],
+    "sdkClass": "Separator",
+    "provenance": "schema"
+  },
+  {
+    "tag": "ser",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:area3DChart",
+      "c:areaChart",
+      "c:bar3DChart",
+      "c:barChart",
+      "c:bubbleChart",
+      "c:doughnutChart",
+      "c:line3DChart",
+      "c:lineChart",
+      "c:ofPieChart",
+      "c:pie3DChart",
+      "c:pieChart",
+      "c:radarChart",
+      "c:scatterChart",
+      "c:stockChart",
+      "c:surface3DChart",
+      "c:surfaceChart"
+    ],
+    "sdkClass": "BubbleChartSeries",
+    "provenance": "schema"
+  },
+  {
+    "tag": "serAx",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:plotArea"
+    ],
+    "sdkClass": "SeriesAxis",
+    "provenance": "schema"
+  },
+  {
+    "tag": "serLines",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:barChart",
+      "c:ofPieChart"
+    ],
+    "sdkClass": "SeriesLines",
+    "provenance": "schema"
+  },
+  {
+    "tag": "shape",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:bar3DChart",
+      "c:ser"
+    ],
+    "sdkClass": "Shape",
+    "provenance": "schema"
+  },
+  {
+    "tag": "showBubbleSize",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:dLbl",
+      "c:dLbls"
+    ],
+    "sdkClass": "ShowBubbleSize",
+    "provenance": "schema"
+  },
+  {
+    "tag": "showCatName",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:dLbl",
+      "c:dLbls"
+    ],
+    "sdkClass": "ShowCategoryName",
+    "provenance": "schema"
+  },
+  {
+    "tag": "showDLblsOverMax",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:chart"
+    ],
+    "sdkClass": "ShowDataLabelsOverMaximum",
+    "provenance": "schema"
+  },
+  {
+    "tag": "showHorzBorder",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:dTable"
+    ],
+    "sdkClass": "ShowHorizontalBorder",
+    "provenance": "schema"
+  },
+  {
+    "tag": "showKeys",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:dTable"
+    ],
+    "sdkClass": "ShowKeys",
+    "provenance": "schema"
+  },
+  {
+    "tag": "showLeaderLines",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:dLbls"
+    ],
+    "sdkClass": "ShowLeaderLines",
+    "provenance": "schema"
+  },
+  {
+    "tag": "showLegendKey",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:dLbl",
+      "c:dLbls"
+    ],
+    "sdkClass": "ShowLegendKey",
+    "provenance": "schema"
+  },
+  {
+    "tag": "showNegBubbles",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:bubbleChart"
+    ],
+    "sdkClass": "ShowNegativeBubbles",
+    "provenance": "schema"
+  },
+  {
+    "tag": "showOutline",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:dTable"
+    ],
+    "sdkClass": "ShowOutlineBorder",
+    "provenance": "schema"
+  },
+  {
+    "tag": "showPercent",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:dLbl",
+      "c:dLbls"
+    ],
+    "sdkClass": "ShowPercent",
+    "provenance": "schema"
+  },
+  {
+    "tag": "showSerName",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:dLbl",
+      "c:dLbls"
+    ],
+    "sdkClass": "ShowSeriesName",
+    "provenance": "schema"
+  },
+  {
+    "tag": "showVal",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:dLbl",
+      "c:dLbls"
+    ],
+    "sdkClass": "ShowValue",
+    "provenance": "schema"
+  },
+  {
+    "tag": "showVertBorder",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:dTable"
+    ],
+    "sdkClass": "ShowVerticalBorder",
+    "provenance": "schema"
+  },
+  {
+    "tag": "sideWall",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:chart"
+    ],
+    "sdkClass": "SideWall",
+    "provenance": "schema"
+  },
+  {
+    "tag": "size",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:marker"
+    ],
+    "sdkClass": "Size",
+    "provenance": "schema"
+  },
+  {
+    "tag": "sizeRepresents",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:bubbleChart"
+    ],
+    "sdkClass": "SizeRepresents",
+    "provenance": "schema"
+  },
+  {
+    "tag": "smooth",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:lineChart",
+      "c:ser"
+    ],
+    "sdkClass": "Smooth",
+    "provenance": "schema"
+  },
+  {
+    "tag": "splitPos",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:ofPieChart"
+    ],
+    "sdkClass": "SplitPosition",
+    "provenance": "schema"
+  },
+  {
+    "tag": "splitType",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:ofPieChart"
+    ],
+    "sdkClass": "SplitType",
+    "provenance": "schema"
+  },
+  {
+    "tag": "spPr",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":bwMode"
+    ],
+    "parents": [
+      "c:backWall",
+      "c:bandFmt",
+      "c:catAx",
+      "c:chartSpace",
+      "c:dLbl",
+      "c:dLbls",
+      "c:dPt",
+      "c:dTable",
+      "c:dateAx",
+      "c:dispUnitsLbl",
+      "c:downBars",
+      "c:dropLines",
+      "c:errBars",
+      "c:floor",
+      "c:hiLowLines",
+      "c:leaderLines",
+      "c:legend",
+      "c:majorGridlines",
+      "c:marker",
+      "c:minorGridlines",
+      "c:pivotFmt",
+      "c:plotArea",
+      "c:ser",
+      "c:serAx",
+      "c:serLines",
+      "c:sideWall",
+      "c:title",
+      "c:trendline",
+      "c:trendlineLbl",
+      "c:upBars",
+      "c:valAx"
+    ],
+    "sdkClass": "ShapeProperties",
+    "provenance": "schema"
+  },
+  {
+    "tag": "stockChart",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:plotArea"
+    ],
+    "sdkClass": "StockChart",
+    "provenance": "schema"
+  },
+  {
+    "tag": "strCache",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:strRef"
+    ],
+    "sdkClass": "StringCache",
+    "provenance": "schema"
+  },
+  {
+    "tag": "strLit",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:cat",
+      "c:tx",
+      "c:xVal"
+    ],
+    "sdkClass": "StringLiteral",
+    "provenance": "schema"
+  },
+  {
+    "tag": "strRef",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:cat",
+      "c:tx",
+      "c:xVal"
+    ],
+    "sdkClass": "StringReference",
+    "provenance": "schema"
+  },
+  {
+    "tag": "style",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:chartSpace"
+    ],
+    "sdkClass": "Style",
+    "provenance": "schema"
+  },
+  {
+    "tag": "surface3DChart",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:plotArea"
+    ],
+    "sdkClass": "Surface3DChart",
+    "provenance": "schema"
+  },
+  {
+    "tag": "surfaceChart",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:plotArea"
+    ],
+    "sdkClass": "SurfaceChart",
+    "provenance": "schema"
+  },
+  {
+    "tag": "symbol",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:marker"
+    ],
+    "sdkClass": "Symbol",
+    "provenance": "schema"
+  },
+  {
+    "tag": "thickness",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:backWall",
+      "c:floor",
+      "c:sideWall"
+    ],
+    "sdkClass": "Thickness",
+    "provenance": "schema"
+  },
+  {
+    "tag": "tickLblPos",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:catAx",
+      "c:dateAx",
+      "c:serAx",
+      "c:valAx"
+    ],
+    "sdkClass": "TickLabelPosition",
+    "provenance": "schema"
+  },
+  {
+    "tag": "tickLblSkip",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:catAx",
+      "c:serAx"
+    ],
+    "sdkClass": "TickLabelSkip",
+    "provenance": "schema"
+  },
+  {
+    "tag": "tickMarkSkip",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:catAx",
+      "c:serAx"
+    ],
+    "sdkClass": "TickMarkSkip",
+    "provenance": "schema"
+  },
+  {
+    "tag": "title",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:catAx",
+      "c:chart",
+      "c:dateAx",
+      "c:serAx",
+      "c:valAx"
+    ],
+    "sdkClass": "Title",
+    "provenance": "schema"
+  },
+  {
+    "tag": "trendline",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:ser"
+    ],
+    "sdkClass": "Trendline",
+    "provenance": "schema"
+  },
+  {
+    "tag": "trendlineLbl",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:trendline"
+    ],
+    "sdkClass": "TrendlineLabel",
+    "provenance": "schema"
+  },
+  {
+    "tag": "trendlineType",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:trendline"
+    ],
+    "sdkClass": "TrendlineType",
+    "provenance": "schema"
+  },
+  {
+    "tag": "tx",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:dLbl",
+      "c:dispUnitsLbl",
+      "c:ser",
+      "c:title",
+      "c:trendlineLbl"
+    ],
+    "sdkClass": "SeriesText",
+    "provenance": "schema"
+  },
+  {
+    "tag": "txPr",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:catAx",
+      "c:chartSpace",
+      "c:dLbl",
+      "c:dLbls",
+      "c:dTable",
+      "c:dateAx",
+      "c:dispUnitsLbl",
+      "c:legend",
+      "c:legendEntry",
+      "c:serAx",
+      "c:title",
+      "c:trendlineLbl",
+      "c:valAx"
+    ],
+    "sdkClass": "TextProperties",
+    "provenance": "schema"
+  },
+  {
+    "tag": "upBars",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:upDownBars"
+    ],
+    "sdkClass": "UpBars",
+    "provenance": "schema"
+  },
+  {
+    "tag": "upDownBars",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:lineChart",
+      "c:stockChart"
+    ],
+    "sdkClass": "UpDownBars",
+    "provenance": "schema"
+  },
+  {
+    "tag": "userInterface",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:protection"
+    ],
+    "sdkClass": "UserInterface",
+    "provenance": "schema"
+  },
+  {
+    "tag": "userShapes",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      "r:id"
+    ],
+    "parents": [
+      "a:graphicData",
+      "c:chartSpace"
+    ],
+    "sdkClass": "UserShapesReference",
+    "provenance": "schema"
+  },
+  {
+    "tag": "v",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:pt",
+      "c:tx"
+    ],
+    "sdkClass": "NumericValue",
+    "provenance": "schema"
+  },
+  {
+    "tag": "val",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:errBars",
+      "c:ser"
+    ],
+    "sdkClass": "Values",
+    "provenance": "schema"
+  },
+  {
+    "tag": "valAx",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:plotArea"
+    ],
+    "sdkClass": "ValueAxis",
+    "provenance": "schema"
+  },
+  {
+    "tag": "varyColors",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:area3DChart",
+      "c:areaChart",
+      "c:bar3DChart",
+      "c:barChart",
+      "c:bubbleChart",
+      "c:doughnutChart",
+      "c:line3DChart",
+      "c:lineChart",
+      "c:ofPieChart",
+      "c:pie3DChart",
+      "c:pieChart",
+      "c:radarChart",
+      "c:scatterChart",
+      "c:surface3DChart"
+    ],
+    "sdkClass": "VaryColors",
+    "provenance": "schema"
+  },
+  {
+    "tag": "view3D",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:chart"
+    ],
+    "sdkClass": "View3D",
+    "provenance": "schema"
+  },
+  {
+    "tag": "w",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:manualLayout"
+    ],
+    "sdkClass": "Width",
+    "provenance": "schema"
+  },
+  {
+    "tag": "wireframe",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:surface3DChart",
+      "c:surfaceChart"
+    ],
+    "sdkClass": "Wireframe",
+    "provenance": "schema"
+  },
+  {
+    "tag": "wMode",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:manualLayout"
+    ],
+    "sdkClass": "WidthMode",
+    "provenance": "schema"
+  },
+  {
+    "tag": "x",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:manualLayout"
+    ],
+    "sdkClass": "Left",
+    "provenance": "schema"
+  },
+  {
+    "tag": "xMode",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:manualLayout"
+    ],
+    "sdkClass": "LeftMode",
+    "provenance": "schema"
+  },
+  {
+    "tag": "xVal",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:ser"
+    ],
+    "sdkClass": "XValues",
+    "provenance": "schema"
+  },
+  {
+    "tag": "y",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:manualLayout"
+    ],
+    "sdkClass": "Top",
+    "provenance": "schema"
+  },
+  {
+    "tag": "yMode",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "c:manualLayout"
+    ],
+    "sdkClass": "TopMode",
+    "provenance": "schema"
+  },
+  {
+    "tag": "yVal",
+    "namespace": "c",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:ser"
+    ],
+    "sdkClass": "YValues",
+    "provenance": "schema"
+  },
+  {
+    "tag": "absSizeAnchor",
+    "namespace": "cdr",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:userShapes"
+    ],
+    "sdkClass": "AbsoluteAnchorSize",
+    "provenance": "schema"
+  },
+  {
+    "tag": "blipFill",
+    "namespace": "cdr",
+    "domain": "shared",
+    "attributes": [
+      ":dpi",
+      ":rotWithShape"
+    ],
+    "parents": [
+      "cdr:pic"
+    ],
+    "sdkClass": "BlipFill",
+    "provenance": "schema"
+  },
+  {
+    "tag": "cNvCxnSpPr",
+    "namespace": "cdr",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "cdr:nvCxnSpPr"
+    ],
+    "sdkClass": "NonVisualConnectionShapeProperties",
+    "provenance": "schema"
+  },
+  {
+    "tag": "cNvGraphicFramePr",
+    "namespace": "cdr",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "cdr:nvGraphicFramePr"
+    ],
+    "sdkClass": "NonVisualGraphicFrameDrawingProperties",
+    "provenance": "schema"
+  },
+  {
+    "tag": "cNvGrpSpPr",
+    "namespace": "cdr",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "cdr:nvGrpSpPr"
+    ],
+    "sdkClass": "NonVisualGroupShapeDrawingProperties",
+    "provenance": "schema"
+  },
+  {
+    "tag": "cNvPicPr",
+    "namespace": "cdr",
+    "domain": "shared",
+    "attributes": [
+      ":preferRelativeResize"
+    ],
+    "parents": [
+      "cdr:nvPicPr"
+    ],
+    "sdkClass": "NonVisualPictureDrawingProperties",
+    "provenance": "schema"
+  },
+  {
+    "tag": "cNvPr",
+    "namespace": "cdr",
+    "domain": "shared",
+    "attributes": [
+      ":descr",
+      ":hidden",
+      ":id",
+      ":name",
+      ":title"
+    ],
+    "parents": [
+      "cdr:nvCxnSpPr",
+      "cdr:nvGraphicFramePr",
+      "cdr:nvGrpSpPr",
+      "cdr:nvPicPr",
+      "cdr:nvSpPr"
+    ],
+    "sdkClass": "NonVisualDrawingProperties",
+    "provenance": "schema"
+  },
+  {
+    "tag": "cNvSpPr",
+    "namespace": "cdr",
+    "domain": "shared",
+    "attributes": [
+      ":txBox"
+    ],
+    "parents": [
+      "cdr:nvSpPr"
+    ],
+    "sdkClass": "NonVisualShapeDrawingProperties",
+    "provenance": "schema"
+  },
+  {
+    "tag": "cxnSp",
+    "namespace": "cdr",
+    "domain": "shared",
+    "attributes": [
+      ":fPublished",
+      ":macro"
+    ],
+    "parents": [
+      "cdr:absSizeAnchor",
+      "cdr:grpSp",
+      "cdr:relSizeAnchor"
+    ],
+    "sdkClass": "ConnectionShape",
+    "provenance": "schema"
+  },
+  {
+    "tag": "ext",
+    "namespace": "cdr",
+    "domain": "shared",
+    "attributes": [
+      ":cx",
+      ":cy"
+    ],
+    "parents": [
+      "cdr:absSizeAnchor"
+    ],
+    "sdkClass": "Extent",
+    "provenance": "schema"
+  },
+  {
+    "tag": "from",
+    "namespace": "cdr",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "cdr:absSizeAnchor",
+      "cdr:relSizeAnchor"
+    ],
+    "sdkClass": "FromAnchor",
+    "provenance": "schema"
+  },
+  {
+    "tag": "graphicFrame",
+    "namespace": "cdr",
+    "domain": "shared",
+    "attributes": [
+      ":fPublished",
+      ":macro"
+    ],
+    "parents": [
+      "cdr:absSizeAnchor",
+      "cdr:grpSp",
+      "cdr:relSizeAnchor"
+    ],
+    "sdkClass": "GraphicFrame",
+    "provenance": "schema"
+  },
+  {
+    "tag": "grpSp",
+    "namespace": "cdr",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "cdr:absSizeAnchor",
+      "cdr:grpSp",
+      "cdr:relSizeAnchor"
+    ],
+    "sdkClass": "GroupShape",
+    "provenance": "schema"
+  },
+  {
+    "tag": "grpSpPr",
+    "namespace": "cdr",
+    "domain": "shared",
+    "attributes": [
+      ":bwMode"
+    ],
+    "parents": [
+      "cdr:grpSp"
+    ],
+    "sdkClass": "GroupShapeProperties",
+    "provenance": "schema"
+  },
+  {
+    "tag": "nvCxnSpPr",
+    "namespace": "cdr",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "cdr:cxnSp"
+    ],
+    "sdkClass": "NonVisualConnectorShapeDrawingProperties",
+    "provenance": "schema"
+  },
+  {
+    "tag": "nvGraphicFramePr",
+    "namespace": "cdr",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "cdr:graphicFrame"
+    ],
+    "sdkClass": "NonVisualGraphicFrameProperties",
+    "provenance": "schema"
+  },
+  {
+    "tag": "nvGrpSpPr",
+    "namespace": "cdr",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "cdr:grpSp"
+    ],
+    "sdkClass": "NonVisualGroupShapeProperties",
+    "provenance": "schema"
+  },
+  {
+    "tag": "nvPicPr",
+    "namespace": "cdr",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "cdr:pic"
+    ],
+    "sdkClass": "NonVisualPictureProperties",
+    "provenance": "schema"
+  },
+  {
+    "tag": "nvSpPr",
+    "namespace": "cdr",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "cdr:sp"
+    ],
+    "sdkClass": "NonVisualShapeProperties",
+    "provenance": "schema"
+  },
+  {
+    "tag": "pic",
+    "namespace": "cdr",
+    "domain": "shared",
+    "attributes": [
+      ":fPublished",
+      ":macro"
+    ],
+    "parents": [
+      "cdr:absSizeAnchor",
+      "cdr:grpSp",
+      "cdr:relSizeAnchor"
+    ],
+    "sdkClass": "Picture",
+    "provenance": "schema"
+  },
+  {
+    "tag": "relSizeAnchor",
+    "namespace": "cdr",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "c:userShapes"
+    ],
+    "sdkClass": "RelativeAnchorSize",
+    "provenance": "schema"
+  },
+  {
+    "tag": "sp",
+    "namespace": "cdr",
+    "domain": "shared",
+    "attributes": [
+      ":fLocksText",
+      ":fPublished",
+      ":macro",
+      ":textlink"
+    ],
+    "parents": [
+      "cdr:absSizeAnchor",
+      "cdr:grpSp",
+      "cdr:relSizeAnchor"
+    ],
+    "sdkClass": "Shape",
+    "provenance": "schema"
+  },
+  {
+    "tag": "spPr",
+    "namespace": "cdr",
+    "domain": "shared",
+    "attributes": [
+      ":bwMode"
+    ],
+    "parents": [
+      "cdr:cxnSp",
+      "cdr:pic",
+      "cdr:sp"
+    ],
+    "sdkClass": "ShapeProperties",
+    "provenance": "schema"
+  },
+  {
+    "tag": "style",
+    "namespace": "cdr",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "cdr:cxnSp",
+      "cdr:pic",
+      "cdr:sp"
+    ],
+    "sdkClass": "Style",
+    "provenance": "schema"
+  },
+  {
+    "tag": "to",
+    "namespace": "cdr",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "cdr:relSizeAnchor"
+    ],
+    "sdkClass": "ToAnchor",
+    "provenance": "schema"
+  },
+  {
+    "tag": "txBody",
+    "namespace": "cdr",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "cdr:sp"
+    ],
+    "sdkClass": "TextBody",
+    "provenance": "schema"
+  },
+  {
+    "tag": "x",
+    "namespace": "cdr",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "cdr:from",
+      "cdr:to"
+    ],
+    "sdkClass": "XPosition",
+    "provenance": "schema"
+  },
+  {
+    "tag": "xfrm",
+    "namespace": "cdr",
+    "domain": "shared",
+    "attributes": [
+      ":flipH",
+      ":flipV",
+      ":rot"
+    ],
+    "parents": [
+      "cdr:graphicFrame"
+    ],
+    "sdkClass": "Transform",
+    "provenance": "schema"
+  },
+  {
+    "tag": "y",
+    "namespace": "cdr",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "cdr:from",
+      "cdr:to"
+    ],
+    "sdkClass": "YPosition",
+    "provenance": "schema"
+  },
+  {
+    "tag": "adj",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [
+      ":idx",
+      ":val"
+    ],
+    "parents": [
+      "dgm:adjLst"
+    ],
+    "sdkClass": "Adjust",
+    "provenance": "schema"
+  },
+  {
+    "tag": "adjLst",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "dgm:shape"
+    ],
+    "sdkClass": "AdjustList",
+    "provenance": "schema"
+  },
+  {
+    "tag": "alg",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [
+      ":rev",
+      ":type"
+    ],
+    "parents": [
+      "dgm:else",
+      "dgm:forEach",
+      "dgm:if",
+      "dgm:layoutNode"
+    ],
+    "sdkClass": "Algorithm",
+    "provenance": "schema"
+  },
+  {
+    "tag": "animLvl",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "dgm:presLayoutVars",
+      "dgm:varLst"
+    ],
+    "sdkClass": "AnimationLevel",
+    "provenance": "schema"
+  },
+  {
+    "tag": "animOne",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "dgm:presLayoutVars",
+      "dgm:varLst"
+    ],
+    "sdkClass": "AnimateOneByOne",
+    "provenance": "schema"
+  },
+  {
+    "tag": "bg",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "dgm:dataModel"
+    ],
+    "sdkClass": "Background",
+    "provenance": "schema"
+  },
+  {
+    "tag": "bulletEnabled",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "dgm:presLayoutVars",
+      "dgm:varLst"
+    ],
+    "sdkClass": "BulletEnabled",
+    "provenance": "schema"
+  },
+  {
+    "tag": "cat",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [
+      ":pri",
+      ":type"
+    ],
+    "parents": [
+      "dgm:catLst"
+    ],
+    "sdkClass": "StyleDisplayCategory",
+    "provenance": "schema"
+  },
+  {
+    "tag": "catLst",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "dgm:colorsDef",
+      "dgm:colorsDefHdr",
+      "dgm:layoutDef",
+      "dgm:layoutDefHdr",
+      "dgm:styleDef",
+      "dgm:styleDefHdr"
+    ],
+    "sdkClass": "StyleDisplayCategories",
+    "provenance": "schema"
+  },
+  {
+    "tag": "chMax",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "dgm:presLayoutVars",
+      "dgm:varLst"
+    ],
+    "sdkClass": "MaxNumberOfChildren",
+    "provenance": "schema"
+  },
+  {
+    "tag": "choose",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [
+      ":name"
+    ],
+    "parents": [
+      "dgm:else",
+      "dgm:forEach",
+      "dgm:if",
+      "dgm:layoutNode"
+    ],
+    "sdkClass": "Choose",
+    "provenance": "schema"
+  },
+  {
+    "tag": "chPref",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "dgm:presLayoutVars",
+      "dgm:varLst"
+    ],
+    "sdkClass": "PreferredNumberOfChildren",
+    "provenance": "schema"
+  },
+  {
+    "tag": "clrData",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [
+      ":useDef"
+    ],
+    "parents": [
+      "dgm:layoutDef"
+    ],
+    "sdkClass": "ColorData",
+    "provenance": "schema"
+  },
+  {
+    "tag": "colorsDef",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [
+      ":minVer",
+      ":uniqueId"
+    ],
+    "parents": [
+      "a:graphicData"
+    ],
+    "sdkClass": "ColorsDefinition",
+    "provenance": "schema"
+  },
+  {
+    "tag": "colorsDefHdr",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [
+      ":minVer",
+      ":resId",
+      ":uniqueId"
+    ],
+    "parents": [
+      "a:graphicData",
+      "dgm:colorsDefHdrLst"
+    ],
+    "sdkClass": "ColorsDefinitionHeader",
+    "provenance": "schema"
+  },
+  {
+    "tag": "colorsDefHdrLst",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "a:graphicData"
+    ],
+    "sdkClass": "ColorsDefinitionHeaderList",
+    "provenance": "schema"
+  },
+  {
+    "tag": "constr",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [
+      ":fact",
+      ":for",
+      ":forName",
+      ":op",
+      ":ptType",
+      ":refFor",
+      ":refForName",
+      ":refPtType",
+      ":refType",
+      ":type",
+      ":val"
+    ],
+    "parents": [
+      "dgm:constrLst"
+    ],
+    "sdkClass": "Constraint",
+    "provenance": "schema"
+  },
+  {
+    "tag": "constrLst",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "dgm:else",
+      "dgm:forEach",
+      "dgm:if",
+      "dgm:layoutNode"
+    ],
+    "sdkClass": "Constraints",
+    "provenance": "schema"
+  },
+  {
+    "tag": "cxn",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [
+      ":destId",
+      ":destOrd",
+      ":modelId",
+      ":parTransId",
+      ":presId",
+      ":sibTransId",
+      ":srcId",
+      ":srcOrd",
+      ":type"
+    ],
+    "parents": [
+      "dgm:cxnLst"
+    ],
+    "sdkClass": "Connection",
+    "provenance": "schema"
+  },
+  {
+    "tag": "cxnLst",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "dgm:dataModel"
+    ],
+    "sdkClass": "ConnectionList",
+    "provenance": "schema"
+  },
+  {
+    "tag": "dataModel",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "a:graphicData",
+      "dgm:clrData",
+      "dgm:sampData",
+      "dgm:styleData"
+    ],
+    "sdkClass": "DataModel",
+    "provenance": "schema"
+  },
+  {
+    "tag": "desc",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [
+      ":lang",
+      ":val"
+    ],
+    "parents": [
+      "dgm:colorsDef",
+      "dgm:colorsDefHdr",
+      "dgm:layoutDef",
+      "dgm:layoutDefHdr",
+      "dgm:styleDef",
+      "dgm:styleDefHdr"
+    ],
+    "sdkClass": "StyleLabelDescription",
+    "provenance": "schema"
+  },
+  {
+    "tag": "dir",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "dgm:presLayoutVars",
+      "dgm:varLst"
+    ],
+    "sdkClass": "Direction",
+    "provenance": "schema"
+  },
+  {
+    "tag": "effectClrLst",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [
+      ":hueDir",
+      ":meth"
+    ],
+    "parents": [
+      "dgm:styleLbl"
+    ],
+    "sdkClass": "EffectColorList",
+    "provenance": "schema"
+  },
+  {
+    "tag": "else",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [
+      ":name"
+    ],
+    "parents": [
+      "dgm:choose"
+    ],
+    "sdkClass": "DiagramChooseElse",
+    "provenance": "schema"
+  },
+  {
+    "tag": "ext",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [
+      ":uri"
+    ],
+    "parents": [
+      "dgm:extLst"
+    ],
+    "sdkClass": "DiagramDefinitionExtension",
+    "provenance": "schema"
+  },
+  {
+    "tag": "extLst",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "dgm:alg",
+      "dgm:colorsDef",
+      "dgm:colorsDefHdr",
+      "dgm:constr",
+      "dgm:cxn",
+      "dgm:dataModel",
+      "dgm:else",
+      "dgm:forEach",
+      "dgm:if",
+      "dgm:layoutDef",
+      "dgm:layoutDefHdr",
+      "dgm:layoutNode",
+      "dgm:presOf",
+      "dgm:pt",
+      "dgm:rule",
+      "dgm:shape",
+      "dgm:styleDef",
+      "dgm:styleDefHdr",
+      "dgm:styleLbl"
+    ],
+    "sdkClass": "DiagramDefinitionExtensionList",
+    "provenance": "schema"
+  },
+  {
+    "tag": "fillClrLst",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [
+      ":hueDir",
+      ":meth"
+    ],
+    "parents": [
+      "dgm:styleLbl"
+    ],
+    "sdkClass": "FillColorList",
+    "provenance": "schema"
+  },
+  {
+    "tag": "forEach",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [
+      ":axis",
+      ":cnt",
+      ":hideLastTrans",
+      ":name",
+      ":ptType",
+      ":ref",
+      ":st",
+      ":step"
+    ],
+    "parents": [
+      "dgm:else",
+      "dgm:forEach",
+      "dgm:if",
+      "dgm:layoutNode"
+    ],
+    "sdkClass": "ForEach",
+    "provenance": "schema"
+  },
+  {
+    "tag": "hierBranch",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "dgm:presLayoutVars",
+      "dgm:varLst"
+    ],
+    "sdkClass": "HierarchyBranch",
+    "provenance": "schema"
+  },
+  {
+    "tag": "if",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [
+      ":arg",
+      ":axis",
+      ":cnt",
+      ":func",
+      ":hideLastTrans",
+      ":name",
+      ":op",
+      ":ptType",
+      ":st",
+      ":step",
+      ":val"
+    ],
+    "parents": [
+      "dgm:choose"
+    ],
+    "sdkClass": "DiagramChooseIf",
+    "provenance": "schema"
+  },
+  {
+    "tag": "layoutDef",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [
+      ":defStyle",
+      ":minVer",
+      ":uniqueId"
+    ],
+    "parents": [
+      "a:graphicData"
+    ],
+    "sdkClass": "LayoutDefinition",
+    "provenance": "schema"
+  },
+  {
+    "tag": "layoutDefHdr",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [
+      ":defStyle",
+      ":minVer",
+      ":resId",
+      ":uniqueId"
+    ],
+    "parents": [
+      "a:graphicData",
+      "dgm:layoutDefHdrLst"
+    ],
+    "sdkClass": "LayoutDefinitionHeader",
+    "provenance": "schema"
+  },
+  {
+    "tag": "layoutDefHdrLst",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "a:graphicData"
+    ],
+    "sdkClass": "LayoutDefinitionHeaderList",
+    "provenance": "schema"
+  },
+  {
+    "tag": "layoutNode",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [
+      ":chOrder",
+      ":moveWith",
+      ":name",
+      ":styleLbl"
+    ],
+    "parents": [
+      "dgm:else",
+      "dgm:forEach",
+      "dgm:if",
+      "dgm:layoutDef",
+      "dgm:layoutNode"
+    ],
+    "sdkClass": "LayoutNode",
+    "provenance": "schema"
+  },
+  {
+    "tag": "linClrLst",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [
+      ":hueDir",
+      ":meth"
+    ],
+    "parents": [
+      "dgm:styleLbl"
+    ],
+    "sdkClass": "LineColorList",
+    "provenance": "schema"
+  },
+  {
+    "tag": "orgChart",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "dgm:presLayoutVars",
+      "dgm:varLst"
+    ],
+    "sdkClass": "OrganizationChart",
+    "provenance": "schema"
+  },
+  {
+    "tag": "param",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [
+      ":type",
+      ":val"
+    ],
+    "parents": [
+      "dgm:alg"
+    ],
+    "sdkClass": "Parameter",
+    "provenance": "schema"
+  },
+  {
+    "tag": "presLayoutVars",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "dgm:prSet"
+    ],
+    "sdkClass": "PresentationLayoutVariables",
+    "provenance": "schema"
+  },
+  {
+    "tag": "presOf",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [
+      ":axis",
+      ":cnt",
+      ":hideLastTrans",
+      ":ptType",
+      ":st",
+      ":step"
+    ],
+    "parents": [
+      "dgm:else",
+      "dgm:forEach",
+      "dgm:if",
+      "dgm:layoutNode"
+    ],
+    "sdkClass": "PresentationOf",
+    "provenance": "schema"
+  },
+  {
+    "tag": "prSet",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [
+      ":coherent3DOff",
+      ":csCatId",
+      ":csTypeId",
+      ":custAng",
+      ":custFlipHor",
+      ":custFlipVert",
+      ":custLinFactNeighborX",
+      ":custLinFactNeighborY",
+      ":custLinFactX",
+      ":custLinFactY",
+      ":custRadScaleInc",
+      ":custRadScaleRad",
+      ":custScaleX",
+      ":custScaleY",
+      ":custSzX",
+      ":custSzY",
+      ":custT",
+      ":loCatId",
+      ":loTypeId",
+      ":phldr",
+      ":phldrT",
+      ":presAssocID",
+      ":presName",
+      ":presStyleCnt",
+      ":presStyleIdx",
+      ":presStyleLbl",
+      ":qsCatId",
+      ":qsTypeId"
+    ],
+    "parents": [
+      "dgm:pt"
+    ],
+    "sdkClass": "PropertySet",
+    "provenance": "schema"
+  },
+  {
+    "tag": "pt",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [
+      ":cxnId",
+      ":modelId",
+      ":type"
+    ],
+    "parents": [
+      "dgm:ptLst"
+    ],
+    "sdkClass": "Point",
+    "provenance": "schema"
+  },
+  {
+    "tag": "ptLst",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "dgm:dataModel"
+    ],
+    "sdkClass": "PointList",
+    "provenance": "schema"
+  },
+  {
+    "tag": "relIds",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [
+      "r:cs",
+      "r:dm",
+      "r:lo",
+      "r:qs"
+    ],
+    "parents": [
+      "a:graphicData"
+    ],
+    "sdkClass": "RelationshipIds",
+    "provenance": "schema"
+  },
+  {
+    "tag": "resizeHandles",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [
+      ":val"
+    ],
+    "parents": [
+      "dgm:presLayoutVars",
+      "dgm:varLst"
+    ],
+    "sdkClass": "ResizeHandles",
+    "provenance": "schema"
+  },
+  {
+    "tag": "rule",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [
+      ":fact",
+      ":for",
+      ":forName",
+      ":max",
+      ":ptType",
+      ":type",
+      ":val"
+    ],
+    "parents": [
+      "dgm:ruleLst"
+    ],
+    "sdkClass": "Rule",
+    "provenance": "schema"
+  },
+  {
+    "tag": "ruleLst",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "dgm:else",
+      "dgm:forEach",
+      "dgm:if",
+      "dgm:layoutNode"
+    ],
+    "sdkClass": "RuleList",
+    "provenance": "schema"
+  },
+  {
+    "tag": "sampData",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [
+      ":useDef"
+    ],
+    "parents": [
+      "dgm:layoutDef"
+    ],
+    "sdkClass": "SampleData",
+    "provenance": "schema"
+  },
+  {
+    "tag": "scene3d",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "dgm:styleDef",
+      "dgm:styleLbl"
+    ],
+    "sdkClass": "Scene3D",
+    "provenance": "schema"
+  },
+  {
+    "tag": "shape",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [
+      ":blipPhldr",
+      ":hideGeom",
+      ":lkTxEntry",
+      ":rot",
+      ":type",
+      ":zOrderOff",
+      "r:blip"
+    ],
+    "parents": [
+      "dgm:else",
+      "dgm:forEach",
+      "dgm:if",
+      "dgm:layoutNode"
+    ],
+    "sdkClass": "Shape",
+    "provenance": "schema"
+  },
+  {
+    "tag": "sp3d",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [
+      ":contourW",
+      ":extrusionH",
+      ":prstMaterial",
+      ":z"
+    ],
+    "parents": [
+      "dgm:styleLbl"
+    ],
+    "sdkClass": "Shape3D",
+    "provenance": "schema"
+  },
+  {
+    "tag": "spPr",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [
+      ":bwMode"
+    ],
+    "parents": [
+      "dgm:pt"
+    ],
+    "sdkClass": "ShapeProperties",
+    "provenance": "schema"
+  },
+  {
+    "tag": "style",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "dgm:prSet",
+      "dgm:styleLbl"
+    ],
+    "sdkClass": "Style",
+    "provenance": "schema"
+  },
+  {
+    "tag": "styleData",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [
+      ":useDef"
+    ],
+    "parents": [
+      "dgm:layoutDef"
+    ],
+    "sdkClass": "StyleData",
+    "provenance": "schema"
+  },
+  {
+    "tag": "styleDef",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [
+      ":minVer",
+      ":uniqueId"
+    ],
+    "parents": [
+      "a:graphicData"
+    ],
+    "sdkClass": "StyleDefinition",
+    "provenance": "schema"
+  },
+  {
+    "tag": "styleDefHdr",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [
+      ":minVer",
+      ":resId",
+      ":uniqueId"
+    ],
+    "parents": [
+      "a:graphicData",
+      "dgm:styleDefHdrLst"
+    ],
+    "sdkClass": "StyleDefinitionHeader",
+    "provenance": "schema"
+  },
+  {
+    "tag": "styleDefHdrLst",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "a:graphicData"
+    ],
+    "sdkClass": "StyleDefinitionHeaderList",
+    "provenance": "schema"
+  },
+  {
+    "tag": "styleLbl",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [
+      ":name"
+    ],
+    "parents": [
+      "dgm:colorsDef",
+      "dgm:styleDef"
+    ],
+    "sdkClass": "StyleLabel",
+    "provenance": "schema"
+  },
+  {
+    "tag": "t",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "dgm:pt"
+    ],
+    "sdkClass": "TextBody",
+    "provenance": "schema"
+  },
+  {
+    "tag": "title",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [
+      ":lang",
+      ":val"
+    ],
+    "parents": [
+      "dgm:colorsDef",
+      "dgm:colorsDefHdr",
+      "dgm:layoutDef",
+      "dgm:layoutDefHdr",
+      "dgm:styleDef",
+      "dgm:styleDefHdr"
+    ],
+    "sdkClass": "StyleDefinitionTitle",
+    "provenance": "schema"
+  },
+  {
+    "tag": "txEffectClrLst",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [
+      ":hueDir",
+      ":meth"
+    ],
+    "parents": [
+      "dgm:styleLbl"
+    ],
+    "sdkClass": "TextEffectColorList",
+    "provenance": "schema"
+  },
+  {
+    "tag": "txFillClrLst",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [
+      ":hueDir",
+      ":meth"
+    ],
+    "parents": [
+      "dgm:styleLbl"
+    ],
+    "sdkClass": "TextFillColorList",
+    "provenance": "schema"
+  },
+  {
+    "tag": "txLinClrLst",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [
+      ":hueDir",
+      ":meth"
+    ],
+    "parents": [
+      "dgm:styleLbl"
+    ],
+    "sdkClass": "TextLineColorList",
+    "provenance": "schema"
+  },
+  {
+    "tag": "txPr",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "dgm:styleLbl"
+    ],
+    "sdkClass": "TextProperties",
+    "provenance": "schema"
+  },
+  {
+    "tag": "varLst",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "dgm:layoutNode"
+    ],
+    "sdkClass": "VariableList",
+    "provenance": "schema"
+  },
+  {
+    "tag": "whole",
+    "namespace": "dgm",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "dgm:dataModel"
+    ],
+    "sdkClass": "Whole",
+    "provenance": "schema"
+  },
+  {
+    "tag": "lockedCanvas",
+    "namespace": "lc",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "a:graphicData"
+    ],
+    "sdkClass": "LockedCanvas",
+    "provenance": "schema"
+  },
+  {
+    "tag": "blipFill",
+    "namespace": "pic",
+    "domain": "shared",
+    "attributes": [
+      ":dpi",
+      ":rotWithShape"
+    ],
+    "parents": [
+      "pic:pic"
+    ],
+    "sdkClass": "BlipFill",
+    "provenance": "schema"
+  },
+  {
+    "tag": "cNvPicPr",
+    "namespace": "pic",
+    "domain": "shared",
+    "attributes": [
+      ":preferRelativeResize"
+    ],
+    "parents": [
+      "pic:nvPicPr"
+    ],
+    "sdkClass": "NonVisualPictureDrawingProperties",
+    "provenance": "schema"
+  },
+  {
+    "tag": "cNvPr",
+    "namespace": "pic",
+    "domain": "shared",
+    "attributes": [
+      ":descr",
+      ":hidden",
+      ":id",
+      ":name",
+      ":title"
+    ],
+    "parents": [
+      "pic:nvPicPr"
+    ],
+    "sdkClass": "NonVisualDrawingProperties",
+    "provenance": "schema"
+  },
+  {
+    "tag": "nvPicPr",
+    "namespace": "pic",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "pic:pic"
+    ],
+    "sdkClass": "NonVisualPictureProperties",
+    "provenance": "schema"
+  },
+  {
+    "tag": "pic",
+    "namespace": "pic",
+    "domain": "shared",
+    "attributes": [],
+    "parents": [
+      "a:graphicData"
+    ],
+    "sdkClass": "Picture",
+    "provenance": "schema"
+  },
+  {
+    "tag": "spPr",
+    "namespace": "pic",
+    "domain": "shared",
+    "attributes": [
+      ":bwMode"
+    ],
+    "parents": [
+      "pic:pic"
+    ],
+    "sdkClass": "ShapeProperties",
+    "provenance": "schema"
+  },
+  {
+    "tag": "Default",
+    "namespace": "r",
+    "domain": "shared",
+    "definition": "Specifies a default content type that will be associated with all parts in the package that have the extension specified in the Extension attribute.",
+    "attributes": [
+      "Extension",
+      "ContentType"
+    ],
+    "parents": [
+      "Types"
+    ],
+    "citation": "ECMA-376 Part 2, Section 9.1.2.2",
+    "sdkClass": "DefaultType",
+    "provenance": "curated"
+  },
+  {
+    "tag": "Override",
+    "namespace": "r",
+    "domain": "shared",
+    "definition": "Content Type Override. Specifies the content type of a specific part inside the ZIP package, overriding defaults.",
+    "attributes": [
+      "PartName",
+      "ContentType"
+    ],
+    "parents": [
+      "Types"
+    ],
+    "citation": "ECMA-376 Part 2, Section 9.1.2.3",
+    "sdkClass": "Override",
+    "provenance": "curated"
+  },
+  {
+    "tag": "Relationship",
+    "namespace": "r",
+    "domain": "shared",
+    "definition": "Defines a single relationship between a source package or part and a target resource. It specifies a unique identifier, the relationship type (defining its role), and the target URI.",
+    "attributes": [
+      "Id",
+      "Type",
+      "Target",
+      "TargetMode"
+    ],
+    "parents": [
+      "Relationships"
+    ],
+    "citation": "ECMA-376 Part 2, Section 9.3",
+    "sdkClass": "System.IO.Packaging.PackageRelationship",
+    "provenance": "curated"
+  },
+  {
+    "tag": "Relationships",
+    "namespace": "r",
+    "domain": "shared",
+    "definition": "The Relationships element is the root element of a relationship part (.rels) in an Open Packaging Conventions (OPC) package. It acts as a container for one or more Relationship elements that define associations between a source part and target resources.",
+    "attributes": [],
+    "parents": [],
+    "citation": "ECMA-376 Part 2, Section 9.3.1",
+    "sdkClass": "PackageRelationshipCollection",
+    "provenance": "curated"
+  },
+  {
+    "tag": "Types",
+    "namespace": "r",
+    "domain": "shared",
+    "definition": "The Types element is the root element of the Content Types stream ([Content_Types].xml) in an OPC package. It contains the default and override content type mappings that define the media types for all parts in the package.",
+    "attributes": [],
+    "parents": [],
+    "citation": "ECMA-376 Part 2, Section 9.1.2",
+    "sdkClass": "Types",
+    "provenance": "curated"
   },
   {
     "tag": "alignment",
@@ -17359,13 +22635,7 @@
     "tag": "bgColor",
     "namespace": "x",
     "domain": "xlsx",
-    "attributes": [
-      ":auto",
-      ":indexed",
-      ":rgb",
-      ":theme",
-      ":tint"
-    ],
+    "attributes": [],
     "parents": [
       "x:patternFill"
     ],
@@ -17983,13 +23253,7 @@
     "tag": "color",
     "namespace": "x",
     "domain": "xlsx",
-    "attributes": [
-      ":auto",
-      ":indexed",
-      ":rgb",
-      ":theme",
-      ":tint"
-    ],
+    "attributes": [],
     "parents": [
       "x:bottom",
       "x:colorScale",
@@ -19163,13 +24427,7 @@
     "tag": "fgColor",
     "namespace": "x",
     "domain": "xlsx",
-    "attributes": [
-      ":auto",
-      ":indexed",
-      ":rgb",
-      ":theme",
-      ":tint"
-    ],
+    "attributes": [],
     "parents": [
       "x:patternFill"
     ],
@@ -22713,13 +27971,7 @@
     "tag": "tabColor",
     "namespace": "x",
     "domain": "xlsx",
-    "attributes": [
-      ":auto",
-      ":indexed",
-      ":rgb",
-      ":theme",
-      ":tint"
-    ],
+    "attributes": [],
     "parents": [
       "x:sheetPr"
     ],
@@ -23597,6 +28849,492 @@
       "x:xmlCellPr"
     ],
     "sdkClass": "XmlProperties",
+    "provenance": "schema"
+  },
+  {
+    "tag": "absoluteAnchor",
+    "namespace": "xdr",
+    "domain": "xlsx",
+    "attributes": [],
+    "parents": [
+      "xdr:wsDr"
+    ],
+    "sdkClass": "AbsoluteAnchor",
+    "provenance": "schema"
+  },
+  {
+    "tag": "blipFill",
+    "namespace": "xdr",
+    "domain": "xlsx",
+    "attributes": [
+      ":rotWithShape"
+    ],
+    "parents": [
+      "xdr:pic"
+    ],
+    "sdkClass": "BlipFill",
+    "provenance": "schema"
+  },
+  {
+    "tag": "clientData",
+    "namespace": "xdr",
+    "domain": "xlsx",
+    "attributes": [
+      ":fLocksWithSheet",
+      ":fPrintsWithSheet"
+    ],
+    "parents": [
+      "xdr:absoluteAnchor",
+      "xdr:oneCellAnchor",
+      "xdr:twoCellAnchor"
+    ],
+    "sdkClass": "ClientData",
+    "provenance": "schema"
+  },
+  {
+    "tag": "cNvCxnSpPr",
+    "namespace": "xdr",
+    "domain": "xlsx",
+    "attributes": [],
+    "parents": [
+      "xdr:nvCxnSpPr"
+    ],
+    "sdkClass": "NonVisualConnectorShapeDrawingProperties",
+    "provenance": "schema"
+  },
+  {
+    "tag": "cNvGraphicFramePr",
+    "namespace": "xdr",
+    "domain": "xlsx",
+    "attributes": [],
+    "parents": [
+      "xdr:nvGraphicFramePr"
+    ],
+    "sdkClass": "NonVisualGraphicFrameDrawingProperties",
+    "provenance": "schema"
+  },
+  {
+    "tag": "cNvGrpSpPr",
+    "namespace": "xdr",
+    "domain": "xlsx",
+    "attributes": [],
+    "parents": [
+      "xdr:nvGrpSpPr"
+    ],
+    "sdkClass": "NonVisualGroupShapeDrawingProperties",
+    "provenance": "schema"
+  },
+  {
+    "tag": "cNvPicPr",
+    "namespace": "xdr",
+    "domain": "xlsx",
+    "attributes": [
+      ":preferRelativeResize"
+    ],
+    "parents": [
+      "xdr:nvPicPr"
+    ],
+    "sdkClass": "NonVisualPictureDrawingProperties",
+    "provenance": "schema"
+  },
+  {
+    "tag": "cNvPr",
+    "namespace": "xdr",
+    "domain": "xlsx",
+    "attributes": [
+      ":descr",
+      ":hidden",
+      ":id",
+      ":name",
+      ":title"
+    ],
+    "parents": [
+      "xdr:nvCxnSpPr",
+      "xdr:nvGraphicFramePr",
+      "xdr:nvGrpSpPr",
+      "xdr:nvPicPr",
+      "xdr:nvSpPr"
+    ],
+    "sdkClass": "NonVisualDrawingProperties",
+    "provenance": "schema"
+  },
+  {
+    "tag": "cNvSpPr",
+    "namespace": "xdr",
+    "domain": "xlsx",
+    "attributes": [
+      ":txBox"
+    ],
+    "parents": [
+      "xdr:nvSpPr"
+    ],
+    "sdkClass": "NonVisualShapeDrawingProperties",
+    "provenance": "schema"
+  },
+  {
+    "tag": "col",
+    "namespace": "xdr",
+    "domain": "xlsx",
+    "attributes": [],
+    "parents": [
+      "x:from",
+      "x:to",
+      "xdr:from",
+      "xdr:to"
+    ],
+    "sdkClass": "ColumnId",
+    "provenance": "schema"
+  },
+  {
+    "tag": "colOff",
+    "namespace": "xdr",
+    "domain": "xlsx",
+    "attributes": [],
+    "parents": [
+      "x:from",
+      "x:to",
+      "xdr:from",
+      "xdr:to"
+    ],
+    "sdkClass": "ColumnOffset",
+    "provenance": "schema"
+  },
+  {
+    "tag": "contentPart",
+    "namespace": "xdr",
+    "domain": "xlsx",
+    "attributes": [
+      ":bwMode",
+      "r:id"
+    ],
+    "parents": [
+      "a:graphicData",
+      "xdr:absoluteAnchor",
+      "xdr:oneCellAnchor",
+      "xdr:twoCellAnchor"
+    ],
+    "sdkClass": "ContentPart",
+    "provenance": "schema"
+  },
+  {
+    "tag": "cxnSp",
+    "namespace": "xdr",
+    "domain": "xlsx",
+    "attributes": [
+      ":fPublished",
+      ":macro"
+    ],
+    "parents": [
+      "xdr:absoluteAnchor",
+      "xdr:grpSp",
+      "xdr:oneCellAnchor",
+      "xdr:twoCellAnchor"
+    ],
+    "sdkClass": "ConnectionShape",
+    "provenance": "schema"
+  },
+  {
+    "tag": "ext",
+    "namespace": "xdr",
+    "domain": "xlsx",
+    "attributes": [
+      ":cx",
+      ":cy"
+    ],
+    "parents": [
+      "xdr:absoluteAnchor",
+      "xdr:oneCellAnchor"
+    ],
+    "sdkClass": "Extent",
+    "provenance": "schema"
+  },
+  {
+    "tag": "from",
+    "namespace": "xdr",
+    "domain": "xlsx",
+    "attributes": [],
+    "parents": [
+      "xdr:oneCellAnchor",
+      "xdr:twoCellAnchor"
+    ],
+    "sdkClass": "FromMarker",
+    "provenance": "schema"
+  },
+  {
+    "tag": "graphicFrame",
+    "namespace": "xdr",
+    "domain": "xlsx",
+    "attributes": [
+      ":fPublished",
+      ":macro"
+    ],
+    "parents": [
+      "xdr:absoluteAnchor",
+      "xdr:grpSp",
+      "xdr:oneCellAnchor",
+      "xdr:twoCellAnchor"
+    ],
+    "sdkClass": "GraphicFrame",
+    "provenance": "schema"
+  },
+  {
+    "tag": "grpSp",
+    "namespace": "xdr",
+    "domain": "xlsx",
+    "attributes": [],
+    "parents": [
+      "xdr:absoluteAnchor",
+      "xdr:grpSp",
+      "xdr:oneCellAnchor",
+      "xdr:twoCellAnchor"
+    ],
+    "sdkClass": "GroupShape",
+    "provenance": "schema"
+  },
+  {
+    "tag": "grpSpPr",
+    "namespace": "xdr",
+    "domain": "xlsx",
+    "attributes": [
+      ":bwMode"
+    ],
+    "parents": [
+      "xdr:grpSp"
+    ],
+    "sdkClass": "GroupShapeProperties",
+    "provenance": "schema"
+  },
+  {
+    "tag": "nvCxnSpPr",
+    "namespace": "xdr",
+    "domain": "xlsx",
+    "attributes": [],
+    "parents": [
+      "xdr:cxnSp"
+    ],
+    "sdkClass": "NonVisualConnectionShapeProperties",
+    "provenance": "schema"
+  },
+  {
+    "tag": "nvGraphicFramePr",
+    "namespace": "xdr",
+    "domain": "xlsx",
+    "attributes": [],
+    "parents": [
+      "xdr:graphicFrame"
+    ],
+    "sdkClass": "NonVisualGraphicFrameProperties",
+    "provenance": "schema"
+  },
+  {
+    "tag": "nvGrpSpPr",
+    "namespace": "xdr",
+    "domain": "xlsx",
+    "attributes": [],
+    "parents": [
+      "xdr:grpSp"
+    ],
+    "sdkClass": "NonVisualGroupShapeProperties",
+    "provenance": "schema"
+  },
+  {
+    "tag": "nvPicPr",
+    "namespace": "xdr",
+    "domain": "xlsx",
+    "attributes": [],
+    "parents": [
+      "xdr:pic"
+    ],
+    "sdkClass": "NonVisualPictureProperties",
+    "provenance": "schema"
+  },
+  {
+    "tag": "nvSpPr",
+    "namespace": "xdr",
+    "domain": "xlsx",
+    "attributes": [],
+    "parents": [
+      "xdr:sp"
+    ],
+    "sdkClass": "NonVisualShapeProperties",
+    "provenance": "schema"
+  },
+  {
+    "tag": "oneCellAnchor",
+    "namespace": "xdr",
+    "domain": "xlsx",
+    "attributes": [],
+    "parents": [
+      "xdr:wsDr"
+    ],
+    "sdkClass": "OneCellAnchor",
+    "provenance": "schema"
+  },
+  {
+    "tag": "pic",
+    "namespace": "xdr",
+    "domain": "xlsx",
+    "attributes": [
+      ":fPublished",
+      ":macro"
+    ],
+    "parents": [
+      "xdr:absoluteAnchor",
+      "xdr:grpSp",
+      "xdr:oneCellAnchor",
+      "xdr:twoCellAnchor"
+    ],
+    "sdkClass": "Picture",
+    "provenance": "schema"
+  },
+  {
+    "tag": "pos",
+    "namespace": "xdr",
+    "domain": "xlsx",
+    "attributes": [
+      ":x",
+      ":y"
+    ],
+    "parents": [
+      "xdr:absoluteAnchor"
+    ],
+    "sdkClass": "Position",
+    "provenance": "schema"
+  },
+  {
+    "tag": "row",
+    "namespace": "xdr",
+    "domain": "xlsx",
+    "attributes": [],
+    "parents": [
+      "x:from",
+      "x:to",
+      "xdr:from",
+      "xdr:to"
+    ],
+    "sdkClass": "RowId",
+    "provenance": "schema"
+  },
+  {
+    "tag": "rowOff",
+    "namespace": "xdr",
+    "domain": "xlsx",
+    "attributes": [],
+    "parents": [
+      "x:from",
+      "x:to",
+      "xdr:from",
+      "xdr:to"
+    ],
+    "sdkClass": "RowOffset",
+    "provenance": "schema"
+  },
+  {
+    "tag": "sp",
+    "namespace": "xdr",
+    "domain": "xlsx",
+    "attributes": [
+      ":fLocksText",
+      ":fPublished",
+      ":macro",
+      ":textlink"
+    ],
+    "parents": [
+      "xdr:absoluteAnchor",
+      "xdr:grpSp",
+      "xdr:oneCellAnchor",
+      "xdr:twoCellAnchor"
+    ],
+    "sdkClass": "Shape",
+    "provenance": "schema"
+  },
+  {
+    "tag": "spPr",
+    "namespace": "xdr",
+    "domain": "xlsx",
+    "attributes": [
+      ":bwMode"
+    ],
+    "parents": [
+      "xdr:cxnSp",
+      "xdr:pic",
+      "xdr:sp"
+    ],
+    "sdkClass": "ShapeProperties",
+    "provenance": "schema"
+  },
+  {
+    "tag": "style",
+    "namespace": "xdr",
+    "domain": "xlsx",
+    "attributes": [],
+    "parents": [
+      "xdr:cxnSp",
+      "xdr:pic",
+      "xdr:sp"
+    ],
+    "sdkClass": "ShapeStyle",
+    "provenance": "schema"
+  },
+  {
+    "tag": "to",
+    "namespace": "xdr",
+    "domain": "xlsx",
+    "attributes": [],
+    "parents": [
+      "xdr:twoCellAnchor"
+    ],
+    "sdkClass": "ToMarker",
+    "provenance": "schema"
+  },
+  {
+    "tag": "twoCellAnchor",
+    "namespace": "xdr",
+    "domain": "xlsx",
+    "attributes": [
+      ":editAs"
+    ],
+    "parents": [
+      "xdr:wsDr"
+    ],
+    "sdkClass": "TwoCellAnchor",
+    "provenance": "schema"
+  },
+  {
+    "tag": "txBody",
+    "namespace": "xdr",
+    "domain": "xlsx",
+    "attributes": [],
+    "parents": [
+      "xdr:sp"
+    ],
+    "sdkClass": "TextBody",
+    "provenance": "schema"
+  },
+  {
+    "tag": "wsDr",
+    "namespace": "xdr",
+    "domain": "xlsx",
+    "attributes": [],
+    "parents": [
+      "a:graphicData"
+    ],
+    "sdkClass": "WorksheetDrawing",
+    "provenance": "schema"
+  },
+  {
+    "tag": "xfrm",
+    "namespace": "xdr",
+    "domain": "xlsx",
+    "attributes": [
+      ":flipH",
+      ":flipV",
+      ":rot"
+    ],
+    "parents": [
+      "xdr:graphicFrame"
+    ],
+    "sdkClass": "Transform",
     "provenance": "schema"
   }
 ]

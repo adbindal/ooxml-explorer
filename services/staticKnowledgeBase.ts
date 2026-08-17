@@ -66,7 +66,9 @@ export const KNOWLEDGE_BASE: ReferenceDoc[] = [
     "attributes": [
       "w:conformance"
     ],
-    "parents": [],
+    "parents": [
+      "a:graphicData"
+    ],
     "sdkClass": "Document",
     "provenance": "curated",
     "definition": "Specifies the root element for the main document part of a WordprocessingML document. It contains the body element, which holds the primary document content such as paragraphs, tables, and sections.",
@@ -241,7 +243,9 @@ export const KNOWLEDGE_BASE: ReferenceDoc[] = [
       ":showSpecialPlsOnTitleSld",
       ":strictFirstAndLastChars"
     ],
-    "parents": [],
+    "parents": [
+      "a:graphicData"
+    ],
     "sdkClass": "Presentation",
     "provenance": "curated",
     "definition": "Specifies the root element for a PresentationML document, containing presentation-wide properties such as slide size, notes size, default text styles, and references to slide masters and slides.",
@@ -259,6 +263,7 @@ export const KNOWLEDGE_BASE: ReferenceDoc[] = [
       "r:id"
     ],
     "parents": [
+      "a:graphicData",
       "p:sldLst"
     ],
     "sdkClass": "OutlineViewSlideListEntry",
@@ -278,7 +283,9 @@ export const KNOWLEDGE_BASE: ReferenceDoc[] = [
       ":type",
       ":userDrawn"
     ],
-    "parents": [],
+    "parents": [
+      "a:graphicData"
+    ],
     "sdkClass": "SlideLayout",
     "provenance": "curated",
     "definition": "This element specifies an instance of a slide layout. It contains a template slide design that can be applied to any slide in a presentation, defining the default positioning and formatting of placeholders and other shapes.",
@@ -291,7 +298,9 @@ export const KNOWLEDGE_BASE: ReferenceDoc[] = [
     "attributes": [
       ":preserve"
     ],
-    "parents": [],
+    "parents": [
+      "a:graphicData"
+    ],
     "sdkClass": "SlideMaster",
     "provenance": "curated",
     "definition": "Specifies an instance of a slide master slide. It contains all elements that describe the objects and their corresponding formatting for slides within a presentation, including shapes, text styles, color maps, and transitions.",
