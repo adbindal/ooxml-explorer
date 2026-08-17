@@ -16,16 +16,20 @@
  *   5. character style
  *   6. direct formatting
  *
- * **Layers 2 and 3 are not implemented here** — they need table and numbering context
- * respectively, and both have their own indirection worth doing properly rather than
- * approximating. `resolveRunProperties` reports what it consulted, so a caller can see
- * that a table-style contribution was not considered rather than assuming it was.
+ * All six layers are supported. Layers 2 and 3 are *supplied by the caller* rather
+ * than resolved here, because both need context this module does not have: the cell's
+ * position within its table (see ./wordTableStyles) and the numbering part (see
+ * ./wordNumbering). A caller that omits layer 2 for a run that is in a table gets a
+ * trace note saying so, rather than a silently incomplete answer.
  *
  * The second, less obvious axis: within layers 2–5, each style is itself resolved by
  * walking its `w:basedOn` chain to a root before it participates in the cascade above.
  * That roll-up uses four different merge rules depending on the element (see
  * MERGE_STRATEGY), and getting them wrong produces confident, plausible, wrong answers.
  */
+
+import type { ResolvedNumbering } from './wordNumbering';
+import type { ConditionalFormatType } from './wordTableStyles';
 
 export const W_NAMESPACE = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
@@ -328,7 +332,22 @@ const withAccessors = (
   isOn: (name: string) => (properties.get(name)?.element ?? null) !== null
 });
 
-export interface RunResolutionInput {
+/**
+ * Cascade layers 2 and 3, supplied by the caller because both need context this module
+ * does not have: the cell's position in its table, and the numbering part.
+ *
+ * Omitting them is legitimate - a run outside a table has no layer 2 - but a caller
+ * that omits `tableStyle` for a run that IS in a table gets a trace note saying so,
+ * rather than a silently incomplete answer.
+ */
+export interface CascadeContext {
+  /** Conditional blocks in Word's application order; see wordTableStyles. */
+  tableStyle?: { type: ConditionalFormatType; pPr?: Element; rPr?: Element }[];
+  /** Resolved level for a numbered paragraph; see wordNumbering. */
+  numbering?: ResolvedNumbering | null;
+}
+
+export interface RunResolutionInput extends CascadeContext {
   /** `w:pStyle` on the containing paragraph. */
   paragraphStyleId?: string;
   /** `w:rStyle` on the run. */
@@ -355,6 +374,15 @@ export const resolveRunProperties = (
     { label: 'docDefaults', container: sheet.docDefaults.rPr, isStyleLayer: false }
   ];
 
+  // Layer 2 - table style conditional formatting, in Word's application order.
+  for (const block of input.tableStyle ?? []) {
+    layers.push({ label: `tableStyle:${block.type}`, container: block.rPr, isStyleLayer: true });
+  }
+  // Layer 3 - numbering.
+  if (input.numbering?.rPr) {
+    layers.push({ label: `numbering:${input.numbering.numId}/${input.numbering.ilvl}`, container: input.numbering.rPr, isStyleLayer: false });
+  }
+
   for (const style of input.paragraphStyleId ? styleChain(sheet, input.paragraphStyleId) : []) {
     layers.push({ label: `style:${style.styleId}`, container: style.rPr, isStyleLayer: true });
   }
@@ -366,17 +394,17 @@ export const resolveRunProperties = (
 
   const { properties, trace } = applyLayers(layers);
 
-  if (input.insideTable) {
+  if (input.insideTable && !input.tableStyle) {
     trace.unshift({
       layer: 'tableStyle',
       contributed: [],
-      note: 'Table style and conditional formatting are not resolved yet; a table style may override what is shown here.'
+      note: 'This run is in a table but no table style was supplied, so layer 2 of the cascade was not applied; a table style may override what is shown here.'
     });
   }
   return withAccessors(properties, trace);
 };
 
-export interface ParagraphResolutionInput {
+export interface ParagraphResolutionInput extends CascadeContext {
   paragraphStyleId?: string;
   /** The paragraph's own `w:pPr`. */
   directPPr?: Element;
@@ -397,6 +425,17 @@ export const resolveParagraphProperties = (
     { label: 'docDefaults', container: sheet.docDefaults.pPr, isStyleLayer: false }
   ];
 
+  // Layer 2 - table style conditional formatting, in Word's application order.
+  for (const block of input.tableStyle ?? []) {
+    layers.push({ label: `tableStyle:${block.type}`, container: block.pPr, isStyleLayer: false });
+  }
+  // Layer 3 - numbering. The level's own w:ind overrides the paragraph style's
+  // indentation, which is why "I set an indent on my list style and nothing
+  // happened" is such a common complaint.
+  if (input.numbering?.pPr) {
+    layers.push({ label: `numbering:${input.numbering.numId}/${input.numbering.ilvl}`, container: input.numbering.pPr, isStyleLayer: false });
+  }
+
   for (const style of input.paragraphStyleId ? styleChain(sheet, input.paragraphStyleId) : []) {
     layers.push({ label: `style:${style.styleId}`, container: style.pPr, isStyleLayer: false });
   }
@@ -405,11 +444,11 @@ export const resolveParagraphProperties = (
 
   const { properties, trace } = applyLayers(layers);
 
-  if (input.insideTable) {
+  if (input.insideTable && !input.tableStyle) {
     trace.unshift({
       layer: 'tableStyle',
       contributed: [],
-      note: 'Table style and conditional formatting are not resolved yet; a table style may override what is shown here.'
+      note: 'This paragraph is in a table but no table style was supplied, so layer 2 of the cascade was not applied; a table style may override what is shown here.'
     });
   }
   return withAccessors(properties, trace);
