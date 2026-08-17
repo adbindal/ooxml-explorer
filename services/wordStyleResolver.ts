@@ -89,6 +89,15 @@ export interface StyleDefinition {
   isDefault: boolean;
   pPr?: Element;
   rPr?: Element;
+  /**
+   * The `w:style` element itself.
+   *
+   * Needed because a table style's conditional blocks (`w:tblStylePr`) and band sizes
+   * (`w:tblPr`) are siblings of `pPr`/`rPr`, not children, and a table style may have
+   * neither — so reaching them via `pPr.parentElement` fails on exactly the styles
+   * that need them most.
+   */
+  element: Element;
 }
 
 export interface StyleSheet {
@@ -178,6 +187,7 @@ export const parseStyles = (stylesXml: string): StyleSheet => {
 
     styles.set(styleId, {
       styleId,
+      element: el,
       type,
       name: el.getElementsByTagNameNS(W_NAMESPACE, 'name').item(0)?.getAttributeNS(W_NAMESPACE, 'val') ?? undefined,
       basedOn: el.getElementsByTagNameNS(W_NAMESPACE, 'basedOn').item(0)?.getAttributeNS(W_NAMESPACE, 'val') ?? undefined,
