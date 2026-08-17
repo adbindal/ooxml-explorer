@@ -384,6 +384,22 @@ Layers 2 and 3 are **supplied by the caller**, not resolved inside the resolver 
 ### Word deviations now encoded and tested
 `tblStyleRowBandSize` defaults to **0** in Word (not 1) → no banding; Word's conditional order is row banding → col banding → first/last **col** → first/last **row** → corners; `w:tblLook`'s legacy bitmask is read **only** when no named attribute is present; `numId="0"` means *remove* numbering; `ilvl` outside 0–8 makes Word refuse the file.
 
+## 8e. The Verified tier is live (2026-08-17)
+
+The chain now closes end to end: **selected element → cascade resolved over the real package → pre-verified evidence → tier computed from provenance → badge**.
+
+| Piece | Commit |
+|---|---|
+| `services/wordFormattingAnalysis.ts` — composition layer | `a42c4d1` |
+| `selectEvidenceTier` + three-state badge | `cc43407` |
+| `AIPanel` builds the evidence | `ba2426a` |
+
+**Tier rule:** minimum across sources *actually present*. A complete computation alone = `verified`; a computation with gaps = `grounded`; a citation = `grounded`; nothing = `unverified`. Absent evidence is deliberately **not** a weak source — a corpus miss must not drag a computed answer down, or the common case (tag outside the curated 29, cascade resolved perfectly) would be mislabelled.
+
+**The locator refuses to guess.** Real documents are full of identical paragraphs; a match must be unambiguous or it returns null and the caller degrades to the ordinary explanation. Same rule one level down for runs.
+
+**Still Word-only and `word/document.xml`-only.** Headers, footers and footnotes are not yet covered, and Excel/PowerPoint have no resolver, so those paths never reach `verified`.
+
 ## 9. Next actions
 
 1. ~~Research (Word, architecture, tooling, storage)~~ — done.
@@ -394,11 +410,12 @@ Layers 2 and 3 are **supplied by the caller**, not resolved inside the resolver 
 6. ~~Stage 1c — surface findings in the UI~~ — done, `af11bf5`.
 7. ~~Stage 1b — MCE preprocessing~~ — done, `2ad039f`. **Stage 1 complete.**
 8. ~~Stage 2 — Word~~ — done, see §8d.
-9. **Stage 2 — Excel resolver.** ⚠️ Do NOT build the cascade the spec describes: MS-OI29500 §2.1.699/700 say *only* the `cellXfs` record defines a cell's formatting. `xfId` is provenance, not inheritance. `apply*` flags are edit-time propagation bits, not render gates. Precedence is fallback-to-a-single-index: `c/@s` → `row/@s` (only if `customFormat="1"`) → `col/@style` (only for unallocated cells) → `cellXfs[0]`. The only true overlay layer is `dxf`.
-10. **Stage 2 — PowerPoint resolver.** Placeholder match on `@idx` (slide→layout) and `@type` (notesSlide→notesMaster); layout→master matching is **undocumented**. `clrMap`/`clrMapOvr` with three disjoint colour alphabets. `a:xfrm` absent = inherit, never zero. Group transform `sx = ext.cx / chExt.cx`.
-11. Decide: which format goes next (Word done) (recommend sequencing, not parallelising — resolvers are genuinely different per format).
-12. Decide: MS-OI29500 licensing — ask or not. Gates Stage 3 only.
-13. Decide: audience (self vs onboarding engineers). If mentoring is primary, Stage 5 moves up.
+9. **Extend Verified coverage in Word** — headers, footers, footnotes and endnotes each have their own part and their own `.rels`; the panel currently only computes for `word/document.xml`.
+10. **Stage 2 — Excel resolver.** ⚠️ Do NOT build the cascade the spec describes: MS-OI29500 §2.1.699/700 say *only* the `cellXfs` record defines a cell's formatting. `xfId` is provenance, not inheritance. `apply*` flags are edit-time propagation bits, not render gates. Precedence is fallback-to-a-single-index: `c/@s` → `row/@s` (only if `customFormat="1"`) → `col/@style` (only for unallocated cells) → `cellXfs[0]`. The only true overlay layer is `dxf`.
+11. **Stage 2 — PowerPoint resolver.** Placeholder match on `@idx` (slide→layout) and `@type` (notesSlide→notesMaster); layout→master matching is **undocumented**. `clrMap`/`clrMapOvr` with three disjoint colour alphabets. `a:xfrm` absent = inherit, never zero. Group transform `sx = ext.cx / chExt.cx`.
+12. Decide: which format goes next (Word done) (recommend sequencing, not parallelising — resolvers are genuinely different per format).
+13. Decide: MS-OI29500 licensing — ask or not. Gates Stage 3 only.
+14. Decide: audience (self vs onboarding engineers). If mentoring is primary, Stage 5 moves up.
 
 ## 10. Known gaps at time of writing
 
