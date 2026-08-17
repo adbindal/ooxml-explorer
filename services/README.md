@@ -89,15 +89,38 @@ It targets the failure class that produces Word's *"found unreadable content"* d
 | `untyped-part` | error | A part covered by neither an `Override` nor a `Default` extension |
 | `dangling-relationship-id` | error | An `rId` referenced by a part but not declared in *that part's* `.rels` |
 | `missing-relationship-target` | error | A relationship pointing at a part not present in the package |
+| `missing-implicit-relationship` | error | A part lacking a required relationship that nothing in the XML references |
+| `ambiguous-implicit-relationship` | error | Two or more relationships of a type that must be singular |
 | `orphaned-rels-part` | warning | A `.rels` file whose owning part is absent |
 | `malformed-xml` | error | A part that does not parse |
 
-Two details carry most of the value:
+Three details carry most of the value:
 
 *   **Relationships resolve per part.** An image used by `header1.xml` must be declared in `word/_rels/header1.xml.rels`; a declaration in `word/_rels/document.xml.rels` does *not* satisfy it. Some readers tolerate the mistake and Word does not — exactly the package that looks fine locally and fails for a user. There is a test asserting the lenient reading is rejected.
 *   **References are found by scanning, not enumerating.** Any attribute in the relationships namespace holding an `rId` value counts. Enumerating `r:id`/`r:embed`/`r:link`/… would silently miss the format-specific ones, and a missed reference is an integrity hole rather than a cosmetic gap.
+*   **Some required relationships are referenced by nothing at all** — see below.
 
-The checks are **format-agnostic**. Packaging is the one layer Word, Excel and PowerPoint share completely, so the same code runs unchanged against `.docx`, `.xlsx` and `.pptx`; a test covers a spreadsheet to keep that honest.
+Most of these checks are **format-agnostic**. Packaging is the one layer Word, Excel and PowerPoint share completely, so the same code runs unchanged against `.docx`, `.xlsx` and `.pptx`; a test covers a spreadsheet to keep that honest.
+
+### Implicit relationships — the ones with no `rId` to dangle
+
+PowerPoint carries its entire inheritance chain through **implicit** relationships (ECMA-376 §13.3.9, §13.3.10). A slide finds its layout by opening `ppt/slides/_rels/slide1.xml.rels` and looking for the relationship whose `Type` ends in `/slideLayout`. **Nothing in `slide1.xml` points at it.**
+
+That is precisely why `dangling-relationship-id` and `missing-relationship-target` cannot cover it: both start from a reference in the XML and follow it outward. When the relationship is simply *absent* there is no reference to start from, nothing dangles, and every other check passes. PowerPoint then opens the file with no error, drops the slide's inherited placeholders, geometry, fonts and colours, and renders defaults. **A wrong-looking deck with a clean bill of health is the whole point of this rule.**
+
+`IMPLICIT_RELATIONSHIPS` in `packageIntegrity.ts` is a table, not branching logic, so DOCX/XLSX entries can be added as data:
+
+| Part (by content type) | Must have a relationship of type | Absent ⇒ |
+|---|---|---|
+| `…presentationml.slide+xml` | `…/slideLayout` | slide inherits nothing; renders with built-in defaults |
+| `…presentationml.slideLayout+xml` | `…/slideMaster` | every slide using the layout loses the master |
+| `…presentationml.slideMaster+xml` | `…/theme` | theme colours, fonts and effects resolve to defaults below it |
+| `…presentationml.notesSlide+xml` | `…/notesMaster` | speaker notes lose master formatting and placeholder layout |
+
+Two decisions worth knowing:
+
+*   **Parts are identified by content type, never by filename.** `ppt/slides/slide1.xml` is a convention, not a rule; `Override/@ContentType` (falling back to `Default/@Extension`) is what a consumer actually dispatches on. A test renames the slide and asserts the check still fires.
+*   **Relationship types match on the trailing segment.** The same relationship has two spellings — Transitional `http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout` and ISO Strict `http://purl.oclc.org/ooxml/officeDocument/relationships/slideLayout`. Comparing full URIs would report every Strict package as broken. A `/relationships/` guard keeps an unrelated vendor URI ending in the same word from matching; both cases are tested.
 
 The API is pure functions over a `Record<partPath, content>` map, deliberately decoupled from JSZip so it is testable without binary fixtures and reusable anywhere.
 
