@@ -36,3 +36,6 @@ playwright-/.cache
 .env*
 !.env.example
 
+
+# Agent worktrees are full checkouts living inside the repo; never track them.
+.claude/worktrees/
