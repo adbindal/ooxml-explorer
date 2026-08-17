@@ -144,6 +144,37 @@ Other high-impact: `cm`/`vm` are **one-based in Office, zero-based in the spec**
 
 **Shared formulas are the corruption mechanism:** followers are *empty* `<f t="shared" si="N"/>` elements. Delete the master and the formulas exist nowhere. `calcChain.xml` is **pure cache and safely deletable** — ECMA §18.6 says the app *"is free to ignore"* it.
 
+### PresentationML + DrawingML (researched 2026-08-17, all [RAW], dual-sourced via MS-OI29500 HTML *and* the DOCX)
+
+**Sizing: DrawingML (444 variations) beats PresentationML (100) by 4.4× — and it is reusable across all three formats.** §21 = 264 (of which **charts alone = 172**), §20 = 180, §19 = 100 (of which **half, 49, are animation/timing** — the slide/shape model everyone asks about is only 18).
+
+🔴 **The PPTX cascade — placeholder correspondence.** Only ONE matching rule is documented anywhere, and it is in MS-OI29500, not ECMA (§19.3.1.36(b)):
+- **Slide shape → layout placeholder: match on `@idx`, never `@type`.** `@idx` defaults to 0.
+- **Notes slide → notes master: match on `@type`.** Different rule, different part. One matcher for both is wrong for one of them.
+- `idx = 0xffffffff` is a sentinel for "no correspondence" — legal `unsignedInt`, so **schema validation cannot catch its misuse**.
+- ⚠️ **Layout → master matching is undocumented.** Not in ECMA, not in MS-OI29500. What python-pptx and others do (match `@type`, folding `ctrTitle`→`title`, `subTitle`→`body`) is **observed practice, not spec**.
+- A master can only carry `title`, `body`, `dt`, `ftr`, `sldNum` — so it **cannot** be the shape-level ancestor of most layout placeholders. **Geometry inheritance stops at the master shape; `p:txStyles` contributes text only.**
+
+🔴 **`a:xfrm`/`off`/`ext` are all `minOccurs="0"` — absent means INHERIT, not zero.** Writing `<a:off x="0" y="0"/>` as a "default" silently pins the shape to the top-left and severs the cascade. Reported as the #1 way generated decks come out visually wrong.
+
+🔴 **Three disjoint colour alphabets.** `ST_SchemeColorVal` (17 values, what `schemeClr/@val` may say) vs `ST_ColorSchemeIndex` (12, the theme slot names) vs `p:clrMap` *attribute names* (12, the semantic keys). They overlap on `accent1-6`/`hlink`/`folHlink`, which is why the bug hides until a dark master. **The spec's own example makes `<a:schemeClr val="tx1"/>` resolve to `a:clrScheme/a:lt1`** — the *light* colour. `dk1/lt1/dk2/lt2` are the only four that bypass the map.
+
+🔴 **Style-reference indexing is NOT uniform.** `fillRef`/`bgRef`: 0 or 1000 = none, 1–999 = `fillStyleLst`, **1001+ = `bgFillStyleLst`, 1-based** (normative, ECMA §20.1.4.2.10 / §19.3.1.3). `lnRef`/`effectRef`: **no offset** — they address one list each. And **ECMA §20.1.4.2.19 names the wrong list for `lnRef`** (`fillStyleLst`; Office reads `lnStyleLst`). `ST_StyleMatrixColumnIndex` has **no bounds**, so out-of-range `idx` is a semantic check only.
+
+🔴 **`@rot` unit contradiction inside the standard.** ECMA §20.1.7.5 prose says **1/64000** degree; `ST_Angle` (§20.1.10.3), the schema, and Office all say **1/60000**. A 6.25% error that reads as a rendering artefact.
+
+**Group transform** (the "why is my shape in the wrong place" mechanism): `sx = ext.cx / chExt.cx` (1 if `chExt` absent/zero); `child_abs = grp.off + (child.off − grp.chOff) × s`. Resizing a group changes `ext` but not `chExt`, which is how children silently acquire a scale. `p:spTree` **is itself a group**, so the transform applies at the root too. Nests recursively.
+
+**`@lvl` is 0-based; `lvl1pPr`…`lvl9pPr` are 1-based.** `a:lvl1pPr` ↔ `@lvl="0"`. Nine levels, hard cap — exactly like `w:ilvl`.
+
+**`+mj-lt` token grammar is UNDOCUMENTED** — appears exactly once in 5,039 pages, inside an example. `ST_TextTypeface` is an unrestricted string. Word uses a *completely different* syntax (`w:rFonts/@asciiTheme="minorHAnsi"`) against the same theme part.
+
+🔴 **Three of the four inheritance hops are IMPLICIT relationships with zero XML reference** (slide→layout, layout→master, master→theme). You resolve them by opening the part's `.rels` and finding the relationship whose `Type` ends in `/slideLayout`. **`packageIntegrity.ts` cannot catch a missing one — there is no `rId` to dangle.** A slide with no layout relationship loses its entire inheritance chain and renders with defaults, silently. → task #13.
+
+**Better MS-OI29500 ingestion path:** the DOCX flattened to text gives all 1,895 variations in ~34k lines. Entries delimited by `^Part \d Se\w+ [\d.]+, `; sub-items by `^[a-z]\.\s{3}`. Beats 1,895 HTML fetches, and no summarizer in the loop. **~25% of §19/§20/§21 entries are pure cross-references** (`19.3.1.44 spPr → 20.5.2.30(a-c)`) and must be **resolved at ingest**, including sub-letter selection, or they store nothing.
+
+**Preset geometry**: the 187 `ST_ShapeType` definitions are NOT in the PDF — they ship as `OfficeOpenXML-DrawingMLGeometries.zip` (51,672 bytes) inside the ECMA Part 1 ZIP.
+
 ### Numbering (top bug source)
 `numPr` → `numId` → `w:num` → `abstractNumId` → `abstractNum` → `lvl[@ilvl]`.
 Three patterns: direct; style-linked (`lvl/pStyle` back-reference — how Heading auto-numbering works); **named list styles** where `abstractNum` has *no* `lvl` children, only `numStyleLink` → styles.xml → back to a *different* `num`. A resolver expecting `lvl` returns nothing and the list renders unnumbered.
