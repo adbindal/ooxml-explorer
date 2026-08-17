@@ -15,6 +15,7 @@ import {
 import { explainElement, ElementExplanation } from '../services/aiService';
 import { computeEvidenceForMarkup } from '../services/wordFormattingAnalysis';
 import { computeExcelEvidenceForMarkup } from '../services/excelFormattingAnalysis';
+import { computePowerpointEvidenceForMarkup } from '../services/powerpointFormattingAnalysis';
 import { ThemeClasses } from '../types';
 import MarkdownContent from './MarkdownContent';
 
@@ -45,6 +46,15 @@ const ANALYSIS_TARGETS = [
     matches: (path: string) => /^xl\/worksheets\/[^/]+\.xml$/.test(path),
     siblings: ['xl/styles.xml', 'xl/workbook.xml', 'xl/sharedStrings.xml'],
     compute: computeExcelEvidenceForMarkup
+  },
+  {
+    // PowerPoint needs the whole inheritance chain, and every hop of it is an
+    // implicit relationship - so the .rels parts are as load-bearing as the content
+    // parts and have to be fetched alongside them.
+    matches: (path: string) => /^ppt\/slides\/[^/]+\.xml$/.test(path),
+    siblings: [] as string[],
+    siblingPattern: /^ppt\/(slides|slideLayouts|slideMasters|theme)\/(_rels\/)?[^/]+$/,
+    compute: computePowerpointEvidenceForMarkup
   }
 ] as const;
 
@@ -60,7 +70,10 @@ const buildComputedEvidence = async (
 
   const parts: Record<string, string> = { [openPath]: context.content };
 
-  const wanted = target.siblings.filter(path => context.relatedFiles?.includes(path));
+  const pattern = 'siblingPattern' in target ? target.siblingPattern : null;
+  const wanted = pattern
+    ? (context.relatedFiles ?? []).filter(path => path !== openPath && pattern.test(path))
+    : target.siblings.filter(path => context.relatedFiles?.includes(path));
   if (wanted.length > 0 && context.onLoadContext) {
     try {
       const loaded = await context.onLoadContext(wanted);
