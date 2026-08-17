@@ -13,8 +13,53 @@ import {
   AIDiffAnalysis
 } from '../services/geminiService';
 import { explainElement, ElementExplanation } from '../services/aiService';
+import { computeEvidenceForMarkup } from '../services/wordFormattingAnalysis';
 import { ThemeClasses } from '../types';
 import MarkdownContent from './MarkdownContent';
+
+/**
+ * Assembles the parts the Word cascade needs and computes evidence for one element.
+ *
+ * The panel holds the open file's text and can fetch siblings, so this pulls
+ * `styles.xml` and `numbering.xml` alongside `document.xml`. Any of them may be
+ * absent; the analysis reports what it could not use rather than failing.
+ *
+ * Returns null when there is nothing to compute, so the caller degrades to the
+ * ordinary retrieval-backed explanation.
+ */
+const buildComputedEvidence = async (
+  context: AIPanelProps['context'],
+  rawXml: string
+): Promise<{ lines: string[]; unresolved: string[] } | null> => {
+  const documentPath = context.fileName;
+  if (!documentPath || !documentPath.endsWith('word/document.xml')) return null;
+  if (!context.content) return null;
+
+  const parts: Record<string, string> = { 'word/document.xml': context.content };
+
+  const wanted = ['word/styles.xml', 'word/numbering.xml']
+    .filter(path => context.relatedFiles?.includes(path));
+
+  if (wanted.length > 0 && context.onLoadContext) {
+    try {
+      const loaded = await context.onLoadContext(wanted);
+      for (const file of loaded as { fileName: string; content: string }[]) {
+        if (file?.fileName && typeof file.content === 'string') {
+          parts[file.fileName] = file.content;
+        }
+      }
+    } catch {
+      // A failed sibling fetch is not fatal - the analysis will report the part as
+      // unavailable and the answer will be capped below Verified accordingly.
+    }
+  }
+
+  try {
+    return computeEvidenceForMarkup(parts, rawXml);
+  } catch {
+    return null;
+  }
+};
 
 interface AIPanelProps {
   onClose: () => void;
@@ -192,11 +237,22 @@ const AIPanel: React.FC<AIPanelProps> = ({ onClose, context, themeClasses }) => 
           ? 'pptx' 
           : 'docx';
           
+      // Try to compute the formatting cascade for this element. When it succeeds the
+      // answer rests on a derivation from the document rather than on retrieval, which
+      // is what earns the Verified tier. It is Word-only for now, and returns null
+      // whenever the element cannot be located unambiguously - in which case we fall
+      // back to the ordinary explanation rather than showing a Verified answer built
+      // on a guess.
+      const computed = fileType === 'docx'
+        ? await buildComputedEvidence(context, context.selectedTag.rawXml)
+        : null;
+
       const result = await explainElement(
         context.selectedTag.tagName,
         context.selectedTag.rawXml,
         fileType,
-        context.selectedTag.parentPath
+        context.selectedTag.parentPath,
+        computed
       );
       setSelectedTagResponse(result);
     } catch (e: unknown) {

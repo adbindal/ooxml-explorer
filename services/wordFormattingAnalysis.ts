@@ -310,3 +310,79 @@ export const analyzeParagraphAt = (
   );
   return analyzeParagraphFormatting(context, paragraph, firstRun);
 };
+
+/**
+ * Normalizes markup for comparison.
+ *
+ * Two sources of noise have to go. The editor pretty-prints what it displays, so a
+ * caller's snippet is rarely byte-identical to the same element in the parsed
+ * document. And serializing a subtree re-emits the namespace declarations it inherited
+ * from the root, so a serialized `<w:p>` carries an `xmlns:w` that the caller's snippet
+ * does not. Neither difference is meaningful here.
+ */
+const normalizeMarkup = (xml: string): string =>
+  xml
+    .replace(/\s+xmlns(:[A-Za-z0-9_-]+)?="[^"]*"/g, '')
+    .replace(/>\s+</g, '><')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+/**
+ * Finds the paragraph a snippet of markup belongs to, and the run inside it if the
+ * snippet is one.
+ *
+ * Returns null unless the match is **unambiguous**. A document routinely contains many
+ * identical paragraphs — empty ones especially — and resolving the formatting of the
+ * wrong one would produce a confidently wrong answer under a "Verified" badge. Refusing
+ * to guess costs a fallback to the ordinary explanation; guessing costs correctness.
+ */
+export const locateParagraphByMarkup = (
+  doc: Document,
+  rawXml: string
+): { paragraph: Element; run?: Element } | null => {
+  const needle = normalizeMarkup(rawXml);
+  if (needle === '') return null;
+
+  const paragraphs = Array.from(doc.getElementsByTagNameNS(W_NAMESPACE, 'p'));
+  const serialize = (el: Element) => normalizeMarkup(new XMLSerializer().serializeToString(el));
+
+  // The snippet may itself be a paragraph.
+  const exact = paragraphs.filter(p => serialize(p) === needle);
+  if (exact.length === 1) return { paragraph: exact[0] };
+  if (exact.length > 1) return null;
+
+  const containing = paragraphs.filter(p => serialize(p).includes(needle));
+  if (containing.length !== 1) return null;
+
+  const paragraph = containing[0];
+  const runs = Array.from(paragraph.getElementsByTagNameNS(W_NAMESPACE, 'r'));
+  const matchingRuns = runs.filter(r => serialize(r) === needle || serialize(r).includes(needle));
+
+  return {
+    paragraph,
+    // Only attach a run when it is unambiguous; otherwise resolve the paragraph alone.
+    run: matchingRuns.length === 1 ? matchingRuns[0] : undefined
+  };
+};
+
+/**
+ * One-call entry point for a UI: given the package parts and a snippet of markup,
+ * produce evidence ready to hand to the AI layer.
+ *
+ * Returns null when nothing could be computed — a non-Word package, an unlocatable
+ * snippet — so the caller falls back to its ordinary path rather than showing an empty
+ * "Verified" answer.
+ */
+export const computeEvidenceForMarkup = (
+  parts: PackageParts,
+  rawXml: string
+): { lines: string[]; unresolved: string[] } | null => {
+  const context = loadWordContext(parts);
+  if (!context.document) return null;
+
+  const located = locateParagraphByMarkup(context.document, rawXml);
+  if (!located) return null;
+
+  const analysis = analyzeParagraphFormatting(context, located.paragraph, located.run);
+  return { lines: analysis.explanation, unresolved: analysis.unresolved };
+};
