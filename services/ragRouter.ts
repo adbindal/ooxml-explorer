@@ -1,5 +1,6 @@
 import { KNOWLEDGE_BASE, ReferenceDoc } from './staticKnowledgeBase';
 import { querySchemaFromStorage, searchSchemasInStorage, selectBestMatch } from './storageService';
+import { recordRetrieval } from './retrievalMetrics';
 
 /**
  * Looks a tag up in the bundled fallback knowledge base.
@@ -73,6 +74,7 @@ export const getRagContext = async (
     const localOverride = localStorage.getItem(overrideKey);
     if (localOverride) {
       console.log(`[RAG Router] Applying local self-healing override for <${cleanTagName}>`);
+      recordRetrieval('overrideHit');
       return {
         grounded: true,
         context: `
@@ -100,18 +102,26 @@ export const getRagContext = async (
   } catch (e) {
     console.warn('[RAG Router] IndexedDB lookup failed; using bundled knowledge base:', e);
   }
-  if (!match) {
+  if (match) {
+    recordRetrieval('exactHit');
+  } else {
     match = queryStaticKnowledgeBase(cleanTagName, context.fileType, context.namespace);
+    if (match) recordRetrieval('offlineHit');
   }
 
   // 3. Fallback: If not found and looks like a natural language query, run LLM keyword search
   if (!match && (cleanTagName.includes(' ') || cleanTagName.length > 15)) {
     console.log(`[RAG Router] Tag <${cleanTagName}> not found. Running LLM-assisted keyword search...`);
+    recordRetrieval('naturalLanguageAttempts');
     const keywords = await extractKeywordsWithLocalAI(cleanTagName);
     try {
       const searchResults = await searchSchemasInStorage(keywords, context.fileType);
       if (searchResults.length > 0) {
-        match = searchResults[0]; // Pick the best keyword match
+        // Takes the first substring hit with no ranking at all. Replacing this with
+        // BM25 is the evidence-backed improvement; the counters above exist to show
+        // whether this path is used enough to be worth it.
+        match = searchResults[0];
+        recordRetrieval('naturalLanguageHits');
       }
     } catch (e) {
       console.warn('[RAG Router] IndexedDB keyword search failed:', e);
@@ -122,6 +132,7 @@ export const getRagContext = async (
     // The curated RAG database only covers a small subset of ECMA-376. This is the
     // common case, not an edge case - be explicit that there is nothing to cite here,
     // so the prompt (see aiService.ts) can instruct the model not to invent one.
+    recordRetrieval('miss');
     return {
       grounded: false,
       context: `No official ECMA-376 definitions found locally in the RAG database for tag <${context.namespace}:${cleanTagName}>. No citation or SDK class name is available for this tag.`

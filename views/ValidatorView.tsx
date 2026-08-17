@@ -8,6 +8,7 @@ import { ThemeClasses } from '../types';
 import { runSystemChecks, LogEntry, CoverageModule } from '../services/testService';
 import { loadZipFile, readPackageParts } from '../services/zipService';
 import { checkPackageIntegrity } from '../services/packageIntegrity';
+import { readRetrievalMetrics, summariseRetrieval, resetRetrievalMetrics } from '../services/retrievalMetrics';
 import {
     resolveAlternateContent,
     MODERN_CONSUMER_NAMESPACES,
@@ -95,6 +96,21 @@ const ValidatorView: React.FC<ValidatorViewProps> = ({ themeClasses }) => {
      * retrieved. Every line it prints is computed from the package, so a clean run is
      * a fact about the file rather than a model's opinion of it.
      */
+    /**
+     * Prints how often each retrieval path has answered a lookup.
+     *
+     * Answers the question that decides whether semantic search is worth building at
+     * all. Counts only - no query text is ever stored.
+     */
+    const handleShowRetrievalMetrics = () => {
+        const summary = summariseRetrieval(readRetrievalMetrics());
+        setLogs(prev => [
+            ...prev,
+            { msg: '📊 Retrieval paths:', type: 'info', timestamp: Date.now() },
+            ...summary.lines.map(line => ({ msg: line, type: 'info' as const, timestamp: Date.now() }))
+        ]);
+    };
+
     const handleCheckIntegrity = async () => {
         const addLog = (msg: string, type: 'info' | 'success' | 'warning' | 'error') =>
             setLogs(prev => [...prev, { msg, type, timestamp: Date.now() }]);
@@ -274,6 +290,24 @@ const ValidatorView: React.FC<ValidatorViewProps> = ({ themeClasses }) => {
                             >
                                 {integrityStatus === 'running' ? <Loader2 className="animate-spin" size={16} /> : <ShieldCheck size={16} />} Check Package Integrity
                             </button>
+
+                            {/* Counts only; never query text. */}
+                            <div className="grid grid-cols-3 gap-2">
+                                <button
+                                    onClick={handleShowRetrievalMetrics}
+                                    title="How often each retrieval path answered a lookup. Decides whether semantic search is worth building."
+                                    className="col-span-2 py-2 rounded font-medium flex items-center justify-center gap-2 bg-slate-600 hover:bg-slate-500 text-white text-xs"
+                                >
+                                    <PieChart size={14} /> Retrieval Stats
+                                </button>
+                                <button
+                                    onClick={() => { resetRetrievalMetrics(); handleShowRetrievalMetrics(); }}
+                                    title="Reset the retrieval counters."
+                                    className="py-2 rounded font-medium bg-zinc-700 hover:bg-zinc-600 text-white text-xs"
+                                >
+                                    Reset
+                                </button>
+                            </div>
                             
                             {/* Coverage Report Widget */}
                             {coverageReport.length > 0 && (
