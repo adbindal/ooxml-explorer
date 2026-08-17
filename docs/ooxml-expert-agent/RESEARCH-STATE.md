@@ -1,6 +1,6 @@
 # OOXML Expert Agent — Research State & Resume Point
 
-**Status:** research complete; build plan published; **Stage 0 and Stage 1 both COMPLETE** (see §8b).
+**Status:** research complete; build plan published; **Stages 0 and 1 complete; Stage 2 (Word) complete** (see §8b).
 **Last updated:** 2026-08-17
 **Purpose:** durable record so this work can resume after a session ends. If you are picking this up cold, read this file top to bottom before doing anything else.
 
@@ -363,6 +363,27 @@ Format-agnostic by construction (packaging is fully shared across the three form
 - **Integrity checks deliberately run against UNRESOLVED markup** and are reported separately: a broken relationship inside an `mc:Fallback` is still broken for whoever takes that branch.
 - ⚠️ Real-file check found `mc:Ignorable="w14 w15 wp14"` but **zero** `AlternateContent` (a text-only spec document). So the `AlternateContent` paths are unit-tested on synthetic fixtures only — **not yet exercised against a real file containing shapes.** Worth doing with a real .docx that has a text box. Naive walkers double-count every textbox, because Word writes shapes twice — DrawingML in `mc:Choice`, VML in `mc:Fallback`. Required before the Stage 2 resolvers. The seam is clean: `packageIntegrity` consumes a path→content map, so MCE slots in as a transform over that map.
 
+## 8d. Stage 2 — Word cascade COMPLETE (2026-08-17)
+
+All six layers of ECMA-376 §17.7.2 now supported.
+
+| Module | Commit | Covers |
+|---|---|---|
+| `services/wordStyleResolver.ts` | `e8aa678` | Layers 1, 4, 5, 6 + `basedOn` roll-up with 4 merge semantics + 12 toggles |
+| `services/wordNumbering.ts` | `ab6d091` | Layer 3 |
+| `services/wordTableStyles.ts` | `ab6d091` | Layer 2 |
+
+Layers 2 and 3 are **supplied by the caller**, not resolved inside the resolver — each needs context it doesn't have (cell position in the table; the numbering part). A caller that omits layer 2 for a run that *is* in a table gets a trace note, not a silently incomplete answer.
+
+**Also shipped:** corpus expanded to **1,899 records across 11 namespaces** (`bbfb65a`) including full DrawingML; namespace-blind lookup bug fixed (`ac0ec80`).
+
+### Open conflicts, deliberately not papered over
+- **Toggle truth table** — spec prose vs Microsoft's OpenXmlPowerTools disagree in one case. Resolver marks the result `uncertain` rather than guessing.
+- **Numbering vs paragraph-style indentation** — MS-OI29500 says `lvl/pPr` indentation *overrides* the paragraph style; the §17.7.2 cascade puts numbering at layer 3 and paragraph styles at layer 4, i.e. the opposite. Cascade order ships (better sourced); trace records both. **Settle against real Word.**
+
+### Word deviations now encoded and tested
+`tblStyleRowBandSize` defaults to **0** in Word (not 1) → no banding; Word's conditional order is row banding → col banding → first/last **col** → first/last **row** → corners; `w:tblLook`'s legacy bitmask is read **only** when no named attribute is present; `numId="0"` means *remove* numbering; `ilvl` outside 0–8 makes Word refuse the file.
+
 ## 9. Next actions
 
 1. ~~Research (Word, architecture, tooling, storage)~~ — done.
@@ -372,10 +393,12 @@ Format-agnostic by construction (packaging is fully shared across the three form
 5. ~~Stage 1a — package integrity~~ — done, `1a7905f`. See §8c.
 6. ~~Stage 1c — surface findings in the UI~~ — done, `af11bf5`.
 7. ~~Stage 1b — MCE preprocessing~~ — done, `2ad039f`. **Stage 1 complete.**
-8. **Stage 2 — the three resolvers.** The centrepiece and the largest item. Word: 6-layer cascade + 4 `basedOn` merge semantics + 12 toggles (settle the contested truth table against real Word first). Excel: `cellXfs`/`cellStyleXfs` + number-format application. PowerPoint: placeholder matching + `clrMap` + theme. Shared: DrawingML theme/colour/font resolution.
-9. Decide: which format goes first (recommend sequencing, not parallelising — resolvers are genuinely different per format).
-10. Decide: MS-OI29500 licensing — ask or not. Gates Stage 3 only.
-11. Decide: audience (self vs onboarding engineers). If mentoring is primary, Stage 5 moves up.
+8. ~~Stage 2 — Word~~ — done, see §8d.
+9. **Stage 2 — Excel resolver.** ⚠️ Do NOT build the cascade the spec describes: MS-OI29500 §2.1.699/700 say *only* the `cellXfs` record defines a cell's formatting. `xfId` is provenance, not inheritance. `apply*` flags are edit-time propagation bits, not render gates. Precedence is fallback-to-a-single-index: `c/@s` → `row/@s` (only if `customFormat="1"`) → `col/@style` (only for unallocated cells) → `cellXfs[0]`. The only true overlay layer is `dxf`.
+10. **Stage 2 — PowerPoint resolver.** Placeholder match on `@idx` (slide→layout) and `@type` (notesSlide→notesMaster); layout→master matching is **undocumented**. `clrMap`/`clrMapOvr` with three disjoint colour alphabets. `a:xfrm` absent = inherit, never zero. Group transform `sx = ext.cx / chExt.cx`.
+11. Decide: which format goes next (Word done) (recommend sequencing, not parallelising — resolvers are genuinely different per format).
+12. Decide: MS-OI29500 licensing — ask or not. Gates Stage 3 only.
+13. Decide: audience (self vs onboarding engineers). If mentoring is primary, Stage 5 moves up.
 
 ## 10. Known gaps at time of writing
 

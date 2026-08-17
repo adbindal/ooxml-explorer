@@ -20,7 +20,13 @@ export default defineConfig(({ mode }) => {
         globals: true,
         environment: 'jsdom',
         setupFiles: './tests/setup.ts',
-        exclude: ['node_modules', 'dist', '.idea', '.git', '.cache', 'tests/e2e/**'],
+        // `.claude/worktrees` holds agent worktrees, which are full checkouts living
+        // inside the repo. Without excluding them the suite collects every test twice
+        // and fails on the Playwright specs, which vitest cannot run.
+        exclude: [
+          'node_modules', 'dist', '.idea', '.git', '.cache',
+          '**/tests/e2e/**', '.claude/worktrees/**'
+        ],
         pool: 'forks',
         fileParallelism: false,
         maxWorkers: 1,

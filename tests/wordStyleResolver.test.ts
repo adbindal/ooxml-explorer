@@ -234,17 +234,95 @@ describe('toggle properties', () => {
   });
 });
 
-describe('unimplemented layers are reported, not hidden', () => {
-  it('warns that table styles were not considered', () => {
+describe('layers the caller must supply', () => {
+  it('warns when a run is in a table but no table style was given', () => {
     const sheet = styles(DOC_DEFAULTS);
     const resolved = resolveRunProperties(sheet, { insideTable: true });
-    const note = resolved.trace.find(t => t.layer === 'tableStyle')?.note;
-    expect(note).toContain('not resolved yet');
+    expect(resolved.trace.find(t => t.layer === 'tableStyle')?.note).toContain('no table style was supplied');
+  });
+
+  it('stops warning once the table style layer is supplied', () => {
+    const sheet = styles(DOC_DEFAULTS);
+    const resolved = resolveRunProperties(sheet, {
+      insideTable: true,
+      tableStyle: [{ type: 'wholeTable', rPr: frag('<w:rPr><w:sz w:val="18"/></w:rPr>') }]
+    });
+    expect(resolved.trace.find(t => t.layer === 'tableStyle')?.note).toBeUndefined();
   });
 
   it('says nothing about table styles outside a table', () => {
     const sheet = styles(DOC_DEFAULTS);
     expect(resolveRunProperties(sheet, {}).trace.find(t => t.layer === 'tableStyle')).toBeUndefined();
+  });
+});
+
+describe('layer 2 - table style conditional formatting', () => {
+  it('applies table style properties over docDefaults', () => {
+    const sheet = styles(DOC_DEFAULTS);
+    const resolved = resolveRunProperties(sheet, {
+      insideTable: true,
+      tableStyle: [{ type: 'wholeTable', rPr: frag('<w:rPr><w:sz w:val="18"/></w:rPr>') }]
+    });
+    expect(resolved.get('sz')).toBe('18');
+    expect(resolved.properties.get('sz')!.source).toBe('tableStyle:wholeTable');
+  });
+
+  it('lets a later conditional block override an earlier one', () => {
+    // The array is already in Word's application order, so later wins.
+    const sheet = styles(DOC_DEFAULTS);
+    const resolved = resolveRunProperties(sheet, {
+      insideTable: true,
+      tableStyle: [
+        { type: 'wholeTable', rPr: frag('<w:rPr><w:sz w:val="18"/></w:rPr>') },
+        { type: 'firstRow', rPr: frag('<w:rPr><w:sz w:val="24"/></w:rPr>') }
+      ]
+    });
+    expect(resolved.get('sz')).toBe('24');
+  });
+
+  it('is beaten by a paragraph style, which sits above it in the cascade', () => {
+    const sheet = styles(`${DOC_DEFAULTS}
+      <w:style w:type="paragraph" w:styleId="Big"><w:rPr><w:sz w:val="40"/></w:rPr></w:style>`);
+    const resolved = resolveRunProperties(sheet, {
+      insideTable: true,
+      paragraphStyleId: 'Big',
+      tableStyle: [{ type: 'wholeTable', rPr: frag('<w:rPr><w:sz w:val="18"/></w:rPr>') }]
+    });
+    expect(resolved.get('sz')).toBe('40');
+  });
+});
+
+describe('layer 3 - numbering', () => {
+  it('applies the level indentation, which overrides the paragraph style', () => {
+    // "I set an indent on my list style and nothing happened" - the level's own
+    // w:ind sits above the paragraph style in the cascade.
+    const sheet = styles(`${DOC_DEFAULTS}
+      <w:style w:type="paragraph" w:styleId="Body"><w:pPr><w:ind w:left="0"/></w:pPr></w:style>`);
+    const resolved = resolveParagraphProperties(sheet, {
+      paragraphStyleId: 'Body',
+      numbering: {
+        numId: '3', ilvl: 0, abstractNumId: '7', lvl: null,
+        start: '1', numFmt: 'decimal', lvlText: '%1.', suff: 'tab', isLgl: false,
+        pPr: frag('<w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr>'),
+        rPr: null, trace: [], problems: []
+      }
+    });
+    // Implemented per the ECMA-376 17.7.2 cascade order: numbering is layer 3 and
+    // the paragraph style is layer 4, so the style wins.
+    //
+    // KNOWN CONFLICT, deliberately not papered over: MS-OI29500 on numbering-level
+    // pPr states that the indentation in lvl/pPr *overrides* the paragraph style's
+    // indentation, which is the opposite. The cascade order is the better-sourced of
+    // the two, so it is what ships; the trace records that numbering contributed, so
+    // a caller can see both layers were consulted. Worth settling against real Word.
+    expect(resolved.properties.get('ind')!.source).toBe('style:Body');
+    expect(resolved.trace.map(t => t.layer)).toContain('numbering:3/0');
+  });
+
+  it('contributes nothing when the paragraph is not numbered', () => {
+    const sheet = styles(DOC_DEFAULTS);
+    const resolved = resolveParagraphProperties(sheet, { numbering: null });
+    expect(resolved.trace.some(t => t.layer.startsWith('numbering:'))).toBe(false);
   });
 });
 
