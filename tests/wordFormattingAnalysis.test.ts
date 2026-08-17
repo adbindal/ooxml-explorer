@@ -81,10 +81,14 @@ describe('loading the package', () => {
     expect(ctx.unresolved).toEqual([]);
   });
 
-  it('reports a missing numbering part instead of failing', () => {
-    const parts = pkg('<w:p/>');
+  it('does NOT flag a missing numbering part for a document with no lists', () => {
+    // A document without lists has no numbering part, which is normal rather than
+    // unresolved. Flagging it unconditionally capped every list-free document below
+    // the Verified tier over a part nothing referenced. The real case - a paragraph
+    // that references a numId when the part is absent - is covered below.
+    const parts = pkg('<w:p><w:r><w:t>no lists here</w:t></w:r></w:p>');
     delete parts['word/numbering.xml'];
-    expect(loadWordContext(parts).unresolved.join(' ')).toContain('numbering.xml');
+    expect(loadWordContext(parts).unresolved).toEqual([]);
   });
 
   it('reports a missing styles part and still resolves direct formatting', () => {
