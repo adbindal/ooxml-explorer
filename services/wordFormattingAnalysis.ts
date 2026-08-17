@@ -110,11 +110,13 @@ export const loadWordContext = (parts: PackageParts): WordDocumentContext => {
     ? parseStyles(stylesXml)
     : { docDefaults: {}, styles: new Map() };
 
+  // A document with no lists has no numbering part, and that is entirely normal - not
+  // something left unresolved. Flagging it unconditionally capped every list-free
+  // document below the Verified tier over a part nothing referenced. The genuine case,
+  // a paragraph that references a numId when the part is absent, is reported per
+  // paragraph in analyzeParagraphFormatting where the reference is actually seen.
   const numberingXml = parts[NUMBERING_PART];
   const numbering = numberingXml ? parseNumbering(numberingXml) : null;
-  if (!numberingXml) {
-    unresolved.push(`${NUMBERING_PART} is not in the package; list formatting cannot be resolved`);
-  }
 
   const bodyPaths = Object.keys(parts)
     .filter(path => BODY_PART_PATTERN.test(path))
