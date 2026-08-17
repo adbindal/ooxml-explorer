@@ -691,15 +691,38 @@ const AIPanel: React.FC<AIPanelProps> = ({ onClose, context, themeClasses }) => 
                                 <Bot size={13} />
                                 <span>XML Element Explanation</span>
                             </div>
-                            {selectedTagResponse.grounded ? (
-                                <span className="px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider border bg-green-500/10 border-green-500/20 text-green-500 shrink-0" title="Backed by an official ECMA-376 citation from the RAG database.">
-                                    ✅ Grounded
-                                </span>
-                            ) : (
-                                <span className="px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider border bg-[#EAB308]/10 border-[#EAB308]/20 text-[#EAB308] shrink-0" title="No official citation was found for this tag - this explanation comes from the model's general knowledge and has not been independently verified.">
-                                    ⚠️ Unverified
-                                </span>
-                            )}
+                            {/* The tier is computed in the orchestrator from evidence
+                                provenance - never reported by the model. See
+                                selectEvidenceTier in services/aiService.ts. */}
+                            {(() => {
+                                const tier = selectedTagResponse.tier
+                                    ?? (selectedTagResponse.grounded ? 'grounded' : 'unverified');
+                                const badge = {
+                                    verified: {
+                                        label: '🔍 Verified',
+                                        className: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500',
+                                        title: 'Computed directly from this document by resolving the formatting cascade. Not retrieved, not recalled.'
+                                    },
+                                    grounded: {
+                                        label: '✅ Grounded',
+                                        className: 'bg-green-500/10 border-green-500/20 text-green-500',
+                                        title: 'Backed by an official ECMA-376 citation from the schema database, or by a computation that could not establish everything.'
+                                    },
+                                    unverified: {
+                                        label: '⚠️ Unverified',
+                                        className: 'bg-[#EAB308]/10 border-[#EAB308]/20 text-[#EAB308]',
+                                        title: "No citation was found and nothing could be computed - this explanation comes from the model's general knowledge and has not been independently verified."
+                                    }
+                                }[tier];
+                                return (
+                                    <span
+                                        className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider border shrink-0 ${badge.className}`}
+                                        title={badge.title}
+                                    >
+                                        {badge.label}
+                                    </span>
+                                );
+                            })()}
                         </div>
                         <div className="p-3 rounded-lg bg-blue-500/5 border border-blue-500/10 font-mono text-[10px] break-all text-[#4A89DC]">
                             {context.selectedTag?.rawXml}
