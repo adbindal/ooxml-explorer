@@ -56,6 +56,15 @@ const NUMBERING = `<?xml version="1.0"?>
 const document = (body: string) => `<?xml version="1.0"?>
 <w:document xmlns:w="${W}" xmlns:mc="${MC}"><w:body>${body}</w:body></w:document>`;
 
+const header = (body: string) => `<?xml version="1.0"?>
+<w:hdr xmlns:w="${W}" xmlns:mc="${MC}">${body}</w:hdr>`;
+
+const footer = (body: string) => `<?xml version="1.0"?>
+<w:ftr xmlns:w="${W}" xmlns:mc="${MC}">${body}</w:ftr>`;
+
+const footnotes = (body: string) => `<?xml version="1.0"?>
+<w:footnotes xmlns:w="${W}" xmlns:mc="${MC}"><w:footnote w:id="1">${body}</w:footnote></w:footnotes>`;
+
 const pkg = (body: string, over: Partial<PackageParts> = {}): PackageParts => ({
   'word/styles.xml': STYLES,
   'word/numbering.xml': NUMBERING,
@@ -297,6 +306,178 @@ describe('computeEvidenceForMarkup', () => {
     expect(computeEvidenceForMarkup(parts, '<w:p/>')).toBeNull();
   });
 })
+
+/**
+ * Headers, footers and notes are separate parts with paragraphs of their own, resolving
+ * against the same styles.xml. Before they were loaded, selecting anything inside one
+ * produced no computed evidence at all and the answer silently dropped to "Unverified"
+ * for markup the app could resolve completely.
+ */
+describe('body parts beyond document.xml', () => {
+  const HEADER_TITLE = '<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>Company name</w:t></w:r></w:p>';
+
+  it('discovers every story in the package, main body first', () => {
+    const ctx = loadWordContext(pkg('<w:p/>', {
+      'word/header1.xml': header('<w:p/>'),
+      'word/header2.xml': header('<w:p/>'),
+      'word/footer1.xml': footer('<w:p/>'),
+      'word/footnotes.xml': footnotes('<w:p/>'),
+      'word/endnotes.xml': `<?xml version="1.0"?><w:endnotes xmlns:w="${W}"><w:p/></w:endnotes>`,
+      'word/comments.xml': `<?xml version="1.0"?><w:comments xmlns:w="${W}"><w:p/></w:comments>`
+    }));
+    expect(ctx.bodyParts.map(p => p.path)).toEqual([
+      'word/document.xml',
+      'word/comments.xml',
+      'word/endnotes.xml',
+      'word/footer1.xml',
+      'word/footnotes.xml',
+      'word/header1.xml',
+      'word/header2.xml'
+    ]);
+  });
+
+  it('discovers a legally named part the producer numbered unusually', () => {
+    // Part names come from relationships, not from a convention. Matching by shape
+    // rather than against a fixed list is what keeps such a file resolvable.
+    const ctx = loadWordContext(pkg('<w:p/>', {
+      'word/headerFirstPage.xml': header(HEADER_TITLE)
+    }));
+    expect(ctx.bodyParts.map(p => p.path)).toContain('word/headerFirstPage.xml');
+  });
+
+  it('does not mistake neighbouring parts for stories', () => {
+    // styles/numbering are inputs to the cascade, not content; the w15 comment
+    // side-cars hold no paragraphs; a glossary document has its own stylesheet and
+    // would resolve against the wrong one.
+    const ctx = loadWordContext(pkg('<w:p/>', {
+      'word/commentsExtended.xml': '<x/>',
+      'word/commentsIds.xml': '<x/>',
+      'word/settings.xml': '<x/>',
+      'word/glossary/document.xml': document('<w:p/>')
+    }));
+    expect(ctx.bodyParts.map(p => p.path)).toEqual(['word/document.xml']);
+  });
+
+  it('keeps `document` pointing at the main story only', () => {
+    const ctx = loadWordContext(pkg('<w:p><w:r><w:t>body</w:t></w:r></w:p>', {
+      'word/header1.xml': header('<w:p><w:r><w:t>head</w:t></w:r></w:p>')
+    }));
+    expect(ctx.document!.getElementsByTagNameNS(W, 'p').length).toBe(1);
+    expect(ctx.document!.documentElement.textContent).toBe('body');
+  });
+
+  it('resolves a header paragraph completely, and says which part it is in', () => {
+    const evidence = computeEvidenceForMarkup(
+      pkg('<w:p><w:r><w:t>body</w:t></w:r></w:p>', { 'word/header1.xml': header(HEADER_TITLE) }),
+      '<w:r><w:t>Company name</w:t></w:r>'
+    )!;
+    expect(evidence.part).toBe('word/header1.xml');
+    expect(evidence.lines.join('\n')).toContain('Paragraph is in word/header1.xml.');
+    expect(evidence.lines.join('\n')).toContain('sz = 32 (from style:Heading1)');
+    expect(evidence.unresolved).toEqual([]);
+    expect(selectEvidenceTier(false, evidence)).toBe('verified');
+  });
+
+  it('resolves a footnote paragraph against the same numbering definitions', () => {
+    const evidence = computeEvidenceForMarkup(
+      pkg('<w:p><w:r><w:t>body</w:t></w:r></w:p>', {
+        'word/footnotes.xml': footnotes(
+          '<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr><w:r><w:t>Source</w:t></w:r></w:p>'
+        )
+      }),
+      '<w:r><w:t>Source</w:t></w:r>'
+    )!;
+    expect(evidence.part).toBe('word/footnotes.xml');
+    expect(evidence.lines.join('\n')).toContain('Numbered: numId 1, level 0, format decimal');
+    expect(selectEvidenceTier(false, evidence)).toBe('verified');
+  });
+
+  it('resolves a footer paragraph in a package that has no document.xml at all', () => {
+    // A header resolves against styles.xml and numbering.xml; the body part it never
+    // consults must not be reported as a gap, or a complete answer is capped at
+    // Grounded for something that had no bearing on it.
+    const parts = pkg('<w:p/>', { 'word/footer1.xml': footer(HEADER_TITLE) });
+    delete parts['word/document.xml'];
+    const evidence = computeEvidenceForMarkup(parts, '<w:r><w:t>Company name</w:t></w:r>')!;
+    expect(evidence.part).toBe('word/footer1.xml');
+    expect(evidence.unresolved).toEqual([]);
+    expect(selectEvidenceTier(false, evidence)).toBe('verified');
+  });
+
+  it('REFUSES to guess when the same paragraph appears in two different parts', () => {
+    // Ambiguity spans parts. An empty paragraph in the body and an empty paragraph in
+    // a header are as indistinguishable as two in the body, and picking either would
+    // put a wrong answer under a Verified badge.
+    const parts = pkg('<w:p/>', { 'word/header1.xml': header('<w:p/>') });
+    expect(locateParagraphByMarkup(loadWordContext(parts), '<w:p/>')).toBeNull();
+    const evidence = computeEvidenceForMarkup(parts, '<w:p/>');
+    expect(evidence).toBeNull();
+    expect(selectEvidenceTier(false, evidence)).toBe('unverified');
+  });
+
+  it('refuses when a run snippet appears in both the body and a header', () => {
+    const parts = pkg('<w:p><w:r><w:t>Page</w:t></w:r></w:p>', {
+      'word/header1.xml': header('<w:p><w:r><w:t>Page</w:t></w:r></w:p>')
+    });
+    expect(computeEvidenceForMarkup(parts, '<w:r><w:t>Page</w:t></w:r>')).toBeNull();
+  });
+
+  it('still resolves a body paragraph that is unique across every part', () => {
+    const parts = pkg('<w:p><w:r><w:t>body</w:t></w:r></w:p>', {
+      'word/header1.xml': header('<w:p><w:r><w:t>head</w:t></w:r></w:p>')
+    });
+    const evidence = computeEvidenceForMarkup(parts, '<w:r><w:t>body</w:t></w:r>')!;
+    expect(evidence.part).toBe('word/document.xml');
+    expect(selectEvidenceTier(false, evidence)).toBe('verified');
+  });
+
+  it('resolves markup compatibility inside a header too', () => {
+    // A text box in a header is written twice exactly as it is in the body; skipping
+    // the pass there would double-count it and break the uniqueness check with it.
+    const ctx = loadWordContext(pkg('<w:p/>', {
+      'word/header1.xml': header(`
+        <mc:AlternateContent>
+          <mc:Choice Requires="w"><w:p><w:r><w:t>modern</w:t></w:r></w:p></mc:Choice>
+          <mc:Fallback><w:p><w:r><w:t>legacy</w:t></w:r></w:p></mc:Fallback>
+        </mc:AlternateContent>`)
+    }));
+    const headerPart = ctx.bodyParts.find(p => p.path === 'word/header1.xml')!;
+    const paragraphs = headerPart.document.getElementsByTagNameNS(W, 'p');
+    expect(paragraphs.length).toBe(1);
+    expect(paragraphs[0].textContent).toBe('modern');
+  });
+
+  it('reports a malformed header and still loads the parts that parsed', () => {
+    const ctx = loadWordContext(pkg('<w:p><w:r><w:t>body</w:t></w:r></w:p>', {
+      'word/header1.xml': '<w:hdr><unclosed>'
+    }));
+    expect(ctx.unresolved.join(' ')).toContain('word/header1.xml is not well-formed');
+    expect(ctx.bodyParts.map(p => p.path)).toEqual(['word/document.xml']);
+  });
+
+  it('behaves exactly as before for a package with no header parts', () => {
+    const body = '<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>Title</w:t></w:r></w:p>';
+    const ctx = loadWordContext(pkg(body));
+    expect(ctx.bodyParts.map(p => p.path)).toEqual(['word/document.xml']);
+    expect(ctx.unresolved).toEqual([]);
+
+    // And an unrelated header must not change a body answer in any way.
+    const alone = computeEvidenceForMarkup(pkg(body), '<w:r><w:t>Title</w:t></w:r>')!;
+    const alongside = computeEvidenceForMarkup(
+      pkg(body, { 'word/header1.xml': header('<w:p><w:r><w:t>head</w:t></w:r></w:p>') }),
+      '<w:r><w:t>Title</w:t></w:r>'
+    )!;
+    expect(alongside.lines).toEqual(alone.lines);
+    expect(alongside.unresolved).toEqual(alone.unresolved);
+  });
+
+  it('accepts a bare Document and reports no part name rather than guessing one', () => {
+    const d = loadWordContext(pkg('<w:p><w:r><w:t>alpha</w:t></w:r></w:p>')).document!;
+    const found = locateParagraphByMarkup(d, '<w:r><w:t>alpha</w:t></w:r>')!;
+    expect(found.paragraph.textContent).toBe('alpha');
+    expect(found.part).toBeNull();
+  });
+});
 
 describe('the full chain: computed evidence earns the Verified tier', () => {
   it('a resolvable element yields evidence that selects verified', () => {
