@@ -38,7 +38,23 @@ const SOURCES: { file: string; domain: 'docx' | 'xlsx' | 'pptx' | 'shared' }[] =
   { file: 'schemas_openxmlformats_org_wordprocessingml_2006_main.json', domain: 'docx' },
   { file: 'schemas_openxmlformats_org_spreadsheetml_2006_main.json', domain: 'xlsx' },
   { file: 'schemas_openxmlformats_org_presentationml_2006_main.json', domain: 'pptx' },
-  { file: 'schemas_openxmlformats_org_drawingml_2006_main.json', domain: 'shared' }
+
+  // DrawingML. The largest documented-deviation surface of the three formats
+  // (~444 MS-OI29500 entries against PresentationML's 100) and reusable across all
+  // of them, which is why it is worth ingesting in full rather than just `a:`.
+  { file: 'schemas_openxmlformats_org_drawingml_2006_main.json', domain: 'shared' },
+  { file: 'schemas_openxmlformats_org_drawingml_2006_chart.json', domain: 'shared' },
+  { file: 'schemas_openxmlformats_org_drawingml_2006_diagram.json', domain: 'shared' },
+  { file: 'schemas_openxmlformats_org_drawingml_2006_chartDrawing.json', domain: 'shared' },
+  { file: 'schemas_openxmlformats_org_drawingml_2006_picture.json', domain: 'shared' },
+  { file: 'schemas_openxmlformats_org_drawingml_2006_lockedCanvas.json', domain: 'shared' },
+
+  // The two format-specific positioning wrappers. DrawingML payloads are identical
+  // across formats; only the way they are anchored differs - `wp:` positions against
+  // a paginated document, `xdr:` against the cell grid. PowerPoint has no wrapper at
+  // all, which is what absolute EMU in `p:spTree` replaces.
+  { file: 'schemas_openxmlformats_org_drawingml_2006_wordprocessingDrawing.json', domain: 'docx' },
+  { file: 'schemas_openxmlformats_org_drawingml_2006_spreadsheetDrawing.json', domain: 'xlsx' }
 ];
 
 interface SdkAttribute {
@@ -126,24 +142,35 @@ const main = async () => {
   if (existsSync(OUTPUT_PATH)) {
     const existing = JSON.parse(readFileSync(OUTPUT_PATH, 'utf8')) as ReferenceDoc[];
     for (const doc of existing) {
-      if (doc.definition) curatedByKey.set(`${doc.domain}:${doc.tag}`, doc);
+      if (doc.definition) curatedByKey.set(`${doc.domain}:${doc.namespace}:${doc.tag}`, doc);
     }
     console.log(`[ingest] Preserving ${curatedByKey.size} curated records with prose.`);
   }
 
   const generated = new Map<string, ReferenceDoc>();
 
+  // Load every namespace before emitting anything. Both derivations below have to be
+  // global rather than per-file, because the namespaces genuinely cross-reference:
+  // `a:graphic` is a child of `wp:inline` AND `xdr:graphicFrame`, and chart types
+  // inherit from DrawingML base classes. Computing either per file silently
+  // under-reports - the record would simply be missing parents it really has.
+  const loaded: { domain: 'docx' | 'xlsx' | 'pptx' | 'shared'; file: string; Types: SdkType[] }[] = [];
   for (const { file, domain } of SOURCES) {
     const { Types } = await fetchNamespace(file);
+    loaded.push({ domain, file, Types });
+  }
 
-    const byClassName = new Map<string, SdkType>();
+  const byClassName = new Map<string, SdkType>();
+  for (const { Types } of loaded) {
     for (const entry of Types) {
       if (entry.ClassName) byClassName.set(entry.ClassName, entry);
     }
+  }
 
-    // Parents are not stated anywhere in the SDK data; they are the inverse of the
-    // Children lists, so build that index before emitting records.
-    const parentsByQName = new Map<string, Set<string>>();
+  // Parents are not stated anywhere in the SDK data; they are the inverse of the
+  // Children lists.
+  const parentsByQName = new Map<string, Set<string>>();
+  for (const { Types } of loaded) {
     for (const entry of Types) {
       const parent = elementQName(entry.Name);
       if (!parent) continue;
@@ -154,14 +181,18 @@ const main = async () => {
         parentsByQName.get(childQName)!.add(parent);
       }
     }
+  }
 
+  for (const { domain, file, Types } of loaded) {
     let emitted = 0;
     for (const entry of Types) {
       const qname = elementQName(entry.Name);
       if (!qname) continue; // type-only entry, not an element
 
       const { prefix, tag } = splitQName(qname);
-      const key = `${domain}:${tag}`;
+      // Namespace is part of the key. Within `shared` alone, `ext` exists under
+      // both `a:` and `cdr:`, and they are different elements.
+      const key = `${domain}:${prefix}:${tag}`;
 
       // A tag can appear under several complex types (w:rPr sits under seven). Merge
       // rather than letting the last one win, so the record reflects every context.
@@ -182,7 +213,8 @@ const main = async () => {
       });
       emitted += 1;
     }
-    console.log(`[ingest] ${domain.padEnd(6)} ${String(emitted).padStart(5)} elements from ${file.split('_').slice(2, 3)}`);
+    const nsLabel = file.replace(/^schemas_openxmlformats_org_/, '').replace(/\.json$/, '');
+    console.log(`[ingest] ${domain.padEnd(6)} ${String(emitted).padStart(5)} elements  ${nsLabel}`);
   }
 
   // Merge rule: prose from humans, structure from the schema.
@@ -210,7 +242,9 @@ const main = async () => {
   }
 
   const output = [...merged.values()].sort((a, b) =>
-    a.domain === b.domain ? a.tag.localeCompare(b.tag) : a.domain.localeCompare(b.domain)
+    a.domain !== b.domain ? a.domain.localeCompare(b.domain)
+      : a.namespace !== b.namespace ? a.namespace.localeCompare(b.namespace)
+      : a.tag.localeCompare(b.tag)
   );
 
   writeFileSync(OUTPUT_PATH, JSON.stringify(output, null, 2), 'utf8');
