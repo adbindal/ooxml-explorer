@@ -14,6 +14,7 @@ import {
 } from '../services/geminiService';
 import { explainElement, ElementExplanation } from '../services/aiService';
 import { computeEvidenceForMarkup } from '../services/wordFormattingAnalysis';
+import { computeExcelEvidenceForMarkup } from '../services/excelFormattingAnalysis';
 import { ThemeClasses } from '../types';
 import MarkdownContent from './MarkdownContent';
 
@@ -27,19 +28,39 @@ import MarkdownContent from './MarkdownContent';
  * Returns null when there is nothing to compute, so the caller degrades to the
  * ordinary retrieval-backed explanation.
  */
+/**
+ * Which parts each format's analysis needs alongside the open file.
+ *
+ * Keyed on the open part rather than the file extension, because the analysis is only
+ * meaningful for the parts that actually carry content - a selection inside
+ * `xl/styles.xml` has no cell to resolve.
+ */
+const ANALYSIS_TARGETS = [
+  {
+    matches: (path: string) => path.endsWith('word/document.xml'),
+    siblings: ['word/styles.xml', 'word/numbering.xml'],
+    compute: computeEvidenceForMarkup
+  },
+  {
+    matches: (path: string) => /^xl\/worksheets\/[^/]+\.xml$/.test(path),
+    siblings: ['xl/styles.xml', 'xl/workbook.xml', 'xl/sharedStrings.xml'],
+    compute: computeExcelEvidenceForMarkup
+  }
+] as const;
+
 const buildComputedEvidence = async (
   context: AIPanelProps['context'],
   rawXml: string
 ): Promise<{ lines: string[]; unresolved: string[] } | null> => {
-  const documentPath = context.fileName;
-  if (!documentPath || !documentPath.endsWith('word/document.xml')) return null;
-  if (!context.content) return null;
+  const openPath = context.fileName;
+  if (!openPath || !context.content) return null;
 
-  const parts: Record<string, string> = { 'word/document.xml': context.content };
+  const target = ANALYSIS_TARGETS.find(t => t.matches(openPath));
+  if (!target) return null;
 
-  const wanted = ['word/styles.xml', 'word/numbering.xml']
-    .filter(path => context.relatedFiles?.includes(path));
+  const parts: Record<string, string> = { [openPath]: context.content };
 
+  const wanted = target.siblings.filter(path => context.relatedFiles?.includes(path));
   if (wanted.length > 0 && context.onLoadContext) {
     try {
       const loaded = await context.onLoadContext(wanted);
@@ -49,13 +70,13 @@ const buildComputedEvidence = async (
         }
       }
     } catch {
-      // A failed sibling fetch is not fatal - the analysis will report the part as
-      // unavailable and the answer will be capped below Verified accordingly.
+      // A failed sibling fetch is not fatal - the analysis reports the part as
+      // unavailable and the tier is capped below Verified accordingly.
     }
   }
 
   try {
-    return computeEvidenceForMarkup(parts, rawXml);
+    return target.compute(parts, rawXml);
   } catch {
     return null;
   }
@@ -243,9 +264,7 @@ const AIPanel: React.FC<AIPanelProps> = ({ onClose, context, themeClasses }) => 
       // whenever the element cannot be located unambiguously - in which case we fall
       // back to the ordinary explanation rather than showing a Verified answer built
       // on a guess.
-      const computed = fileType === 'docx'
-        ? await buildComputedEvidence(context, context.selectedTag.rawXml)
-        : null;
+      const computed = await buildComputedEvidence(context, context.selectedTag.rawXml);
 
       const result = await explainElement(
         context.selectedTag.tagName,
