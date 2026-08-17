@@ -13,8 +13,53 @@ import {
   AIDiffAnalysis
 } from '../services/geminiService';
 import { explainElement, ElementExplanation } from '../services/aiService';
+import { computeEvidenceForMarkup } from '../services/wordFormattingAnalysis';
 import { ThemeClasses } from '../types';
 import MarkdownContent from './MarkdownContent';
+
+/**
+ * Assembles the parts the Word cascade needs and computes evidence for one element.
+ *
+ * The panel holds the open file's text and can fetch siblings, so this pulls
+ * `styles.xml` and `numbering.xml` alongside `document.xml`. Any of them may be
+ * absent; the analysis reports what it could not use rather than failing.
+ *
+ * Returns null when there is nothing to compute, so the caller degrades to the
+ * ordinary retrieval-backed explanation.
+ */
+const buildComputedEvidence = async (
+  context: AIPanelProps['context'],
+  rawXml: string
+): Promise<{ lines: string[]; unresolved: string[] } | null> => {
+  const documentPath = context.fileName;
+  if (!documentPath || !documentPath.endsWith('word/document.xml')) return null;
+  if (!context.content) return null;
+
+  const parts: Record<string, string> = { 'word/document.xml': context.content };
+
+  const wanted = ['word/styles.xml', 'word/numbering.xml']
+    .filter(path => context.relatedFiles?.includes(path));
+
+  if (wanted.length > 0 && context.onLoadContext) {
+    try {
+      const loaded = await context.onLoadContext(wanted);
+      for (const file of loaded as { fileName: string; content: string }[]) {
+        if (file?.fileName && typeof file.content === 'string') {
+          parts[file.fileName] = file.content;
+        }
+      }
+    } catch {
+      // A failed sibling fetch is not fatal - the analysis will report the part as
+      // unavailable and the answer will be capped below Verified accordingly.
+    }
+  }
+
+  try {
+    return computeEvidenceForMarkup(parts, rawXml);
+  } catch {
+    return null;
+  }
+};
 
 interface AIPanelProps {
   onClose: () => void;
@@ -192,11 +237,22 @@ const AIPanel: React.FC<AIPanelProps> = ({ onClose, context, themeClasses }) => 
           ? 'pptx' 
           : 'docx';
           
+      // Try to compute the formatting cascade for this element. When it succeeds the
+      // answer rests on a derivation from the document rather than on retrieval, which
+      // is what earns the Verified tier. It is Word-only for now, and returns null
+      // whenever the element cannot be located unambiguously - in which case we fall
+      // back to the ordinary explanation rather than showing a Verified answer built
+      // on a guess.
+      const computed = fileType === 'docx'
+        ? await buildComputedEvidence(context, context.selectedTag.rawXml)
+        : null;
+
       const result = await explainElement(
         context.selectedTag.tagName,
         context.selectedTag.rawXml,
         fileType,
-        context.selectedTag.parentPath
+        context.selectedTag.parentPath,
+        computed
       );
       setSelectedTagResponse(result);
     } catch (e: unknown) {
@@ -691,15 +747,38 @@ const AIPanel: React.FC<AIPanelProps> = ({ onClose, context, themeClasses }) => 
                                 <Bot size={13} />
                                 <span>XML Element Explanation</span>
                             </div>
-                            {selectedTagResponse.grounded ? (
-                                <span className="px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider border bg-green-500/10 border-green-500/20 text-green-500 shrink-0" title="Backed by an official ECMA-376 citation from the RAG database.">
-                                    ✅ Grounded
-                                </span>
-                            ) : (
-                                <span className="px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider border bg-[#EAB308]/10 border-[#EAB308]/20 text-[#EAB308] shrink-0" title="No official citation was found for this tag - this explanation comes from the model's general knowledge and has not been independently verified.">
-                                    ⚠️ Unverified
-                                </span>
-                            )}
+                            {/* The tier is computed in the orchestrator from evidence
+                                provenance - never reported by the model. See
+                                selectEvidenceTier in services/aiService.ts. */}
+                            {(() => {
+                                const tier = selectedTagResponse.tier
+                                    ?? (selectedTagResponse.grounded ? 'grounded' : 'unverified');
+                                const badge = {
+                                    verified: {
+                                        label: '🔍 Verified',
+                                        className: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500',
+                                        title: 'Computed directly from this document by resolving the formatting cascade. Not retrieved, not recalled.'
+                                    },
+                                    grounded: {
+                                        label: '✅ Grounded',
+                                        className: 'bg-green-500/10 border-green-500/20 text-green-500',
+                                        title: 'Backed by an official ECMA-376 citation from the schema database, or by a computation that could not establish everything.'
+                                    },
+                                    unverified: {
+                                        label: '⚠️ Unverified',
+                                        className: 'bg-[#EAB308]/10 border-[#EAB308]/20 text-[#EAB308]',
+                                        title: "No citation was found and nothing could be computed - this explanation comes from the model's general knowledge and has not been independently verified."
+                                    }
+                                }[tier];
+                                return (
+                                    <span
+                                        className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider border shrink-0 ${badge.className}`}
+                                        title={badge.title}
+                                    >
+                                        {badge.label}
+                                    </span>
+                                );
+                            })()}
                         </div>
                         <div className="p-3 rounded-lg bg-blue-500/5 border border-blue-500/10 font-mono text-[10px] break-all text-[#4A89DC]">
                             {context.selectedTag?.rawXml}
