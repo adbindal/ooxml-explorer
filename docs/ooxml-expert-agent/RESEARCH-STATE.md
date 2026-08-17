@@ -1,6 +1,6 @@
 # OOXML Expert Agent — Research State & Resume Point
 
-**Status:** research complete; build plan published; **Stages 0 and 1 complete; Stage 2 (Word) complete** (see §8b).
+**Status:** research complete; build plan published; **Stages 0 and 1 complete; Stage 2 complete for Word and Excel** (see §8b).
 **Last updated:** 2026-08-17
 **Purpose:** durable record so this work can resume after a session ends. If you are picking this up cold, read this file top to bottom before doing anything else.
 
@@ -412,7 +412,13 @@ The chain now closes end to end: **selected element → cascade resolved over th
 - **Built-in format table carries both readings** where Excel and the standard disagree (14, 22, 37–40, 47). Excel's is reported by default.
 - **All three date epochs**, including the 1900 compatibility system's phantom day. Existence is provable from the standard's own arithmetic; identity is never stated in ECMA-376, so the code does not claim one.
 
-⚠️ **Not yet wired to the UI.** No composition layer equivalent to `wordFormattingAnalysis.ts` exists for Excel, so `.xlsx` never reaches the Verified tier. That is the next hop, and it is the same shape as the Word one.
+✅ **Wired** (`ad0abb0`). `services/excelFormattingAnalysis.ts` composes it over a package and the panel routes both formats through one table, keyed on **which part is open** rather than the file extension — a selection inside `xl/styles.xml` has no cell to resolve.
+
+Value interpretation is where most of the care went, because it is easier to get wrong than the format:
+- **`t="s"` means `<v>` is an INDEX** into the shared string table; **`t="str"` means `<v>` IS the string.** One character apart, opposite meanings. Both tested against the same `<v>0</v>`.
+- Shared-string runs are concatenated — same run-splitting problem as Word's `w:r`.
+- A date is a number *plus a date-shaped format*; nothing in the cell says so.
+- A formula with no cached `<v>` is flagged; libraries write these routinely and the cell renders blank everywhere except Excel.
 
 ## 9. Next actions
 
@@ -425,7 +431,7 @@ The chain now closes end to end: **selected element → cascade resolved over th
 7. ~~Stage 1b — MCE preprocessing~~ — done, `2ad039f`. **Stage 1 complete.**
 8. ~~Stage 2 — Word~~ — done, see §8d.
 9. **Extend Verified coverage in Word** — headers, footers, footnotes and endnotes each have their own part and their own `.rels`; the panel currently only computes for `word/document.xml`.
-10. ~~Stage 2 — Excel resolver~~ — done, see §8f. **Next: the Excel composition layer**, mirroring `wordFormattingAnalysis.ts`, so `.xlsx` can reach the Verified tier. Needs `xl/styles.xml`, `xl/workbook.xml` (for the date system) and the sheet part; the `sharedStrings` hop matters for reading values but not for formatting.
+10. ~~Stage 2 — Excel resolver + composition~~ — done, see §8f. Word and Excel both reach the Verified tier.
 11. **Stage 2 — PowerPoint resolver.** Placeholder match on `@idx` (slide→layout) and `@type` (notesSlide→notesMaster); layout→master matching is **undocumented**. `clrMap`/`clrMapOvr` with three disjoint colour alphabets. `a:xfrm` absent = inherit, never zero. Group transform `sx = ext.cx / chExt.cx`.
 12. Decide: which format goes next (Word done) (recommend sequencing, not parallelising — resolvers are genuinely different per format).
 13. Decide: MS-OI29500 licensing — ask or not. Gates Stage 3 only.
