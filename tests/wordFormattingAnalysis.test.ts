@@ -508,3 +508,85 @@ describe('the full chain: computed evidence earns the Verified tier', () => {
     expect(selectEvidenceTier(false, evidence)).toBe('unverified');
   });
 });
+
+describe('numbering precedence depends on where the numbering came from', () => {
+  // [MS-OI29500] §2.1.229: Word applies the paragraph style BEFORE numbering, but
+  // only for numbering applied "via numbering properties" - i.e. w:numPr on the
+  // paragraph. Inherited through the style, the ECMA §17.7.2 order stands. The two
+  // placements give opposite answers, so provenance is not a detail.
+  const NUM = `<?xml version="1.0"?>
+    <w:numbering xmlns:w="${W}">
+      <w:abstractNum w:abstractNumId="9">
+        <w:lvl w:ilvl="0">
+          <w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/>
+          <w:pPr><w:ind w:left="720"/><w:jc w:val="left"/><w:keepNext/></w:pPr>
+        </w:lvl>
+      </w:abstractNum>
+      <w:num w:numId="1"><w:abstractNumId w:val="9"/></w:num>
+    </w:numbering>`;
+
+  const STYLES_NUM = `<?xml version="1.0"?>
+    <w:styles xmlns:w="${W}">
+      <w:docDefaults><w:pPrDefault><w:pPr/></w:pPrDefault></w:docDefaults>
+      <w:style w:type="paragraph" w:styleId="Wide">
+        <w:pPr><w:ind w:left="2880"/></w:pPr>
+      </w:style>
+      <w:style w:type="paragraph" w:styleId="WideNum">
+        <w:pPr><w:ind w:left="2880"/><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr>
+      </w:style>
+    </w:styles>`;
+
+  const numPkg = (body: string): PackageParts => ({
+    'word/styles.xml': STYLES_NUM,
+    'word/numbering.xml': NUM,
+    'word/document.xml': document(body)
+  });
+
+  const indOf = (parts: PackageParts) => {
+    const a = analyzeParagraphAt(loadWordContext(parts), 0)!;
+    return a.paragraph.properties.get('ind')?.element?.getAttributeNS(W, 'left') ?? null;
+  };
+
+  it('numbering from the paragraph w:numPr BEATS the paragraph style', () => {
+    // The style says 2880, the level says 720. Word applies the style first, so the
+    // level wins. The previously-shipped order had this backwards.
+    expect(indOf(numPkg(
+      '<w:p><w:pPr><w:pStyle w:val="Wide"/><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr></w:p>'
+    ))).toBe('720');
+  });
+
+  it('numbering inherited through the style LOSES to the style', () => {
+    // Same two values, numbering reached via the style instead. ECMA order stands.
+    expect(indOf(numPkg('<w:p><w:pPr><w:pStyle w:val="WideNum"/></w:pPr></w:p>'))).toBe('2880');
+  });
+
+  it('records which placement was used in the trace', () => {
+    const direct = analyzeParagraphAt(loadWordContext(numPkg(
+      '<w:p><w:pPr><w:pStyle w:val="Wide"/><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr></w:p>'
+    )), 0)!;
+    const layers = direct.paragraph.trace.map(t => t.layer);
+    // Numbering after the style chain.
+    expect(layers.indexOf('numbering:1/0')).toBeGreaterThan(layers.indexOf('style:Wide'));
+  });
+
+  it('honours only jc, ind and tabs from the numbering level', () => {
+    // [MS-OI29500] §17.9.22: Word allows only these three as children of a level's
+    // pPr. Passing the rest through would report formatting Word never applies.
+    const a = analyzeParagraphAt(loadWordContext(numPkg(
+      '<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr></w:p>'
+    )), 0)!;
+    expect(a.paragraph.properties.get('jc')?.source).toBe('numbering:1/0');
+    expect(a.paragraph.properties.has('keepNext')).toBe(false);
+  });
+
+  it('drops style-hierarchy indentation when numId is 0', () => {
+    // numId="0" says this is NOT a numbered item, and Word additionally discards the
+    // inherited indent. Without this a cancelled list item keeps its list indent and
+    // sits out of line with the body text around it.
+    const a = analyzeParagraphAt(loadWordContext(numPkg(
+      '<w:p><w:pPr><w:pStyle w:val="Wide"/><w:numPr><w:numId w:val="0"/></w:numPr></w:pPr></w:p>'
+    )), 0)!;
+    expect(a.paragraph.properties.has('ind')).toBe(false);
+    expect(a.paragraph.trace.some(t => t.layer === 'numbering:cancelled')).toBe(true);
+  });
+});
