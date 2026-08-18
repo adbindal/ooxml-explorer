@@ -81,6 +81,7 @@
  */
 
 import { W_NAMESPACE } from './wordStyleResolver';
+import { finding, renderFindings, type Finding, type Severity } from './findings';
 
 /** Office 2013 side-car namespace: threading and resolved-state. No trailing `/main`. */
 export const W15_NAMESPACE = 'http://schemas.microsoft.com/office/word/2012/wordml';
@@ -94,35 +95,80 @@ export const MAX_COMMENT_AUTHOR_LENGTH = 255;
 /** `CT_Comment/@w:initials` carries a StringValidator with MaxLength 9. */
 export const MAX_COMMENT_INITIALS_LENGTH = 9;
 
-export type CommentProblemKind =
-  | 'unmatched-range-start'
-  | 'unmatched-range-end'
-  | 'missing-reference'
-  | 'missing-body'
-  | 'comments-part-missing'
-  | 'orphan-comment'
-  | 'duplicate-id'
-  | 'id-out-of-range'
-  | 'reversed-range'
-  | 'overlapping-range'
-  | 'nested-range'
-  | 'missing-author'
-  | 'author-too-long'
-  | 'initials-too-long'
-  | 'missing-para-id'
-  | 'threading-unknown'
-  | 'dangling-parent'
-  | 'orphan-comment-ex';
+/**
+ * Severity, silence, and WHICH PART each kind is really about.
+ *
+ * The last column matters: comments live across three parts, and a finding that says
+ * `word/document.xml` when the fault is in `commentsExtended.xml` sends the reader to
+ * the wrong file.
+ *
+ * On silence: a comment that displays with no text is VISIBLE — someone sees the empty
+ * bubble. A comment that never displays at all is SILENT, and so is every threading
+ * fault, because the margin looks perfectly normal when replies have quietly flattened
+ * into top-level comments.
+ */
+const COMMENT_RULES = {
+  'unmatched-range-start': { severity: 'error',   silent: true,  where: 'body' },
+  'unmatched-range-end':   { severity: 'warning', silent: true,  where: 'body' },
+  'missing-reference':     { severity: 'warning', silent: true,  where: 'body' },
+  'missing-body':          { severity: 'error',   silent: false, where: 'comments' },
+  'comments-part-missing': { severity: 'error',   silent: false, where: 'comments' },
+  'orphan-comment':        { severity: 'warning', silent: true,  where: 'comments' },
+  'duplicate-id':          { severity: 'error',   silent: true,  where: 'comments' },
+  'id-out-of-range':       { severity: 'error',   silent: false, where: 'body' },
+  'reversed-range':        { severity: 'warning', silent: true,  where: 'body' },
+  'overlapping-range':     { severity: 'note',    silent: true,  where: 'body' },
+  'nested-range':          { severity: 'note',    silent: true,  where: 'body' },
+  'missing-author':        { severity: 'warning', silent: false, where: 'comments' },
+  'author-too-long':       { severity: 'error',   silent: false, where: 'comments' },
+  'initials-too-long':     { severity: 'error',   silent: false, where: 'comments' },
+  'missing-para-id':       { severity: 'warning', silent: true,  where: 'comments' },
+  'threading-unknown':     { severity: 'note',    silent: true,  where: 'extended' },
+  'dangling-parent':       { severity: 'warning', silent: true,  where: 'extended' },
+  'orphan-comment-ex':     { severity: 'note',    silent: true,  where: 'extended' }
+} as const satisfies Record<string, { severity: Severity; silent: boolean; where: CommentPartRole }>;
 
-export interface CommentProblem {
+type CommentPartRole = 'body' | 'comments' | 'extended';
+
+export type CommentProblemKind = keyof typeof COMMENT_RULES;
+
+/** Where each role lives in a conventional package. */
+export const COMMENT_PART_PATHS: Record<CommentPartRole, string> = {
+  body: 'word/document.xml',
+  comments: 'word/comments.xml',
+  extended: 'word/commentsExtended.xml'
+};
+
+/**
+ * Turns a problem description into a Finding, applying the table above.
+ *
+ * Takes an object rather than positional arguments so the call sites keep naming their
+ * fields — with eighteen kinds and two optional identifiers, positional arguments would
+ * be unreadable and easy to transpose.
+ */
+const commentFinding = (input: {
   kind: CommentProblemKind;
-  /** What is wrong, in terms of what a reader of the document would experience. */
   message: string;
-  /** What to do about it. */
   remediation: string;
   id?: string;
   paraId?: string;
-}
+}): Finding => {
+  const rule = COMMENT_RULES[input.kind];
+  const subject: Record<string, string> = {};
+  if (input.id !== undefined) subject.id = input.id;
+  if (input.paraId !== undefined) subject.paraId = input.paraId;
+  return finding(
+    `comment/${input.kind}`,
+    COMMENT_PART_PATHS[rule.where],
+    input.message,
+    input.remediation,
+    {
+      severity: rule.severity,
+      silent: rule.silent,
+      ...(Object.keys(subject).length > 0 ? { subject } : {})
+    }
+  );
+};
 
 /** Where a comment attaches in the body. All three markers are independent. */
 export interface CommentAnchor {
@@ -181,7 +227,7 @@ export interface CommentIndex {
   anchorsById: Map<string, CommentAnchor>;
   /** False when threading and resolved-state could not be determined for any comment. */
   threadingKnown: boolean;
-  problems: CommentProblem[];
+  problems: Finding[];
 }
 
 /** A root comment and every reply beneath it, flattened in document order. */
@@ -251,30 +297,30 @@ const textOf = (el: Element): string =>
  * missing `commentsExtended.xml` makes threading unknown rather than absent.
  */
 export function readComments(parts: CommentParts): CommentIndex {
-  const problems: CommentProblem[] = [];
+  const problems: Finding[] = [];
   const docRoot = rootOf(parts.document);
 
   const { anchors, anchorsById } = readAnchors(docRoot, problems);
   const { comments, byId } = readBodies(parts.comments ?? null, problems);
 
   if (!parts.comments && anchors.length > 0) {
-    problems.push({
+    problems.push(commentFinding({
       kind: 'comments-part-missing',
       message: `The body refers to ${anchors.length} comment${anchors.length === 1 ? '' : 's'} but word/comments.xml was not supplied. Every comment shows in the margin with no text.`,
       remediation: 'Restore word/comments.xml, or delete the range markers and commentReference runs that point into it.'
-    });
+    }));
   }
 
   // An id the body names with nothing behind it: the comment displays, empty.
   for (const anchor of anchors) {
     if (byId.has(anchor.id)) continue;
     if (!parts.comments) continue; // already reported once, at the part level
-    problems.push({
+    problems.push(commentFinding({
       kind: 'missing-body',
       id: anchor.id,
       message: `The body references comment ${anchor.id} but word/comments.xml has no <w:comment w:id="${anchor.id}">. The comment is anchored and highlighted but has no text.`,
       remediation: `Add the missing <w:comment w:id="${anchor.id}">, or remove the range markers and commentReference for id ${anchor.id}.`
-    });
+    }));
   }
 
   attachAnchors(comments, anchorsById, problems);
@@ -285,7 +331,7 @@ export function readComments(parts: CommentParts): CommentIndex {
 }
 
 /** Pair range markers by id and collect reference runs. */
-function readAnchors(docRoot: ParentNode, problems: CommentProblem[]) {
+function readAnchors(docRoot: ParentNode, problems: Finding[]) {
   const starts = collect(docRoot, W_NAMESPACE, ['commentRangeStart']);
   const ends = collect(docRoot, W_NAMESPACE, ['commentRangeEnd']);
   const references = collect(docRoot, W_NAMESPACE, ['commentReference']);
@@ -323,30 +369,30 @@ function readAnchors(docRoot: ParentNode, problems: CommentProblem[]) {
   for (const start of starts) {
     const id = attr(start, 'id');
     if (id === null) {
-      problems.push({
+      problems.push(commentFinding({
         kind: 'unmatched-range-start',
         message: 'A <w:commentRangeStart> has no w:id, so nothing can close it and no comment can claim it. @w:id is required.',
         remediation: 'Give the marker the id of the comment it opens, or delete it.'
-      });
+      }));
       continue;
     }
     if (!idIsInRange(id)) {
-      problems.push({
+      problems.push(commentFinding({
         kind: 'id-out-of-range',
         id,
         message: `Comment range id "${id}" is outside the permitted range. The type admits any non-negative number, or a negative number of -2 or below; -1 and non-integers are excluded.`,
         remediation: 'Renumber the comment and all three of its markers to a non-negative integer.'
-      });
+      }));
     }
 
     const anchor = anchorFor(id);
     if (anchor.rangeStart !== null) {
-      problems.push({
+      problems.push(commentFinding({
         kind: 'duplicate-id',
         id,
         message: `Two <w:commentRangeStart w:id="${id}"/> markers open the same comment. Ends match by id, so the second start competes with the first for the same end and one of the two highlights silently covers the wrong span.`,
         remediation: 'Give each comment its own id across document.xml and comments.xml.'
-      });
+      }));
       continue;
     }
     anchor.rangeStart = start;
@@ -358,32 +404,32 @@ function readAnchors(docRoot: ParentNode, problems: CommentProblem[]) {
       const startPos = order.get(start);
       const endPos = order.get(end);
       if (startPos !== undefined && endPos !== undefined && endPos < startPos) {
-        problems.push({
+        problems.push(commentFinding({
           kind: 'reversed-range',
           id,
           message: `Comment ${id} has its range end before its range start, so it highlights no text and the anchor point is ambiguous.`,
           remediation: 'Move the end marker after the start, or swap the two.'
-        });
+        }));
       }
     } else {
-      problems.push({
+      problems.push(commentFinding({
         kind: 'unmatched-range-start',
         id,
         message: `Comment ${id} opens a range that never closes — no <w:commentRangeEnd w:id="${id}"/> exists. The highlight has no defined extent, so what the comment appears to be about depends on the reader's application rather than on the document.`,
         remediation: `Insert <w:commentRangeEnd w:id="${id}"/> at the point the commented text should end.`
-      });
+      }));
     }
   }
 
   for (const end of ends) {
     if (claimedEnds.has(end)) continue;
     const id = attr(end, 'id');
-    problems.push({
+    problems.push(commentFinding({
       kind: 'unmatched-range-end',
       id: id ?? undefined,
       message: `A <w:commentRangeEnd${id === null ? '' : ` w:id="${id}"`}/> closes a comment range that was never opened. The start carried no name and neither does the end, so there is no way to recover where the highlight was meant to begin.`,
       remediation: 'Delete the stray end, or restore the matching <w:commentRangeStart>.'
-    });
+    }));
   }
 
   for (const reference of references) {
@@ -395,12 +441,12 @@ function readAnchors(docRoot: ParentNode, problems: CommentProblem[]) {
 
   for (const anchor of anchors) {
     if (anchor.reference !== null) continue;
-    problems.push({
+    problems.push(commentFinding({
       kind: 'missing-reference',
       id: anchor.id,
       message: `Comment ${anchor.id} has range markers but no <w:commentReference w:id="${anchor.id}"/> run. The reference is the anchor point Word draws the balloon from; without it the comment is generally not displayed at all, even though its text is in the package.`,
       remediation: `Add <w:r><w:commentReference w:id="${anchor.id}"/></w:r> at the end of the commented range.`
-    });
+    }));
   }
 
   reportRangeOverlaps(anchors, order, problems);
@@ -416,7 +462,7 @@ function readAnchors(docRoot: ParentNode, problems: CommentProblem[]) {
 function reportRangeOverlaps(
   anchors: CommentAnchor[],
   order: Map<Element, number>,
-  problems: CommentProblem[]
+  problems: Finding[]
 ) {
   const spans = anchors
     .filter(a => a.rangeStart !== null && a.rangeEnd !== null)
@@ -434,26 +480,26 @@ function reportRangeOverlaps(
       const inner = spans[j];
       if (inner.start > outer.end) break; // sorted by start: nothing later can touch it
       if (inner.end <= outer.end) {
-        problems.push({
+        problems.push(commentFinding({
           kind: 'nested-range',
           id: inner.id,
           message: `Comment ${inner.id}'s range sits entirely inside comment ${outer.id}'s. This is legal and common, but the two comments cover overlapping text, so "the text comment ${outer.id} refers to" includes everything comment ${inner.id} refers to.`,
           remediation: 'No action needed. Surfaced so that tools reporting commented text do not present the two ranges as independent.'
-        });
+        }));
       } else {
-        problems.push({
+        problems.push(commentFinding({
           kind: 'overlapping-range',
           id: inner.id,
           message: `Comment ${inner.id}'s range starts inside comment ${outer.id}'s and ends outside it. Partial overlap is legal but neither comment contains the other, so the highlights interleave and no nesting order exists.`,
           remediation: 'No action needed, unless the overlap was accidental — in which case move one end marker so the ranges either nest or separate.'
-        });
+        }));
       }
     }
   }
 }
 
 /** Read `word/comments.xml` into Comment records, validating what the schema requires. */
-function readBodies(commentsPart: Document | Element | null, problems: CommentProblem[]) {
+function readBodies(commentsPart: Document | Element | null, problems: Finding[]) {
   const comments: Comment[] = [];
   const byId = new Map<string, Comment>();
   if (!commentsPart) return { comments, byId };
@@ -461,46 +507,46 @@ function readBodies(commentsPart: Document | Element | null, problems: CommentPr
   for (const el of collect(rootOf(commentsPart), W_NAMESPACE, ['comment'])) {
     const id = attr(el, 'id');
     if (id === null) {
-      problems.push({
+      problems.push(commentFinding({
         kind: 'duplicate-id',
         message: 'A <w:comment> has no w:id, so nothing in the body can reference it and it can never display. @w:id is required.',
         remediation: 'Give the comment the id used by its commentReference, or delete it.'
-      });
+      }));
       continue;
     }
     if (!idIsInRange(id)) {
-      problems.push({
+      problems.push(commentFinding({
         kind: 'id-out-of-range',
         id,
         message: `Comment id "${id}" is outside the permitted range. The type admits any non-negative number, or a negative number of -2 or below; -1 and non-integers are excluded.`,
         remediation: 'Renumber the comment and all three of its body markers to a non-negative integer.'
-      });
+      }));
     }
 
     const author = attr(el, 'author');
     const initials = attr(el, 'initials');
     if (author === null) {
-      problems.push({
+      problems.push(commentFinding({
         kind: 'missing-author',
         id,
         message: `Comment ${id} has no w:author. The attribute is required, and it is the only thing that identifies who said this — readers see an unattributed comment.`,
         remediation: 'Add a w:author. Use a deliberate placeholder rather than an empty string if the real name must not ship.'
-      });
+      }));
     } else if (author.length > MAX_COMMENT_AUTHOR_LENGTH) {
-      problems.push({
+      problems.push(commentFinding({
         kind: 'author-too-long',
         id,
         message: `Comment ${id} has an author of ${author.length} characters; the maximum is ${MAX_COMMENT_AUTHOR_LENGTH}.`,
         remediation: `Shorten the author name to ${MAX_COMMENT_AUTHOR_LENGTH} characters or fewer.`
-      });
+      }));
     }
     if (initials !== null && initials.length > MAX_COMMENT_INITIALS_LENGTH) {
-      problems.push({
+      problems.push(commentFinding({
         kind: 'initials-too-long',
         id,
         message: `Comment ${id} has initials of ${initials.length} characters; the maximum is ${MAX_COMMENT_INITIALS_LENGTH}.`,
         remediation: `Shorten the initials to ${MAX_COMMENT_INITIALS_LENGTH} characters or fewer.`
-      });
+      }));
     }
 
     // commentsExtended keys on the LAST paragraph's w14:paraId, not the first and not
@@ -523,12 +569,12 @@ function readBodies(commentsPart: Document | Element | null, problems: CommentPr
     };
 
     if (byId.has(id)) {
-      problems.push({
+      problems.push(commentFinding({
         kind: 'duplicate-id',
         id,
         message: `Two <w:comment> elements share w:id "${id}". A commentReference names one id, so one of the two bodies is unreachable and which one displays is not something the markup determines.`,
         remediation: 'Renumber one of them, and update its range markers and commentReference to match.'
-      });
+      }));
     } else {
       byId.set(id, comment);
     }
@@ -542,18 +588,18 @@ function readBodies(commentsPart: Document | Element | null, problems: CommentPr
 function attachAnchors(
   comments: Comment[],
   anchorsById: Map<string, CommentAnchor>,
-  problems: CommentProblem[]
+  problems: Finding[]
 ) {
   for (const comment of comments) {
     const anchor = anchorsById.get(comment.id) ?? null;
     comment.anchor = anchor;
     if (anchor !== null) continue;
-    problems.push({
+    problems.push(commentFinding({
       kind: 'orphan-comment',
       id: comment.id,
       message: `Comment ${comment.id}${comment.author === null ? '' : ` by ${comment.author}`} is in word/comments.xml but nothing in the document references it, so Word never displays it. Its text still ships inside the file and is readable by anyone who unzips it.`,
       remediation: 'Delete the <w:comment>, or add the range markers and commentReference that were meant to anchor it.'
-    });
+    }));
   }
 }
 
@@ -567,15 +613,15 @@ function attachAnchors(
 function resolveThreading(
   comments: Comment[],
   extendedPart: Document | Element | null,
-  problems: CommentProblem[]
+  problems: Finding[]
 ): boolean {
   if (!extendedPart) {
     if (comments.length === 0) return true;
-    problems.push({
+    problems.push(commentFinding({
       kind: 'threading-unknown',
       message: `word/commentsExtended.xml was not supplied, so for all ${comments.length} comment${comments.length === 1 ? '' : 's'} it cannot be determined which are replies or which threads are resolved. Both are stored only in that part.`,
       remediation: 'Supply word/commentsExtended.xml. Until then, present reply and resolved state as unknown rather than as "no" — a resolved thread shown as open is the failure this reports.'
-    });
+    }));
     return false;
   }
 
@@ -594,12 +640,12 @@ function resolveThreading(
     if (paraId === null) continue;
     const comment = byParaId.get(paraId);
     if (!comment) {
-      problems.push({
+      problems.push(commentFinding({
         kind: 'orphan-comment-ex',
         paraId,
         message: `A <w15:commentEx w15:paraId="${paraId}"/> names a paragraph that no comment's last paragraph carries. Whatever thread position or resolved state it recorded applies to nothing.`,
         remediation: 'Delete the stray commentEx, or restore the w14:paraId on the comment paragraph it was written for.'
-      });
+      }));
       continue;
     }
     matched.add(comment);
@@ -607,13 +653,13 @@ function resolveThreading(
     const parentParaId = ex.getAttributeNS(W15_NAMESPACE, 'paraIdParent');
     const parent = parentParaId === null ? null : (byParaId.get(parentParaId) ?? null);
     if (parentParaId !== null && parent === null) {
-      problems.push({
+      problems.push(commentFinding({
         kind: 'dangling-parent',
         id: comment.id,
         paraId: parentParaId,
         message: `Comment ${comment.id} is a reply to paragraph ${parentParaId}, but no comment carries that w14:paraId. The comment it answers is gone, so the reply displays detached from the question it was written against.`,
         remediation: 'Restore the parent comment, or drop w15:paraIdParent so the reply becomes a top-level comment instead of a broken one.'
-      });
+      }));
     }
 
     comment.thread = {
@@ -630,20 +676,20 @@ function resolveThreading(
     if (matched.has(comment)) continue;
     complete = false;
     if (comment.paraId === null) {
-      problems.push({
+      problems.push(commentFinding({
         kind: 'missing-para-id',
         id: comment.id,
         message: `Comment ${comment.id}'s last paragraph has no w14:paraId, which is the only key commentsExtended.xml joins on. Whether it is a reply, and whether its thread is resolved, cannot be determined for this comment even though the part is present.`,
         remediation: 'Add a w14:paraId to the comment\'s last w:p and a matching w15:commentEx entry. Word writes both on save.'
-      });
+      }));
     } else {
-      problems.push({
+      problems.push(commentFinding({
         kind: 'threading-unknown',
         id: comment.id,
         paraId: comment.paraId,
         message: `commentsExtended.xml has no <w15:commentEx> for paraId ${comment.paraId}, so comment ${comment.id}'s reply and resolved state are unknown. An absent entry is missing information, not a record that the comment is a resolved-free root.`,
         remediation: `Add <w15:commentEx w15:paraId="${comment.paraId}"/> with the intended w15:paraIdParent and w15:done.`
-      });
+      }));
     }
   }
 
@@ -735,4 +781,78 @@ export function commentThreads(index: CommentIndex): CommentThread[] | null {
   }
 
   return threads;
+}
+
+/**
+ * Evidence lines for the AI panel.
+ *
+ * Needs the three side-car parts alongside the body, and says so when they are absent
+ * rather than reporting a threaded discussion as a flat list of unrelated comments —
+ * which is exactly what a missing `commentsExtended.xml` looks like from `comments.xml`.
+ */
+export function computeCommentEvidenceForMarkup(
+  parts: Record<string, string>,
+  rawXml: string
+): { lines: string[]; unresolved: string[] } | null {
+  const parse = (xml: string | undefined): Document | null => {
+    if (xml === undefined) return null;
+    const doc = new DOMParser().parseFromString(xml, 'application/xml');
+    return doc.getElementsByTagName('parsererror').length > 0 ? null : doc;
+  };
+
+  const bodyPath = Object.keys(parts).find(p => /^word\/(?:document\d*|header[^/]*|footer[^/]*)\.xml$/.test(p));
+  if (bodyPath === undefined) return null;
+  const document = parse(parts[bodyPath]);
+  if (!document) return null;
+
+  const index = readComments({
+    document,
+    comments: parse(parts[COMMENT_PART_PATHS.comments]),
+    commentsExtended: parse(parts[COMMENT_PART_PATHS.extended]),
+    commentsIds: parse(parts['word/commentsIds.xml'])
+  });
+
+  if (index.comments.length === 0 && index.anchors.length === 0 && index.problems.length === 0) return null;
+
+  const lines: string[] = [];
+  const unresolved: string[] = [];
+
+  lines.push(
+    `${bodyPath} anchors ${index.anchors.length} comment reference(s); word/comments.xml supplies ${index.comments.length} comment body/bodies.`
+  );
+
+  if (index.threadingKnown) {
+    const threads = commentThreads(index);
+    const replies = index.comments.filter(c => c.thread.isReply).length;
+    const resolved = index.comments.filter(c => c.thread.resolved === true).length;
+    lines.push(
+      `${threads?.length ?? 0} thread(s): ${replies} of the comments are replies, and ${resolved} are marked resolved.`
+    );
+  } else {
+    // The distinction the module exists to protect: unknown is not "no".
+    unresolved.push(
+      `${COMMENT_PART_PATHS.extended} is absent, so whether any comment is a reply, and whether any is resolved, cannot be determined. They are not known to be top-level or unresolved — they are unknown.`
+    );
+  }
+
+  // The selected comment, when the user has one open.
+  const selectedId = /<w:comment(?:RangeStart|RangeEnd|Reference)?\b[^>]*w:id="([^"]*)"/.exec(rawXml)?.[1];
+  const anchor = selectedId ? index.anchorsById.get(selectedId) : undefined;
+  if (anchor) {
+    const covered = commentRangeText(anchor);
+    const comment = index.byId.get(selectedId!);
+    lines.push(
+      covered === null
+        ? `Comment ${selectedId} has no resolvable range, so what it is attached to cannot be determined from the markup.`
+        : covered === ''
+          ? `Comment ${selectedId} is anchored to a point rather than a span of text.`
+          : `Comment ${selectedId} covers: "${covered.slice(0, 200)}${covered.length > 200 ? '…' : ''}".`
+    );
+    if (comment) {
+      lines.push(`Comment ${selectedId} was written by ${comment.author || 'an unnamed author'}.`);
+    }
+  }
+
+  lines.push(...renderFindings(index.problems));
+  return { lines, unresolved };
 }

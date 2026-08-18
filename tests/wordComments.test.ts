@@ -41,7 +41,9 @@ const body = (id: string, text: string, paraId: string, author = 'Ada') =>
   `<w:comment w:id="${id}" w:author="${author}" w:initials="A" w:date="2026-01-01T00:00:00Z">` +
   `<w:p w14:paraId="${paraId}">${run(text)}</w:p></w:comment>`;
 
-const kinds = (index: { problems: { kind: string }[] }) => index.problems.map(p => p.kind);
+/** Codes are namespaced (`comment/orphan-comment`); tests assert on the kind half. */
+const kinds = (index: { problems: { code: string }[] }) =>
+  index.problems.map(p => p.code.replace(/^comment\//, ''));
 
 describe('namespace constants match the published schema data', () => {
   it('uses the w14/w15/w16cid URIs the Open XML SDK declares, without a trailing /main', () => {
@@ -142,8 +144,8 @@ describe('readComments — anchors that break silently', () => {
       commentsExtended: extendedPart(`<w15:commentEx w15:paraId="dead0001"/>`)
     });
 
-    const problem = index.problems.find(p => p.kind === 'unmatched-range-start');
-    expect(problem?.id).toBe('7');
+    const problem = index.problems.find(p => p.code === 'comment/unmatched-range-start');
+    expect(problem?.subject?.id).toBe('7');
     expect(problem?.message).toContain('never closes');
     expect(index.anchors[0].rangeEnd).toBeNull();
   });
@@ -153,8 +155,8 @@ describe('readComments — anchors that break silently', () => {
       document: doc(`<w:p>${run('text')}<w:commentRangeEnd w:id="9"/></w:p>`)
     });
 
-    const problem = index.problems.find(p => p.kind === 'unmatched-range-end');
-    expect(problem?.id).toBe('9');
+    const problem = index.problems.find(p => p.code === 'comment/unmatched-range-end');
+    expect(problem?.subject?.id).toBe('9');
     expect(problem?.message).toContain('never opened');
   });
 
@@ -180,7 +182,7 @@ describe('readComments — anchors that break silently', () => {
     );
     const index = readComments({ document: parsed });
 
-    expect(index.problems.filter(p => p.kind === 'unmatched-range-end')).toHaveLength(1);
+    expect(index.problems.filter(p => p.code === 'comment/unmatched-range-end')).toHaveLength(1);
     const ends = Array.from(parsed.getElementsByTagNameNS(W_NS, 'commentRangeEnd'));
     expect(index.anchorsById.get('1')!.rangeEnd).toBe(ends[0]);
   });
@@ -198,8 +200,8 @@ describe('readComments — anchors that break silently', () => {
       document: doc(`<w:p><w:commentRangeStart w:id="2"/>${run('x')}<w:commentRangeEnd w:id="2"/></w:p>`)
     });
 
-    const problem = index.problems.find(p => p.kind === 'missing-reference');
-    expect(problem?.id).toBe('2');
+    const problem = index.problems.find(p => p.code === 'comment/missing-reference');
+    expect(problem?.subject?.id).toBe('2');
     expect(problem?.message).toContain('not displayed');
   });
 
@@ -226,8 +228,8 @@ describe('readComments — bodies and anchors existing without each other', () =
       commentsExtended: extendedPart('')
     });
 
-    const problem = index.problems.find(p => p.kind === 'missing-body');
-    expect(problem?.id).toBe('3');
+    const problem = index.problems.find(p => p.code === 'comment/missing-body');
+    expect(problem?.subject?.id).toBe('3');
     expect(problem?.message).toContain('no text');
   });
 
@@ -238,8 +240,8 @@ describe('readComments — bodies and anchors existing without each other', () =
       commentsExtended: extendedPart(`<w15:commentEx w15:paraId="FEED0001"/>`)
     });
 
-    const problem = index.problems.find(p => p.kind === 'orphan-comment');
-    expect(problem?.id).toBe('1');
+    const problem = index.problems.find(p => p.code === 'comment/orphan-comment');
+    expect(problem?.subject?.id).toBe('1');
     expect(problem?.message).toContain('unzips');
     expect(index.comments[0].anchor).toBeNull();
   });
@@ -249,7 +251,7 @@ describe('readComments — bodies and anchors existing without each other', () =
       document: doc(`<w:p>${anchored('1', 'a')}${anchored('2', 'b')}</w:p>`)
     });
 
-    expect(index.problems.filter(p => p.kind === 'comments-part-missing')).toHaveLength(1);
+    expect(index.problems.filter(p => p.code === 'comment/comments-part-missing')).toHaveLength(1);
     expect(kinds(index)).not.toContain('missing-body');
   });
 
@@ -387,8 +389,8 @@ describe('commentRangeText — what does comment N cover?', () => {
       )
     });
 
-    const nested = index.problems.find(p => p.kind === 'nested-range');
-    expect(nested?.id).toBe('2');
+    const nested = index.problems.find(p => p.code === 'comment/nested-range');
+    expect(nested?.subject?.id).toBe('2');
     expect(nested?.remediation).toContain('No action needed');
     expect(commentRangeText(index.anchorsById.get('1')!)).toBe('outer inner');
     expect(commentRangeText(index.anchorsById.get('2')!)).toBe('inner');
@@ -429,7 +431,7 @@ describe('threading — unknown is not the same as false', () => {
     expect(index.comments[0].thread.known).toBe(false);
     expect(index.comments[0].thread.isReply).toBeNull();
     expect(index.comments[0].thread.resolved).toBeNull();
-    const problem = index.problems.find(p => p.kind === 'threading-unknown');
+    const problem = index.problems.find(p => p.code === 'comment/threading-unknown');
     expect(problem?.message).toContain('commentsExtended.xml was not supplied');
   });
 
@@ -444,7 +446,7 @@ describe('threading — unknown is not the same as false', () => {
     expect(index.byId.get('2')!.thread.known).toBe(false);
     expect(index.byId.get('2')!.thread.resolved).toBeNull();
     expect(index.threadingKnown).toBe(false);
-    expect(index.problems.find(p => p.kind === 'threading-unknown')?.id).toBe('2');
+    expect(index.problems.find(p => p.code === 'comment/threading-unknown')?.subject?.id).toBe('2');
   });
 
   it('reports unknown when the last paragraph carries no w14:paraId to join on', () => {
@@ -510,9 +512,9 @@ describe('threading — unknown is not the same as false', () => {
       commentsExtended: extendedPart(`<w15:commentEx w15:paraId="BBBB0002" w15:paraIdParent="DEAD0000"/>`)
     });
 
-    const problem = index.problems.find(p => p.kind === 'dangling-parent');
-    expect(problem?.id).toBe('2');
-    expect(problem?.paraId).toBe('DEAD0000');
+    const problem = index.problems.find(p => p.code === 'comment/dangling-parent');
+    expect(problem?.subject?.id).toBe('2');
+    expect(problem?.subject?.paraId).toBe('DEAD0000');
     // Still known to be a reply — we just cannot say to what.
     expect(index.comments[0].thread.isReply).toBe(true);
     expect(index.comments[0].thread.parentId).toBeNull();
@@ -527,7 +529,7 @@ describe('threading — unknown is not the same as false', () => {
       )
     });
 
-    expect(index.problems.find(p => p.kind === 'orphan-comment-ex')?.paraId).toBe('9999FFFF');
+    expect(index.problems.find(p => p.code === 'comment/orphan-comment-ex')?.subject?.paraId).toBe('9999FFFF');
   });
 });
 

@@ -20,6 +20,8 @@ import { computePowerpointEvidenceForMarkup } from '../services/powerpointFormat
 import { computeChartEvidenceForMarkup } from '../services/chartSemantics';
 import { computeBookmarkEvidenceForMarkup } from '../services/wordBookmarks';
 import { computeOleEvidenceForMarkup } from '../services/oleObjects';
+import { computeCommentEvidenceForMarkup } from '../services/wordComments';
+import { computePivotEvidenceForMarkup } from '../services/excelPivotTables';
 import { diffPackages, explainDiff } from '../services/ooxmlDiff';
 import { ThemeClasses } from '../types';
 import MarkdownContent from './MarkdownContent';
@@ -83,6 +85,23 @@ const ANALYSIS_TARGETS = [
       /^word\/(?:document\d*|header[^/]*|footer[^/]*|footnotes\d*|endnotes\d*|comments\d*)\.xml$/.test(path),
     siblings: [] as string[],
     compute: computeBookmarkEvidenceForMarkup
+  },
+  {
+    // Comments live across four parts: the body carries the anchors, comments.xml the
+    // text, and the w15/w16cid side-cars the threading. Without the side-cars a
+    // threaded discussion reads as a flat list, so they are fetched even though the
+    // body alone parses fine.
+    matches: (path: string) => /^word\/(?:document\d*|header[^/]*|footer[^/]*)\.xml$/.test(path),
+    siblings: ['word/comments.xml', 'word/commentsExtended.xml', 'word/commentsIds.xml'],
+    compute: computeCommentEvidenceForMarkup
+  },
+  {
+    // Every hop of the pivot chain lives in a different part, so the worksheet needs
+    // the workbook, both sets of .rels, and the cache parts to be resolvable at all.
+    matches: (path: string) => /^xl\/worksheets\/[^/]+\.xml$/.test(path),
+    siblings: [] as string[],
+    siblingPattern: /^xl\/(?:workbook\.xml|_rels\/workbook\.xml\.rels|worksheets\/_rels\/[^/]+\.rels|pivotTables\/(?:_rels\/)?[^/]+|pivotCache\/(?:_rels\/)?[^/]+)$/,
+    compute: computePivotEvidenceForMarkup
   },
   {
     // OLE objects appear in all three formats, so this entry is format-agnostic. The

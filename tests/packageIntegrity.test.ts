@@ -44,7 +44,7 @@ const validPackage = (): PackageParts => ({
   'media/image1.png': ''
 });
 
-const rules = (parts: PackageParts) => checkPackageIntegrity(parts).map(f => f.rule);
+const rules = (parts: PackageParts) => checkPackageIntegrity(parts).map(f => f.code.replace(/^package\//, ''));
 
 describe('path helpers', () => {
   it('puts a part\'s relationships in its own _rels directory', () => {
@@ -81,7 +81,7 @@ describe('package-level relationships', () => {
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rId1" Type="http://purl.org/officeDocument" Target="word/missing.xml"/>
 </Relationships>`;
-    const finding = checkPackageIntegrity(parts).find(f => f.rule === 'missing-relationship-target');
+    const finding = checkPackageIntegrity(parts).find(f => f.code === 'package/missing-relationship-target');
     expect(finding?.message).toContain('word/missing.xml');
   });
 
@@ -108,7 +108,7 @@ describe('content types', () => {
     // generated document becomes unopenable.
     const parts = validPackage();
     parts['word/footer9.docbin'] = '';
-    const finding = checkPackageIntegrity(parts).find(f => f.rule === 'untyped-part');
+    const finding = checkPackageIntegrity(parts).find(f => f.code === 'package/untyped-part');
     expect(finding?.part).toBe('word/footer9.docbin');
     expect(finding?.message).toContain('docbin');
   });
@@ -135,7 +135,7 @@ describe('relationship references', () => {
     const parts = validPackage();
     parts['word/_rels/document.xml.rels'] = `<?xml version="1.0"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>`;
-    const finding = checkPackageIntegrity(parts).find(f => f.rule === 'dangling-relationship-id');
+    const finding = checkPackageIntegrity(parts).find(f => f.code === 'package/dangling-relationship-id');
     expect(finding?.part).toBe('word/document.xml');
     expect(finding?.message).toContain('rId10');
   });
@@ -150,7 +150,7 @@ describe('relationship references', () => {
   <Relationship Id="rId10" Type="http://purl.org/header" Target="header1.xml"/>
   <Relationship Id="rId20" Type="http://purl.org/image" Target="media/image1.png"/>
 </Relationships>`;
-    const finding = checkPackageIntegrity(parts).find(f => f.rule === 'dangling-relationship-id');
+    const finding = checkPackageIntegrity(parts).find(f => f.code === 'package/dangling-relationship-id');
     expect(finding?.part).toBe('word/header1.xml');
     expect(finding?.message).toContain('word/_rels/header1.xml.rels');
   });
@@ -160,14 +160,14 @@ describe('relationship references', () => {
     parts['word/_rels/header1.xml.rels'] = `<?xml version="1.0"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>`;
     parts['media/image1.png'] = '';
-    const finding = checkPackageIntegrity(parts).find(f => f.rule === 'dangling-relationship-id');
+    const finding = checkPackageIntegrity(parts).find(f => f.code === 'package/dangling-relationship-id');
     expect(finding?.message).toContain('rId20');
   });
 
   it('flags a relationship whose target is missing from the package', () => {
     const parts = validPackage();
     delete parts['media/image1.png'];
-    const finding = checkPackageIntegrity(parts).find(f => f.rule === 'missing-relationship-target');
+    const finding = checkPackageIntegrity(parts).find(f => f.code === 'package/missing-relationship-target');
     expect(finding?.message).toContain('../media/image1.png');
   });
 
@@ -184,7 +184,7 @@ describe('relationship references', () => {
   it('warns about a rels part whose owner is absent', () => {
     const parts = validPackage();
     delete parts['word/header1.xml'];
-    const finding = checkPackageIntegrity(parts).find(f => f.rule === 'orphaned-rels-part');
+    const finding = checkPackageIntegrity(parts).find(f => f.code === 'package/orphaned-rels-part');
     expect(finding?.severity).toBe('warning');
   });
 });
@@ -255,10 +255,10 @@ describe('implicit relationships', () => {
       ['rId2', `${REL}/notesSlide`, '../notesSlides/notesSlide1.xml']
     );
     const found = checkPackageIntegrity(parts);
-    expect(found.map(f => f.rule)).not.toContain('dangling-relationship-id');
-    expect(found.map(f => f.rule)).not.toContain('missing-relationship-target');
+    expect(found.map(f => f.code.replace(/^package\//, ''))).not.toContain('dangling-relationship-id');
+    expect(found.map(f => f.code.replace(/^package\//, ''))).not.toContain('missing-relationship-target');
 
-    const finding = found.find(f => f.rule === 'missing-implicit-relationship');
+    const finding = found.find(f => f.code === 'package/missing-implicit-relationship');
     expect(finding?.part).toBe('ppt/slides/slide1.xml');
     expect(finding?.severity).toBe('error');
     expect(finding?.message).toContain('slideLayout');
@@ -268,7 +268,7 @@ describe('implicit relationships', () => {
     const parts = validPresentation();
     delete parts['ppt/slides/_rels/slide1.xml.rels'];
     const finding = checkPackageIntegrity(parts).find(
-      f => f.rule === 'missing-implicit-relationship'
+      f => f.code === 'package/missing-implicit-relationship'
     );
     expect(finding?.part).toBe('ppt/slides/slide1.xml');
   });
@@ -281,7 +281,7 @@ describe('implicit relationships', () => {
       ['rId3', `${REL}/slideLayout`, '../slideLayouts/slideLayout1.xml']
     );
     const finding = checkPackageIntegrity(parts).find(
-      f => f.rule === 'ambiguous-implicit-relationship'
+      f => f.code === 'package/ambiguous-implicit-relationship'
     );
     expect(finding?.part).toBe('ppt/slides/slide1.xml');
     expect(finding?.message).toContain('rId1, rId3');
@@ -291,7 +291,7 @@ describe('implicit relationships', () => {
     const parts = validPresentation();
     parts['ppt/slideLayouts/_rels/slideLayout1.xml.rels'] = rels();
     const finding = checkPackageIntegrity(parts).find(
-      f => f.rule === 'missing-implicit-relationship'
+      f => f.code === 'package/missing-implicit-relationship'
     );
     expect(finding?.part).toBe('ppt/slideLayouts/slideLayout1.xml');
     expect(finding?.message).toContain('slideMaster');
@@ -303,7 +303,7 @@ describe('implicit relationships', () => {
       ['rId1', `${REL}/slideLayout`, '../slideLayouts/slideLayout1.xml']
     );
     const finding = checkPackageIntegrity(parts).find(
-      f => f.rule === 'missing-implicit-relationship'
+      f => f.code === 'package/missing-implicit-relationship'
     );
     expect(finding?.part).toBe('ppt/slideMasters/slideMaster1.xml');
     expect(finding?.message).toContain('theme');
@@ -315,7 +315,7 @@ describe('implicit relationships', () => {
       ['rId2', `${REL}/slide`, '../slides/slide1.xml']
     );
     const finding = checkPackageIntegrity(parts).find(
-      f => f.rule === 'missing-implicit-relationship'
+      f => f.code === 'package/missing-implicit-relationship'
     );
     expect(finding?.part).toBe('ppt/notesSlides/notesSlide1.xml');
     expect(finding?.message).toContain('notesMaster');
@@ -338,7 +338,7 @@ describe('implicit relationships', () => {
     );
 
     const finding = checkPackageIntegrity(parts).find(
-      f => f.rule === 'missing-implicit-relationship'
+      f => f.code === 'package/missing-implicit-relationship'
     );
     expect(finding?.part).toBe('ppt/decks/first.xml');
   });
@@ -395,8 +395,8 @@ describe('implicit relationships', () => {
     const parts = validPresentation();
     parts['ppt/slides/_rels/slide1.xml.rels'] = '<Relationships><unclosed>';
     const found = checkPackageIntegrity(parts);
-    expect(found.map(f => f.rule)).toContain('malformed-xml');
-    expect(found.map(f => f.rule)).not.toContain('missing-implicit-relationship');
+    expect(found.map(f => f.code.replace(/^package\//, ''))).toContain('malformed-xml');
+    expect(found.map(f => f.code.replace(/^package\//, ''))).not.toContain('missing-implicit-relationship');
   });
 
   it('stays quiet when [Content_Types].xml is missing, since no part has an identity', () => {
@@ -428,7 +428,7 @@ describe('reporting', () => {
   <sheets><sheet name="S1" sheetId="1" r:id="rId1"/></sheets>
 </workbook>`
     };
-    const finding = checkPackageIntegrity(xlsx).find(f => f.rule === 'dangling-relationship-id');
+    const finding = checkPackageIntegrity(xlsx).find(f => f.code === 'package/dangling-relationship-id');
     expect(finding?.part).toBe('xl/workbook.xml');
     expect(finding?.message).toContain('xl/_rels/workbook.xml.rels');
   });

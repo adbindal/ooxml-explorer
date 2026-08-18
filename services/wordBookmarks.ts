@@ -52,6 +52,7 @@
  */
 
 import { W_NAMESPACE } from './wordStyleResolver';
+import { finding, renderFindings, type Finding, type Severity } from './findings';
 
 /** `CT_Bookmark/@w:name` carries a StringValidator with MaxLength 40. */
 export const MAX_BOOKMARK_NAME_LENGTH = 40;
@@ -93,26 +94,37 @@ const GENERATED_PREFIXES: Array<[string, string]> = [
   ['_Hlk', 'an editing-session marker Word leaves behind']
 ];
 
-export type BookmarkProblemKind =
-  | 'unmatched-start'
-  | 'unmatched-end'
-  | 'duplicate-id'
-  | 'duplicate-name'
-  | 'missing-name'
-  | 'name-too-long'
-  | 'id-out-of-range'
-  | 'reversed-range'
-  | 'id-collision';
+/**
+ * Severity and silence for each kind, decided once here rather than at each call site.
+ *
+ * Almost everything a bookmark gets wrong is SILENT: the document opens, the text is
+ * all present, and the page looks exactly right. What breaks is navigation — a
+ * hyperlink, a cross-reference, a TOC entry — which nobody notices until they click.
+ * `name-too-long` is the exception that Word itself will refuse.
+ */
+const BOOKMARK_RULES = {
+  'unmatched-start':  { severity: 'error',   silent: true },
+  'unmatched-end':    { severity: 'warning', silent: true },
+  'duplicate-id':     { severity: 'error',   silent: true },
+  'duplicate-name':   { severity: 'warning', silent: true },
+  'missing-name':     { severity: 'error',   silent: true },
+  'name-too-long':    { severity: 'error',   silent: false },
+  'id-out-of-range':  { severity: 'error',   silent: false },
+  'reversed-range':   { severity: 'warning', silent: true },
+  'id-collision':     { severity: 'error',   silent: true }
+} as const satisfies Record<string, { severity: Severity; silent: boolean }>;
 
-export interface BookmarkProblem {
-  kind: BookmarkProblemKind;
-  /** What is wrong, in terms of what a reader of the document would experience. */
-  message: string;
-  /** What to do about it. */
-  remediation: string;
-  id?: string;
-  name?: string;
-}
+export type BookmarkProblemKind = keyof typeof BOOKMARK_RULES;
+
+/** Builds a bookmark finding, applying the severity table above. */
+const bookmarkFinding = (
+  kind: BookmarkProblemKind,
+  part: string,
+  message: string,
+  remediation: string,
+  subject?: Record<string, string>
+): Finding =>
+  finding(`bookmark/${kind}`, part, message, remediation, { ...BOOKMARK_RULES[kind], subject });
 
 export interface Bookmark {
   id: string;
@@ -136,7 +148,7 @@ export interface BookmarkIndex {
   /** Names are not unique in practice, so this maps to a list. */
   byName: Map<string, Bookmark[]>;
   byId: Map<string, Bookmark>;
-  problems: BookmarkProblem[];
+  problems: Finding[];
 }
 
 export interface IdCollision {
@@ -183,9 +195,9 @@ const classifyName = (name: string) => {
  * and endnotes each carry their own bookmarks in their own id space, so index them
  * separately; ids are unique *within a part*, not across the package.
  */
-export function readBookmarks(doc: Document | Element): BookmarkIndex {
+export function readBookmarks(doc: Document | Element, part = ''): BookmarkIndex {
   const root: ParentNode = 'documentElement' in doc && doc.documentElement ? doc.documentElement : (doc as Element);
-  const problems: BookmarkProblem[] = [];
+  const problems: Finding[] = [];
   const bookmarks: Bookmark[] = [];
   const byName = new Map<string, Bookmark[]>();
   const byId = new Map<string, Bookmark>();
@@ -214,40 +226,38 @@ export function readBookmarks(doc: Document | Element): BookmarkIndex {
     const name = attr(start, 'name');
 
     if (id === null) {
-      problems.push({
-        kind: 'unmatched-start',
-        name: name ?? undefined,
-        message: `A <w:${kind}> has no w:id, so nothing can close it. @w:id is required.`,
-        remediation: 'Give the start an id and add a matching end element.'
-      });
+      problems.push(bookmarkFinding(
+        'unmatched-start', part,
+        `A <w:${kind}> has no w:id, so nothing can close it. @w:id is required.`,
+        'Give the start an id and add a matching end element.',
+        name === null ? undefined : { name }
+      ));
       continue;
     }
 
     if (!idIsInRange(id)) {
-      problems.push({
-        kind: 'id-out-of-range',
-        id,
-        name: name ?? undefined,
-        message: `w:id "${id}" is outside the permitted range. The type admits any non-negative number, or a negative number of -2 or below; -1 and non-integers are excluded.`,
-        remediation: 'Renumber this marker to a non-negative integer above every other w:id in the part.'
-      });
+      problems.push(bookmarkFinding(
+        'id-out-of-range', part,
+        `w:id "${id}" is outside the permitted range. The type admits any non-negative number, or a negative number of -2 or below; -1 and non-integers are excluded.`,
+        'Renumber this marker to a non-negative integer above every other w:id in the part.',
+        name === null ? { id } : { id, name }
+      ));
     }
 
     if (name === null) {
-      problems.push({
-        kind: 'missing-name',
-        id,
-        message: `<w:${kind} w:id="${id}"> has no w:name. The name is required, and it is the only handle a hyperlink or cross-reference has.`,
-        remediation: 'Add a w:name, or delete the marker pair if nothing references it.'
-      });
+      problems.push(bookmarkFinding(
+        'missing-name', part,
+        `<w:${kind} w:id="${id}"> has no w:name. The name is required, and it is the only handle a hyperlink or cross-reference has.`,
+        'Add a w:name, or delete the marker pair if nothing references it.',
+        { id }
+      ));
     } else if (name.length > MAX_BOOKMARK_NAME_LENGTH) {
-      problems.push({
-        kind: 'name-too-long',
-        id,
-        name,
-        message: `Bookmark name is ${name.length} characters; the maximum is ${MAX_BOOKMARK_NAME_LENGTH}.`,
-        remediation: `Shorten the name to ${MAX_BOOKMARK_NAME_LENGTH} characters or fewer, and update every reference to it.`
-      });
+      problems.push(bookmarkFinding(
+        'name-too-long', part,
+        `Bookmark name is ${name.length} characters; the maximum is ${MAX_BOOKMARK_NAME_LENGTH}.`,
+        `Shorten the name to ${MAX_BOOKMARK_NAME_LENGTH} characters or fewer, and update every reference to it.`,
+        { id, name }
+      ));
     }
 
     const candidates = endsByKind.get(RANGE_KINDS[kind])?.get(id) ?? [];
@@ -272,45 +282,41 @@ export function readBookmarks(doc: Document | Element): BookmarkIndex {
     };
 
     if (!end) {
-      problems.push({
-        kind: 'unmatched-start',
-        id,
-        name: resolvedName,
-        message: `Bookmark "${resolvedName}" opens but never closes — no <w:${RANGE_KINDS[kind]} w:id="${id}"/> exists. Word treats the bookmark as absent, so hyperlinks, cross-references and TOC entries aimed at this name resolve to nothing. The document still opens and looks correct.`,
-        remediation: `Insert <w:${RANGE_KINDS[kind]} w:id="${id}"/> at the point the range should end.`
-      });
+      problems.push(bookmarkFinding(
+        'unmatched-start', part,
+        `Bookmark "${resolvedName}" opens but never closes — no <w:${RANGE_KINDS[kind]} w:id="${id}"/> exists. Word treats the bookmark as absent, so hyperlinks, cross-references and TOC entries aimed at this name resolve to nothing. The document still opens and looks correct.`,
+        `Insert <w:${RANGE_KINDS[kind]} w:id="${id}"/> at the point the range should end.`,
+        { id, name: resolvedName }
+      ));
     } else if (start.compareDocumentPosition(end) & Node.DOCUMENT_POSITION_PRECEDING) {
-      problems.push({
-        kind: 'reversed-range',
-        id,
-        name: resolvedName,
-        message: `Bookmark "${resolvedName}" has its end before its start in document order, so it covers no content.`,
-        remediation: 'Move the end marker after the start, or swap the two.'
-      });
+      problems.push(bookmarkFinding(
+        'reversed-range', part,
+        `Bookmark "${resolvedName}" has its end before its start in document order, so it covers no content.`,
+        'Move the end marker after the start, or swap the two.',
+        { id, name: resolvedName }
+      ));
     }
 
     if (byId.has(id)) {
       const first = byId.get(id)!;
-      problems.push({
-        kind: 'duplicate-id',
-        id,
-        name: resolvedName,
-        message: `w:id "${id}" starts two ranges ("${first.name}" and "${resolvedName}"). Ends match by id, so the second start competes with the first for the same end marker and one of the two bookmarks silently loses its range.`,
-        remediation: 'Renumber one of them to an id unused anywhere in the part.'
-      });
+      problems.push(bookmarkFinding(
+        'duplicate-id', part,
+        `w:id "${id}" starts two ranges ("${first.name}" and "${resolvedName}"). Ends match by id, so the second start competes with the first for the same end marker and one of the two bookmarks silently loses its range.`,
+        'Renumber one of them to an id unused anywhere in the part.',
+        { id, name: resolvedName }
+      ));
     } else {
       byId.set(id, bookmark);
     }
 
     const sameName = byName.get(resolvedName);
     if (sameName && resolvedName !== '') {
-      problems.push({
-        kind: 'duplicate-name',
-        id,
-        name: resolvedName,
-        message: `Two bookmarks are named "${resolvedName}". Names are the reference handle, so anything pointing at this name reaches only one of them — and which one is not something the markup determines.`,
-        remediation: 'Rename one, or delete the redundant range.'
-      });
+      problems.push(bookmarkFinding(
+        'duplicate-name', part,
+        `Two bookmarks are named "${resolvedName}". Names are the reference handle, so anything pointing at this name reaches only one of them — and which one is not something the markup determines.`,
+        'Rename one, or delete the redundant range.',
+        { id, name: resolvedName }
+      ));
       sameName.push(bookmark);
     } else {
       byName.set(resolvedName, [bookmark]);
@@ -322,12 +328,12 @@ export function readBookmarks(doc: Document | Element): BookmarkIndex {
   for (const end of ends) {
     if (claimedEnds.has(end)) continue;
     const id = attr(end, 'id');
-    problems.push({
-      kind: 'unmatched-end',
-      id: id ?? undefined,
-      message: `A <w:${end.localName}${id === null ? '' : ` w:id="${id}"`}/> closes a range that was never opened. Because starts carry the name and ends do not, there is no way to tell which bookmark was lost — only that one was.`,
-      remediation: 'Delete the stray end, or restore the start that used to match it.'
-    });
+    problems.push(bookmarkFinding(
+      'unmatched-end', part,
+      `A <w:${end.localName}${id === null ? '' : ` w:id="${id}"`}/> closes a range that was never opened. Because starts carry the name and ends do not, there is no way to tell which bookmark was lost — only that one was.`,
+      'Delete the stray end, or restore the start that used to match it.',
+      id === null ? undefined : { id }
+    ));
   }
 
   return { bookmarks, byName, byId, problems };
@@ -423,7 +429,7 @@ export function computeBookmarkEvidenceForMarkup(
   const doc = new DOMParser().parseFromString(xml, 'application/xml');
   if (doc.getElementsByTagName('parsererror').length > 0) return null;
 
-  const index = readBookmarks(doc);
+  const index = readBookmarks(doc, path);
   const collisions = findMarkupIdCollisions(doc);
   if (index.bookmarks.length === 0 && index.problems.length === 0 && collisions.length === 0) return null;
 
@@ -463,7 +469,7 @@ export function computeBookmarkEvidenceForMarkup(
     );
   }
 
-  for (const problem of index.problems) lines.push(`${problem.message} ${problem.remediation}`);
+  lines.push(...renderFindings(index.problems));
 
   for (const collision of collisions) {
     lines.push(
