@@ -579,7 +579,7 @@ Four subsystems the user named, each needing separate handling:
 
 **Method note.** Both modules shipped in §8m/§8n were **mutation-tested**: the implementation was deliberately broken several distinct ways and the tests re-run, to check they fail for the right reasons rather than agreeing with themselves. This found a real gap in the bookmark tests (no case had two range kinds in one document, the only arrangement where kind-matching is observable). Worth doing for every module here — a green suite on first run is not evidence.
 
-**Not yet wired to the panel.** `wordBookmarks.ts` and `oleObjects.ts` have no caller in `components/AIPanel.tsx`. Both need an `ANALYSIS_TARGETS` entry, as charts got in `d1be6d8`. OLE is format-agnostic and would apply to Word, Excel and PowerPoint body parts alike.
+**Wired to the panel** in `c0c4b0c`, which also fixed a latent design bug: `buildComputedEvidence` used `ANALYSIS_TARGETS.find`, so only the **first** matching entry ran. That was fine while each part had exactly one analysis and wrong the moment it did not — a `word/document.xml` carries formatting *and* bookmarks *and* possibly OLE objects, which are independent questions. It now runs every match, unions the sibling requests so a part is fetched once, and merges the results; one analysis throwing no longer suppresses the rest. **Anything added to `ANALYSIS_TARGETS` from here on composes rather than shadows.**
 
 **Still open:**
 - **#11** Pin a real `styles.xml` regression fixture — **blocked** on the licensing question in §8j / `LICENSING.md`.
