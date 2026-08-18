@@ -320,11 +320,15 @@ describe('tolerating input', () => {
     expect(readOleObjects({ 'word/document.xml': '<w:document><unclosed>' }, 'word/document.xml')).toEqual([]);
   });
 
-  it('finds objects in a Strict-namespace package', () => {
-    // Strict uses purl.oclc.org URIs for the same vocabulary. Pinning the
-    // Transitional URI reports every Strict file as having no OLE objects.
+  it('finds objects in a Strict-namespace Word package', () => {
+    // Strict does not merely swap the host — it DROPS THE YEAR:
+    //   Transitional  http://schemas.openxmlformats.org/wordprocessingml/2006/main
+    //   Strict        http://purl.oclc.org/ooxml/wordprocessingml/main
+    // An earlier version of this test invented "purl.oclc.org/.../2006/main", which
+    // does not exist. It passed against a matcher that only handled Transitional, so
+    // the test asserted Strict support the code did not have.
     const parts: PackageParts = {
-      'word/document.xml': `<?xml version="1.0"?><w:document xmlns:w="http://purl.oclc.org/ooxml/wordprocessingml/2006/main" ${O} xmlns:r="http://purl.oclc.org/ooxml/officeDocument/2006/relationships"><w:body><w:p><w:r><w:object>
+      'word/document.xml': `<?xml version="1.0"?><w:document xmlns:w="http://purl.oclc.org/ooxml/wordprocessingml/main" ${O} xmlns:r="http://purl.oclc.org/ooxml/officeDocument/relationships"><w:body><w:p><w:r><w:object>
         <o:OLEObject Type="Embed" ProgID="Excel.Sheet.12" r:id="rId4"/>
       </w:object></w:r></w:p></w:body></w:document>`,
       'word/_rels/document.xml.rels': rels(rel('rId4', 'oleObject', 'embeddings/oleObject1.bin')),
@@ -334,6 +338,39 @@ describe('tolerating input', () => {
 
     expect(object.binding).toBe('embedded');
     expect(object.dataPartExists).toBe(true);
+  });
+
+  it('finds objects in a Strict-namespace Excel package', () => {
+    const parts: PackageParts = {
+      'xl/worksheets/sheet1.xml': `<?xml version="1.0"?><x:worksheet xmlns:x="http://purl.oclc.org/ooxml/spreadsheetml/main" xmlns:r="http://purl.oclc.org/ooxml/officeDocument/relationships"><x:oleObjects>
+        <x:oleObject progId="Word.Document.12" r:id="rId1"/>
+      </x:oleObjects></x:worksheet>`,
+      'xl/worksheets/_rels/sheet1.xml.rels': rels(rel('rId1', 'oleObject', '../embeddings/oleObject1.bin')),
+      'xl/embeddings/oleObject1.bin': 'BINARY'
+    };
+    const [object] = readOleObjects(parts, 'xl/worksheets/sheet1.xml');
+
+    expect(object.binding).toBe('embedded');
+    expect(object.dataPartExists).toBe(true);
+  });
+
+  it('finds objects in a Strict-namespace PowerPoint package, preview included', () => {
+    const parts: PackageParts = {
+      'ppt/slides/slide1.xml': `<?xml version="1.0"?><p:sld xmlns:p="http://purl.oclc.org/ooxml/presentationml/main" xmlns:a="http://purl.oclc.org/ooxml/drawingml/main" xmlns:r="http://purl.oclc.org/ooxml/officeDocument/relationships"><p:cSld><p:spTree>
+        <p:oleObj r:id="rId2" progId="Excel.Sheet.12"><p:embed/>
+        <p:pic><p:blipFill><a:blip r:embed="rId3"/></p:blipFill></p:pic></p:oleObj>
+      </p:spTree></p:cSld></p:sld>`,
+      'ppt/slides/_rels/slide1.xml.rels': rels(
+        rel('rId2', 'oleObject', '../embeddings/oleObject1.bin') + rel('rId3', 'image', '../media/image1.emf')
+      ),
+      'ppt/embeddings/oleObject1.bin': 'BINARY',
+      'ppt/media/image1.emf': 'IMAGE'
+    };
+    const [object] = readOleObjects(parts, 'ppt/slides/slide1.xml');
+
+    expect(object.binding).toBe('embedded');
+    // The a:blip lookup is year-pinned too, so this pins the drawingml suffix as well.
+    expect(object.preview?.partExists).toBe(true);
   });
 });
 
