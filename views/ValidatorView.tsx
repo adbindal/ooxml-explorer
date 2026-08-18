@@ -8,6 +8,7 @@ import { ThemeClasses } from '../types';
 import { runSystemChecks, LogEntry, CoverageModule } from '../services/testService';
 import { loadZipFile, readPackageParts } from '../services/zipService';
 import { checkPackageIntegrity } from '../services/packageIntegrity';
+import { compareFindings } from '../services/findings';
 import { readRetrievalMetrics, summariseRetrieval, resetRetrievalMetrics } from '../services/retrievalMetrics';
 import {
     resolveAlternateContent,
@@ -164,8 +165,16 @@ const ValidatorView: React.FC<ValidatorViewProps> = ({ themeClasses }) => {
                 const errors = findings.filter(f => f.severity === 'error').length;
                 const warnings = findings.length - errors;
                 addLog(`Found ${errors} error(s) and ${warnings} warning(s).`, errors > 0 ? 'error' : 'warning');
-                for (const finding of findings) {
-                    addLog(`[${finding.rule}] ${finding.part} — ${finding.message}`, finding.severity);
+                // Most integrity faults are silent - the package opens and renders and is
+                // broken anyway - so say which ones, rather than leaving the reader to
+                // assume anything visible would already have been noticed.
+                for (const finding of [...findings].sort(compareFindings)) {
+                    const silent = finding.silent ? ' (renders correctly and is broken anyway)' : '';
+                    addLog(
+                        `[${finding.code}] ${finding.part} — ${finding.message}${silent} ${finding.remediation}`,
+                        // The log has no 'note' level; notes are informational, so they map to 'info'.
+                        finding.severity === 'note' ? 'info' : finding.severity
+                    );
                 }
             }
             setIntegrityStatus('done');

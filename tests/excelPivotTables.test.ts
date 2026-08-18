@@ -66,7 +66,7 @@ const pkg = (over: Partial<PackageParts> = {}): PackageParts => {
 };
 
 const only = (parts: PackageParts) => readPivotTables(parts)[0];
-const kinds = (parts: PackageParts) => pivotTableErrors(only(parts)).map(p => p.kind);
+const kinds = (parts: PackageParts) => pivotTableErrors(only(parts)).map(p => p.code);
 
 describe('the healthy chain', () => {
   it('resolves all three hops and reports nothing', () => {
@@ -136,7 +136,7 @@ describe('hop 1 — cacheId into the workbook', () => {
     const table = only(parts);
 
     expect(table.chain.brokenHop).toBe('table-to-workbook');
-    expect(table.chain.problems.map(p => p.kind)).toContain('cache-id-not-in-workbook');
+    expect(table.chain.problems.map(p => p.code)).toContain('pivot/cache-id-not-in-workbook');
     expect(describeBrokenHop(table.chain)).toContain('Hop 1 of 3');
     expect(table.chain.cacheDefinitionPath).toBeNull();
   });
@@ -145,7 +145,7 @@ describe('hop 1 — cacheId into the workbook', () => {
     // The two identifier spaces are the trap. Writing the pivotCache's r:id into
     // @cacheId is a real authoring bug, and it must not accidentally resolve.
     const parts = pkg({ 'xl/pivotTables/pivotTable1.xml': pivotTable('cacheId="rId8"') });
-    const problem = only(parts).chain.problems.find(p => p.kind === 'cache-id-not-in-workbook');
+    const problem = only(parts).chain.problems.find(p => p.code === 'pivot/cache-id-not-in-workbook');
 
     expect(problem?.message).toContain('matched by value');
     expect(only(parts).chain.cacheDefinitionPath).toBeNull();
@@ -154,14 +154,14 @@ describe('hop 1 — cacheId into the workbook', () => {
   it('reports a workbook with no pivotCaches at all', () => {
     const parts = pkg({ 'xl/workbook.xml': workbook('') });
 
-    expect(kinds(parts)).toContain('no-pivot-caches');
+    expect(kinds(parts)).toContain('pivot/no-pivot-caches');
     expect(only(parts).chain.brokenHop).toBe('table-to-workbook');
   });
 
   it('reports a missing workbook part rather than blaming the pivot table', () => {
     const parts = pkg({ 'xl/workbook.xml': undefined as unknown as string });
 
-    expect(kinds(parts)).toContain('workbook-missing');
+    expect(kinds(parts)).toContain('pivot/workbook-missing');
   });
 
   it('reports a pivot table with no cacheId at all', () => {
@@ -170,7 +170,7 @@ describe('hop 1 — cacheId into the workbook', () => {
 
     expect(table.chain.cacheId).toBeNull();
     expect(table.chain.brokenHop).toBe('table-to-workbook');
-    expect(table.chain.problems[0].kind).toBe('missing-required-attribute');
+    expect(table.chain.problems[0].code).toBe('pivot/missing-required-attribute');
   });
 
   it('flags two pivotCaches claiming the same cacheId', () => {
@@ -180,7 +180,7 @@ describe('hop 1 — cacheId into the workbook', () => {
       )
     });
 
-    expect(kinds(parts)).toContain('duplicate-cache-id');
+    expect(kinds(parts)).toContain('pivot/duplicate-cache-id');
   });
 });
 
@@ -190,7 +190,7 @@ describe('hop 2 — r:id into the workbook relationships', () => {
     const table = only(parts);
 
     expect(table.chain.brokenHop).toBe('workbook-to-cache-definition');
-    expect(table.chain.problems[0].kind).toBe('missing-required-attribute');
+    expect(table.chain.problems[0].code).toBe('pivot/missing-required-attribute');
     expect(table.chain.problems[0].message).toContain('not interchangeable');
   });
 
@@ -199,13 +199,13 @@ describe('hop 2 — r:id into the workbook relationships', () => {
     const table = only(parts);
 
     expect(table.chain.brokenHop).toBe('workbook-to-cache-definition');
-    expect(table.chain.problems.map(p => p.kind)).toContain('cache-relationship-missing');
+    expect(table.chain.problems.map(p => p.code)).toContain('pivot/cache-relationship-missing');
     expect(describeBrokenHop(table.chain)).toContain('Hop 2 of 3');
   });
 
   it('catches a cache definition part that is simply gone', () => {
     const parts = pkg({ 'xl/pivotCache/pivotCacheDefinition1.xml': undefined as unknown as string });
-    const problem = only(parts).chain.problems.find(p => p.kind === 'cache-definition-missing');
+    const problem = only(parts).chain.problems.find(p => p.code === 'pivot/cache-definition-missing');
 
     expect(problem?.silent).toBe(true);
     expect(problem?.message).toContain('renders');
@@ -219,7 +219,7 @@ describe('hop 2 — r:id into the workbook relationships', () => {
     const table = only(parts);
 
     expect(table.chain.cacheDefinitionPath).toBeNull();
-    expect(table.chain.problems.map(p => p.kind)).toContain('cache-relationship-missing');
+    expect(table.chain.problems.map(p => p.code)).toContain('pivot/cache-relationship-missing');
   });
 });
 
@@ -231,7 +231,7 @@ describe('hop 3 — the cache definition to its records', () => {
     expect(table.chain.brokenHop).toBe('cache-definition-to-records');
     expect(table.chain.cacheRecordsPresent).toBe(false);
     expect(describeBrokenHop(table.chain)).toContain('Hop 3 of 3');
-    expect(table.chain.problems.find(p => p.kind === 'cache-records-missing')?.silent).toBe(true);
+    expect(table.chain.problems.find(p => p.code === 'pivot/cache-records-missing')?.silent).toBe(true);
   });
 
   it('resolves the records relationship against the cache definition, not the workbook', () => {
@@ -244,7 +244,7 @@ describe('hop 3 — the cache definition to its records', () => {
           rel('rId8', 'pivotCacheDefinition', 'pivotCache/pivotCacheDefinition1.xml')
       )
     });
-    const problem = only(parts).chain.problems.find(p => p.kind === 'cache-records-missing');
+    const problem = only(parts).chain.problems.find(p => p.code === 'pivot/cache-records-missing');
 
     expect(problem?.message).toContain('own');
     expect(only(parts).chain.cacheRecordsPath).toBeNull();
@@ -259,7 +259,7 @@ describe('hop 3 — the cache definition to its records', () => {
       'xl/pivotCache/pivotCacheRecords1.xml': undefined as unknown as string
     });
     const table = only(parts);
-    const problem = table.chain.problems.find(p => p.kind === 'cache-records-absent');
+    const problem = table.chain.problems.find(p => p.code === 'pivot/cache-records-absent');
 
     expect(problem?.severity).toBe('note');
     expect(problem?.message).toContain('not damage');
@@ -286,7 +286,7 @@ describe('hop 3 — the cache definition to its records', () => {
       'xl/pivotCache/_rels/pivotCacheDefinition1.xml.rels': undefined as unknown as string,
       'xl/pivotCache/pivotCacheRecords1.xml': undefined as unknown as string
     });
-    const problem = only(parts).chain.problems.find(p => p.kind === 'cache-records-absent');
+    const problem = only(parts).chain.problems.find(p => p.code === 'pivot/cache-records-absent');
 
     expect(problem?.severity).toBe('error');
     expect(problem?.message).toContain('not a schema violation');
@@ -343,7 +343,7 @@ describe('cacheSource — where the data came from', () => {
   it('reports a cache with no cacheSource', () => {
     const parts = pkg({ 'xl/pivotCache/pivotCacheDefinition1.xml': cacheDefinition('r:id="rId1"', '') });
 
-    expect(kinds(parts)).toContain('no-cache-source');
+    expect(kinds(parts)).toContain('pivot/no-cache-source');
     expect(only(parts).cacheSource).toBeNull();
   });
 
@@ -356,7 +356,7 @@ describe('cacheSource — where the data came from', () => {
     });
     const table = only(parts);
 
-    expect(table.problems.map(p => p.kind)).toContain('missing-required-attribute');
+    expect(table.problems.map(p => p.code)).toContain('pivot/missing-required-attribute');
     expect(table.cacheSource?.description).toContain('does not say');
   });
 });
@@ -378,7 +378,7 @@ describe('field indices into the cache', () => {
     const parts = pkg({
       'xl/pivotTables/pivotTable1.xml': pivotTable().replace('fld="2"', 'fld="7"')
     });
-    const problem = only(parts).problems.find(p => p.kind === 'field-index-out-of-range');
+    const problem = only(parts).problems.find(p => p.code === 'pivot/field-index-out-of-range');
 
     expect(problem?.message).toContain('only 3 fields');
     expect(problem?.message).toContain('blank');
@@ -391,8 +391,8 @@ describe('field indices into the cache', () => {
     // rejects indices strictly greater than the count lets it through as valid.
     const parts = pkg({ 'xl/pivotTables/pivotTable1.xml': pivotTable().replace('fld="2"', 'fld="3"') });
 
-    expect(kinds(parts)).toContain('field-index-out-of-range');
-    expect(only(parts).problems.find(p => p.kind === 'field-index-out-of-range')?.message).toContain('indices 0–2');
+    expect(kinds(parts)).toContain('pivot/field-index-out-of-range');
+    expect(only(parts).problems.find(p => p.code === 'pivot/field-index-out-of-range')?.message).toContain('indices 0–2');
   });
 
   it('accepts the last valid index', () => {
@@ -407,7 +407,7 @@ describe('field indices into the cache', () => {
     });
 
     expect(only(parts).fieldReferences.map(r => r.origin)).toContain('pageFields');
-    expect(kinds(parts)).toContain('field-index-out-of-range');
+    expect(kinds(parts)).toContain('pivot/field-index-out-of-range');
   });
 
   it('does not treat x="-2" as a dangling reference', () => {
@@ -429,7 +429,7 @@ describe('field indices into the cache', () => {
     const table = only(parts);
 
     expect(table.cacheFieldCount).toBeNull();
-    expect(table.problems.map(p => p.kind)).not.toContain('field-index-out-of-range');
+    expect(table.problems.map(p => p.code)).not.toContain('pivot/field-index-out-of-range');
     expect(table.fieldReferences.find(r => r.index === 7)?.cacheFieldName).toBeNull();
   });
 
@@ -441,7 +441,7 @@ describe('field indices into the cache', () => {
         '<cacheFields count="2"><cacheField name="Region"/><cacheField name="Quarter"/></cacheFields>'
       )
     });
-    const problem = only(parts).problems.find(p => p.kind === 'field-count-mismatch');
+    const problem = only(parts).problems.find(p => p.code === 'pivot/field-count-mismatch');
 
     expect(problem?.message).toContain('3 pivotField');
     expect(problem?.message).toContain('no index attribute');
@@ -456,7 +456,7 @@ describe('field indices into the cache', () => {
       )
     });
     const messages = only(parts)
-      .problems.filter(p => p.kind === 'field-count-mismatch')
+      .problems.filter(p => p.code === 'pivot/field-count-mismatch')
       .map(p => p.message);
 
     expect(messages.some(m => m.includes('@count says 9'))).toBe(true);
@@ -472,8 +472,8 @@ describe('discovery and reporting', () => {
     const table = only(parts);
 
     expect(table.ownerPath).toBeNull();
-    expect(table.problems.map(p => p.kind)).toContain('orphan-pivot-table-part');
-    expect(table.problems.find(p => p.kind === 'orphan-pivot-table-part')?.message).toContain('implicit relationship');
+    expect(table.problems.map(p => p.code)).toContain('pivot/orphan-pivot-table-part');
+    expect(table.problems.find(p => p.code === 'pivot/orphan-pivot-table-part')?.message).toContain('implicit relationship');
   });
 
   it('finds a relationship-declared pivot table outside the conventional folder', () => {
@@ -492,9 +492,9 @@ describe('discovery and reporting', () => {
       'xl/pivotTables/pivotTable1.xml': `<?xml version="1.0"?><pivotTableDefinition xmlns="${S}" cacheId="4"/>`
     });
 
-    expect(only(parts).problems.map(p => p.kind)).toEqual([
-      'missing-required-attribute',
-      'missing-required-attribute'
+    expect(only(parts).problems.map(p => p.code)).toEqual([
+      'pivot/missing-required-attribute',
+      'pivot/missing-required-attribute'
     ]);
   });
 
@@ -520,7 +520,7 @@ describe('discovery and reporting', () => {
   it('reports an absent pivot table part asked for by path', () => {
     const chain = resolvePivotCacheChain(pkg(), 'xl/pivotTables/nope.xml');
 
-    expect(chain.problems[0].kind).toBe('missing-required-attribute');
+    expect(chain.problems[0].code).toBe('pivot/missing-required-attribute');
     expect(chain.cacheId).toBeNull();
   });
 });

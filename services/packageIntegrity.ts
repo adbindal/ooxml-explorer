@@ -19,24 +19,65 @@
  * lives in a content-type-keyed table (IMPLICIT_RELATIONSHIPS) so it stays data.
  */
 
+import { finding, type Finding, type Severity } from './findings';
+
 export type IntegritySeverity = 'error' | 'warning';
 
-export interface IntegrityFinding {
-  severity: IntegritySeverity;
-  /** Stable machine-readable identifier, suitable for grouping or suppression. */
-  rule:
-    | 'missing-content-types'
-    | 'untyped-part'
-    | 'dangling-relationship-id'
-    | 'missing-relationship-target'
-    | 'missing-implicit-relationship'
-    | 'ambiguous-implicit-relationship'
-    | 'orphaned-rels-part'
-    | 'malformed-xml';
-  /** The part the finding is about. */
-  part: string;
-  message: string;
-}
+/**
+ * Severity, silence and the fix for each rule.
+ *
+ * `remediation` lives here rather than at each call site because it is a property of
+ * the rule, not of the occurrence — every dangling relationship id is fixed the same
+ * way. This also closes a real gap: integrity findings previously carried no
+ * remediation at all, which made them the one analyzer that could tell you something
+ * was wrong without telling you what to do about it.
+ *
+ * Most of these are SILENT. A package with a missing implicit relationship or an
+ * untyped part still opens and still renders, which is precisely why it needs a
+ * checker. Only a missing [Content_Types].xml or malformed XML stops the file loading.
+ */
+const INTEGRITY_RULES = {
+  'missing-content-types': {
+    severity: 'error', silent: false,
+    remediation: 'Add a [Content_Types].xml declaring a Default or Override for every part.'
+  },
+  'untyped-part': {
+    severity: 'warning', silent: true,
+    remediation: 'Add an Override for the part, or a Default for its extension, in [Content_Types].xml.'
+  },
+  'dangling-relationship-id': {
+    severity: 'error', silent: true,
+    remediation: 'Declare the relationship in the part’s .rels, or remove the reference to it.'
+  },
+  'missing-relationship-target': {
+    severity: 'error', silent: true,
+    remediation: 'Restore the target part, or delete the relationship pointing at it.'
+  },
+  'missing-implicit-relationship': {
+    severity: 'error', silent: true,
+    remediation: 'Add the missing relationship to the part’s .rels.'
+  },
+  'ambiguous-implicit-relationship': {
+    severity: 'error', silent: true,
+    remediation: 'Remove all but the one correct relationship.'
+  },
+  'orphaned-rels-part': {
+    severity: 'warning', silent: true,
+    remediation: 'Delete the relationship part, or restore the part it describes.'
+  },
+  'malformed-xml': {
+    severity: 'error', silent: false,
+    remediation: 'Repair the XML so that it parses.'
+  }
+} as const satisfies Record<string, { severity: Severity; silent: boolean; remediation: string }>;
+
+export type IntegrityRule = keyof typeof INTEGRITY_RULES;
+
+const integrityFinding = (rule: IntegrityRule, part: string, message: string): Finding =>
+  finding(`package/${rule}`, part, message, INTEGRITY_RULES[rule].remediation, {
+    severity: INTEGRITY_RULES[rule].severity,
+    silent: INTEGRITY_RULES[rule].silent
+  });
 
 /** Part path (no leading slash) to its text content. Binary parts map to ''. */
 export type PackageParts = Record<string, string>;
@@ -269,8 +310,8 @@ const hasRelationshipType = (relationshipTypeUri: string, expected: string): boo
  * consistent. It does not mean the document renders as intended - that is a different
  * question answered by the formatting resolvers, not by this.
  */
-export const checkPackageIntegrity = (parts: PackageParts): IntegrityFinding[] => {
-  const findings: IntegrityFinding[] = [];
+export const checkPackageIntegrity = (parts: PackageParts): Finding[] => {
+  const findings: Finding[] = [];
   const paths = Object.keys(parts).map(normalizePath);
   const present = new Set(paths);
   let declarations: ContentTypeDeclarations | null = null;
@@ -278,21 +319,19 @@ export const checkPackageIntegrity = (parts: PackageParts): IntegrityFinding[] =
   // --- Content types -------------------------------------------------------
   const contentTypesXml = parts[CONTENT_TYPES];
   if (contentTypesXml === undefined) {
-    findings.push({
-      severity: 'error',
-      rule: 'missing-content-types',
-      part: CONTENT_TYPES,
-      message: `The package has no ${CONTENT_TYPES}. Every OPC package requires one; without it the file cannot be opened.`
-    });
+    findings.push(integrityFinding(
+      'missing-content-types',
+      CONTENT_TYPES,
+      `The package has no ${CONTENT_TYPES}. Every OPC package requires one; without it the file cannot be opened.`
+    ));
   } else {
     const doc = parseXml(contentTypesXml);
     if (!doc) {
-      findings.push({
-        severity: 'error',
-        rule: 'malformed-xml',
-        part: CONTENT_TYPES,
-        message: `${CONTENT_TYPES} is not well-formed XML.`
-      });
+      findings.push(integrityFinding(
+        'malformed-xml',
+        CONTENT_TYPES,
+        `${CONTENT_TYPES} is not well-formed XML.`
+      ));
     } else {
       declarations = readContentTypes(doc);
       const { defaults, overrides } = declarations;
@@ -301,12 +340,11 @@ export const checkPackageIntegrity = (parts: PackageParts): IntegrityFinding[] =
         if (path === CONTENT_TYPES) continue; // the stream itself is not a part
         const extension = path.slice(path.lastIndexOf('.') + 1).toLowerCase();
         if (overrides.has(path) || defaults.has(extension)) continue;
-        findings.push({
-          severity: 'error',
-          rule: 'untyped-part',
-          part: path,
-          message: `Part is not declared in ${CONTENT_TYPES}. Add an Override for it, or a Default for the "${extension}" extension.`
-        });
+        findings.push(integrityFinding(
+          'untyped-part',
+          path,
+          `Part is not declared in ${CONTENT_TYPES}. Add an Override for it, or a Default for the "${extension}" extension.`
+        ));
       }
     }
   }
@@ -317,23 +355,21 @@ export const checkPackageIntegrity = (parts: PackageParts): IntegrityFinding[] =
 
     const owner = ownerOfRels(path);
     if (owner && !present.has(owner)) {
-      findings.push({
-        severity: 'warning',
-        rule: 'orphaned-rels-part',
-        part: path,
-        message: `Relationship part describes "${owner}", which is not in the package.`
-      });
+      findings.push(integrityFinding(
+        'orphaned-rels-part',
+        path,
+        `Relationship part describes "${owner}", which is not in the package.`
+      ));
       continue;
     }
 
     const relationships = readRelationships(parts[path]);
     if (!relationships) {
-      findings.push({
-        severity: 'error',
-        rule: 'malformed-xml',
-        part: path,
-        message: 'Relationship part is not well-formed XML.'
-      });
+      findings.push(integrityFinding(
+        'malformed-xml',
+        path,
+        'Relationship part is not well-formed XML.'
+      ));
       continue;
     }
 
@@ -345,12 +381,11 @@ export const checkPackageIntegrity = (parts: PackageParts): IntegrityFinding[] =
       if (rel.external || rel.target === '') continue;
       const resolved = resolveTarget(resolveBase, rel.target);
       if (!present.has(resolved)) {
-        findings.push({
-          severity: 'error',
-          rule: 'missing-relationship-target',
-          part: owner ?? path,
-          message: `Relationship ${rel.id} points at "${rel.target}" (${resolved}), which is not in the package.`
-        });
+        findings.push(integrityFinding(
+          'missing-relationship-target',
+          owner ?? path,
+          `Relationship ${rel.id} points at "${rel.target}" (${resolved}), which is not in the package.`
+        ));
       }
     }
   }
@@ -361,12 +396,11 @@ export const checkPackageIntegrity = (parts: PackageParts): IntegrityFinding[] =
 
     const doc = parseXml(parts[path]);
     if (!doc) {
-      findings.push({
-        severity: 'error',
-        rule: 'malformed-xml',
-        part: path,
-        message: 'Part is not well-formed XML.'
-      });
+      findings.push(integrityFinding(
+        'malformed-xml',
+        path,
+        'Part is not well-formed XML.'
+      ));
       continue;
     }
 
@@ -384,12 +418,11 @@ export const checkPackageIntegrity = (parts: PackageParts): IntegrityFinding[] =
 
     for (const id of referenced) {
       if (!declared.has(id)) {
-        findings.push({
-          severity: 'error',
-          rule: 'dangling-relationship-id',
-          part: path,
-          message: `References relationship ${id}, which is not declared in ${relsPath}.`
-        });
+        findings.push(integrityFinding(
+          'dangling-relationship-id',
+          path,
+          `References relationship ${id}, which is not declared in ${relsPath}.`
+        ));
       }
     }
   }
@@ -423,23 +456,21 @@ export const checkPackageIntegrity = (parts: PackageParts): IntegrityFinding[] =
         );
 
         if (matches.length === 0) {
-          findings.push({
-            severity: 'error',
-            rule: 'missing-implicit-relationship',
-            part: path,
-            message: `This ${expectation.partLabel} has no "${expectation.relationshipType}" relationship in ${relsPath}. The link is implicit - nothing in the part's XML references it - so no other check can see it missing, and the file still opens: ${expectation.consequence}.`
-          });
+          findings.push(integrityFinding(
+            'missing-implicit-relationship',
+            path,
+            `This ${expectation.partLabel} has no "${expectation.relationshipType}" relationship in ${relsPath}. The link is implicit - nothing in the part's XML references it - so no other check can see it missing, and the file still opens: ${expectation.consequence}.`
+          ));
           continue;
         }
 
         if (expectation.cardinality === 'exactly-one' && matches.length > 1) {
           const ids = matches.map(rel => rel.id).join(', ');
-          findings.push({
-            severity: 'error',
-            rule: 'ambiguous-implicit-relationship',
-            part: path,
-            message: `This ${expectation.partLabel} declares ${matches.length} "${expectation.relationshipType}" relationships (${ids}) in ${relsPath}, but may have exactly one. Because the link is implicit, the part's XML says nothing about which is intended and consumers are free to disagree; remove all but the correct one.`
-          });
+          findings.push(integrityFinding(
+            'ambiguous-implicit-relationship',
+            path,
+            `This ${expectation.partLabel} declares ${matches.length} "${expectation.relationshipType}" relationships (${ids}) in ${relsPath}, but may have exactly one. Because the link is implicit, the part's XML says nothing about which is intended and consumers are free to disagree; remove all but the correct one.`
+          ));
         }
       }
     }

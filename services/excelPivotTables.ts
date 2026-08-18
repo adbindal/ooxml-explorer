@@ -46,6 +46,7 @@
  */
 
 import { relsPathFor, resolveTarget, type PackageParts } from './packageIntegrity';
+import { finding, renderFindings, type Finding, type Severity } from './findings';
 
 /**
  * Namespace matching tolerates Strict as well as Transitional packages, which use
@@ -108,20 +109,31 @@ export type PivotProblemKind =
   | 'field-index-out-of-range'
   | 'field-count-mismatch';
 
-export interface PivotProblem {
+/**
+ * Turns a pivot problem into a Finding.
+ *
+ * Severity and silence stay per-call-site here rather than moving to a table, because
+ * unlike the other analyzers they are not a property of the kind: a missing records
+ * part is an `error` normally and a `note` under `refreshOnLoad`, and only the call
+ * site knows which. `hop` becomes part of the subject — it is the single most useful
+ * thing to know about a broken chain, since it names where the walk stopped.
+ */
+const pivotFinding = (input: {
   kind: PivotProblemKind;
   /** Which hop this break sits on; null for problems inside a single part. */
   hop: PivotChainHop | null;
-  /**
-   * `note` marks a legitimate state that merely deserves explaining — an absent
-   * records part under `refreshOnLoad`, for instance. Only `error` is damage.
-   */
-  severity: 'error' | 'note';
+  severity: Severity;
   message: string;
   remediation: string;
-  /** True when the workbook still opens and still displays the same numbers. */
   silent: boolean;
-}
+  /** The part the fault is in. Defaults to the pivot table part being walked. */
+  part?: string;
+}): Finding =>
+  finding(`pivot/${input.kind}`, input.part ?? '', input.message, input.remediation, {
+    severity: input.severity,
+    silent: input.silent,
+    ...(input.hop ? { subject: { hop: input.hop } } : {})
+  });
 
 /** Where a cache says its data came from. */
 export interface PivotCacheSource {
@@ -174,7 +186,7 @@ export interface PivotCacheChain {
   recordsAbsentIsExpected: boolean;
   /** The *first* hop that failed, or null when all three resolved. */
   brokenHop: PivotChainHop | null;
-  problems: PivotProblem[];
+  problems: Finding[];
 }
 
 export interface PivotTable {
@@ -193,7 +205,7 @@ export interface PivotTable {
   pivotFieldCount: number;
   /** Every index this table writes into the cache's field list. */
   fieldReferences: PivotFieldReference[];
-  problems: PivotProblem[];
+  problems: Finding[];
 }
 
 interface Relationship {
@@ -263,7 +275,7 @@ export const resolvePivotCacheChain = (
   /** An already-parsed pivot table definition, when the caller has one. */
   parsedTable?: Document
 ): PivotCacheChain => {
-  const problems: PivotProblem[] = [];
+  const problems: Finding[] = [];
   const chain: PivotCacheChain = {
     pivotTablePath,
     cacheId: null,
@@ -284,14 +296,15 @@ export const resolvePivotCacheChain = (
   const definition = table?.documentElement ?? null;
   if (!definition) {
     chain.brokenHop = 'table-to-workbook';
-    problems.push({
+    problems.push(pivotFinding({
+      part: pivotTablePath,
       kind: 'missing-required-attribute',
       hop: 'table-to-workbook',
       severity: 'error',
       message: `${pivotTablePath} is missing or is not well-formed XML, so no pivot table can be read from it.`,
       remediation: `Restore ${pivotTablePath}.`,
       silent: true
-    });
+    }));
     return chain;
   }
 
@@ -299,7 +312,8 @@ export const resolvePivotCacheChain = (
   chain.cacheId = definition.getAttribute('cacheId');
   if (chain.cacheId === null) {
     chain.brokenHop = 'table-to-workbook';
-    problems.push({
+    problems.push(pivotFinding({
+      part: pivotTablePath,
       kind: 'missing-required-attribute',
       hop: 'table-to-workbook',
       severity: 'error',
@@ -307,7 +321,7 @@ export const resolvePivotCacheChain = (
         'pivotTableDefinition/@cacheId is absent. It is required, and it is the only thing joining this pivot table to its cached data — without it the table names no cache at all.',
       remediation: 'Set cacheId to the cacheId of the workbook pivotCache holding this table’s data.',
       silent: true
-    });
+    }));
     return chain;
   }
 
@@ -316,7 +330,8 @@ export const resolvePivotCacheChain = (
   const workbookDoc = workbookPath !== null ? parseXml(parts[workbookPath] ?? '') : null;
   if (!workbookDoc?.documentElement) {
     chain.brokenHop = 'table-to-workbook';
-    problems.push({
+    problems.push(pivotFinding({
+      part: workbookPath ?? 'xl/workbook.xml',
       kind: 'workbook-missing',
       hop: 'table-to-workbook',
       severity: 'error',
@@ -325,7 +340,7 @@ export const resolvePivotCacheChain = (
       } is missing or unparseable, so cacheId "${chain.cacheId}" cannot be looked up and no pivot cache can be found.`,
       remediation: 'Restore the workbook part named by the officeDocument relationship in _rels/.rels.',
       silent: true
-    });
+    }));
     return chain;
   }
 
@@ -333,21 +348,23 @@ export const resolvePivotCacheChain = (
   const entries = pivotCachesEl ? descendants(pivotCachesEl, 'pivotCache') : [];
   if (entries.length === 0) {
     chain.brokenHop = 'table-to-workbook';
-    problems.push({
+    problems.push(pivotFinding({
+      part: workbookPath ?? 'xl/workbook.xml',
       kind: 'no-pivot-caches',
       hop: 'table-to-workbook',
       severity: 'error',
       message: `${workbookPath} declares no pivotCaches, so cacheId "${chain.cacheId}" resolves to nothing. pivotCaches is the only place a cacheId is bound to a relationship id, so with it gone every pivot table in the workbook is cut off from its data at once.`,
       remediation: `Add <pivotCaches><pivotCache cacheId="${chain.cacheId}" r:id="…"/></pivotCaches> to ${workbookPath}.`,
       silent: true
-    });
+    }));
     return chain;
   }
 
   const matches = entries.filter(el => el.getAttribute('cacheId') === chain.cacheId);
   if (matches.length === 0) {
     chain.brokenHop = 'table-to-workbook';
-    problems.push({
+    problems.push(pivotFinding({
+      part: workbookPath ?? 'xl/workbook.xml',
       kind: 'cache-id-not-in-workbook',
       hop: 'table-to-workbook',
       severity: 'error',
@@ -358,18 +375,19 @@ export const resolvePivotCacheChain = (
         .join(', ')}). @cacheId is matched by value, not resolved as a relationship id, so an rId written here would also miss.`,
       remediation: `Add a pivotCache with cacheId="${chain.cacheId}", or point the pivot table at a cacheId the workbook actually declares.`,
       silent: true
-    });
+    }));
     return chain;
   }
   if (matches.length > 1) {
-    problems.push({
+    problems.push(pivotFinding({
+      part: workbookPath ?? 'xl/workbook.xml',
       kind: 'duplicate-cache-id',
       hop: 'table-to-workbook',
       severity: 'error',
       message: `${workbookPath} declares ${matches.length} pivotCache entries with cacheId="${chain.cacheId}". cacheId is meant to identify one cache, so which data this pivot table shows is left to the consumer to guess.`,
       remediation: 'Give each pivotCache a distinct cacheId and repoint the pivot tables accordingly.',
       silent: true
-    });
+    }));
   }
 
   // ---- hop two: @r:id, resolved through the workbook's own relationships ---------
@@ -379,21 +397,23 @@ export const resolvePivotCacheChain = (
 
   if (chain.cacheRelationshipId === null) {
     chain.brokenHop = 'workbook-to-cache-definition';
-    problems.push({
+    problems.push(pivotFinding({
+      part: pivotTablePath,
       kind: 'missing-required-attribute',
       hop: 'workbook-to-cache-definition',
       severity: 'error',
       message: `The pivotCache with cacheId="${chain.cacheId}" carries no r:id. Both attributes are required on pivotCache and they are not interchangeable: cacheId names the cache to pivot tables, r:id names the part to the package. Without r:id nothing points at a cache definition part.`,
       remediation: `Add r:id to the pivotCache and declare a matching relationship in ${relsPathFor(workbookPath as string)}.`,
       silent: true
-    });
+    }));
     return chain;
   }
 
   const cacheRel = workbookRels?.get(chain.cacheRelationshipId);
   if (!cacheRel) {
     chain.brokenHop = 'workbook-to-cache-definition';
-    problems.push({
+    problems.push(pivotFinding({
+      part: workbookPath ?? 'xl/workbook.xml',
       kind: 'cache-relationship-missing',
       hop: 'workbook-to-cache-definition',
       severity: 'error',
@@ -408,7 +428,7 @@ export const resolvePivotCacheChain = (
         workbookPath as string
       )}.`,
       silent: true
-    });
+    }));
     return chain;
   }
 
@@ -420,7 +440,8 @@ export const resolvePivotCacheChain = (
   if (!chain.cacheDefinition?.documentElement) {
     chain.brokenHop = 'workbook-to-cache-definition';
     chain.cacheDefinition = null;
-    problems.push({
+    problems.push(pivotFinding({
+      part: chain.cacheDefinitionPath ?? pivotTablePath,
       kind: 'cache-definition-missing',
       hop: 'workbook-to-cache-definition',
       severity: 'error',
@@ -429,7 +450,7 @@ export const resolvePivotCacheChain = (
       } or is unparseable. The pivot table still renders from the cell values cached in the worksheet, so nothing looks wrong until someone refreshes it.`,
       remediation: `Restore ${chain.cacheDefinitionPath}, or remove the pivot table, its pivotCache entry and its relationship together.`,
       silent: true
-    });
+    }));
     return chain;
   }
 
@@ -445,7 +466,8 @@ export const resolvePivotCacheChain = (
   if (chain.cacheRecordsRelationshipId === null) {
     // Not a break: r:id is optional on pivotCacheDefinition (verified — the SDK schema
     // declares it with no RequiredValidator, unlike the two on pivotCache).
-    problems.push({
+    problems.push(pivotFinding({
+      part: chain.cacheDefinitionPath ?? pivotTablePath,
       kind: 'cache-records-absent',
       hop: 'cache-definition-to-records',
       severity: chain.recordsAbsentIsExpected ? 'note' : 'error',
@@ -456,7 +478,7 @@ export const resolvePivotCacheChain = (
         ? 'None needed; refreshing the workbook regenerates the records.'
         : 'Add the pivotCacheRecords part and its relationship, or set refreshOnLoad="1" so the data is rebuilt on open.',
       silent: true
-    });
+    }));
     return chain;
   }
 
@@ -465,7 +487,8 @@ export const resolvePivotCacheChain = (
   if (!recordsRel) {
     chain.brokenHop = 'cache-definition-to-records';
     chain.cacheRecordsPresent = false;
-    problems.push({
+    problems.push(pivotFinding({
+      part: chain.cacheDefinitionPath ?? pivotTablePath,
       kind: 'cache-records-missing',
       hop: 'cache-definition-to-records',
       severity: 'error',
@@ -478,7 +501,7 @@ export const resolvePivotCacheChain = (
         chain.cacheDefinitionPath
       )}.`,
       silent: true
-    });
+    }));
     return chain;
   }
 
@@ -488,7 +511,8 @@ export const resolvePivotCacheChain = (
   chain.cacheRecordsPresent = recordsRel.external ? null : parts[chain.cacheRecordsPath] !== undefined;
   if (chain.cacheRecordsPresent === false) {
     chain.brokenHop = 'cache-definition-to-records';
-    problems.push({
+    problems.push(pivotFinding({
+      part: chain.cacheDefinitionPath ?? pivotTablePath,
       kind: 'cache-records-missing',
       hop: 'cache-definition-to-records',
       severity: 'error',
@@ -497,18 +521,19 @@ export const resolvePivotCacheChain = (
       }.`,
       remediation: `Restore ${chain.cacheRecordsPath}, or drop the r:id and set refreshOnLoad="1" so the data is rebuilt from the source instead.`,
       silent: true
-    });
+    }));
   }
 
   return chain;
 };
 
 /** Reads `cacheSource` and says, in one sentence, where the data claims to come from. */
-const readCacheSource = (cacheDefinition: Document, problems: PivotProblem[]): PivotCacheSource | null => {
+const readCacheSource = (cacheDefinition: Document, problems: Finding[], part: string): PivotCacheSource | null => {
   const root = cacheDefinition.documentElement;
   const el = root ? firstDescendant(root, 'cacheSource') : null;
   if (!el) {
-    problems.push({
+    problems.push(pivotFinding({
+      part: part,
       kind: 'no-cache-source',
       hop: null,
       severity: 'error',
@@ -516,7 +541,7 @@ const readCacheSource = (cacheDefinition: Document, problems: PivotProblem[]): P
         'The pivot cache definition has no cacheSource, so nothing records where the data came from. cacheSource is a required child, and without it the cache cannot be refreshed even when the source data is still present in the workbook.',
       remediation: 'Add a cacheSource naming the worksheet range or connection the data was read from.',
       silent: true
-    });
+    }));
     return null;
   }
 
@@ -534,7 +559,8 @@ const readCacheSource = (cacheDefinition: Document, problems: PivotProblem[]): P
   // @type is required and enumerated: worksheet | external | consolidation | scenario
   // (verified against ST_SourceType in the SDK schema).
   if (source.type === null) {
-    problems.push({
+    problems.push(pivotFinding({
+      part: part,
       kind: 'missing-required-attribute',
       hop: null,
       severity: 'error',
@@ -542,7 +568,7 @@ const readCacheSource = (cacheDefinition: Document, problems: PivotProblem[]): P
         'cacheSource/@type is absent. It is required, and it is what tells a consumer whether to look for a worksheet range, an external connection, consolidation ranges or a scenario — the child element alone does not settle it.',
       remediation: 'Set type to one of "worksheet", "external", "consolidation" or "scenario".',
       silent: true
-    });
+    }));
   }
 
   if (source.type === 'worksheet') {
@@ -599,7 +625,8 @@ const FIELD_INDEX_ORIGINS: { container: string; child: string; attribute: string
 const readFieldReferences = (
   definition: Element,
   cacheFieldNames: string[] | null,
-  problems: PivotProblem[]
+  problems: Finding[],
+  part: string
 ): PivotFieldReference[] => {
   const references: PivotFieldReference[] = [];
 
@@ -617,7 +644,8 @@ const readFieldReferences = (
       references.push({ origin, index, cacheFieldName: name });
 
       if (cacheFieldNames !== null && index >= cacheFieldNames.length) {
-        problems.push({
+        problems.push(pivotFinding({
+          part: part,
           kind: 'field-index-out-of-range',
           hop: null,
           severity: 'error',
@@ -626,7 +654,7 @@ const readFieldReferences = (
           } (indices 0–${cacheFieldNames.length - 1}). Fields are referenced by position, so an index past the end is a dangling reference: the column comes out blank, or shows the wrong field once the indices shift.`,
           remediation: `Point the reference at an existing cache field index, or add the missing cacheField to the cache definition.`,
           silent: true
-        });
+        }));
       }
     }
   }
@@ -636,7 +664,7 @@ const readFieldReferences = (
 
 /** Reads one pivot table part in full, chain included. */
 const readPivotTable = (parts: PackageParts, partPath: string, ownerPath: string | null): PivotTable => {
-  const problems: PivotProblem[] = [];
+  const problems: Finding[] = [];
   const doc = parseXml(parts[partPath] ?? '');
   const definition = doc?.documentElement ?? null;
   const chain = resolvePivotCacheChain(parts, partPath, doc ?? undefined);
@@ -657,32 +685,34 @@ const readPivotTable = (parts: PackageParts, partPath: string, ownerPath: string
   }
 
   if (ownerPath === null) {
-    problems.push({
+    problems.push(pivotFinding({
+      part: partPath,
       kind: 'orphan-pivot-table-part',
       hop: null,
       severity: 'error',
       message: `${partPath} is in the package but no part relates to it. A pivot table is reached only through an implicit relationship from the worksheet it sits on — nothing in worksheet XML names it — so an unreferenced pivot table part is dead weight: it never appears, and the worksheet stays perfectly valid without it.`,
       remediation: `Add a pivotTable relationship from the worksheet that shows this pivot, or delete ${partPath}.`,
       silent: true
-    });
+    }));
   }
 
   // @name and @dataCaption are required on pivotTableDefinition (verified against the
   // SDK schema), alongside @cacheId which resolvePivotCacheChain reports on.
   for (const attribute of ['name', 'dataCaption']) {
     if (definition.getAttribute(attribute) === null) {
-      problems.push({
+      problems.push(pivotFinding({
+        part: partPath,
         kind: 'missing-required-attribute',
         hop: null,
         severity: 'error',
         message: `pivotTableDefinition/@${attribute} is absent, but the schema requires it.`,
         remediation: `Set @${attribute} on the pivotTableDefinition.`,
         silent: true
-      });
+      }));
     }
   }
 
-  const cacheSource = chain.cacheDefinition ? readCacheSource(chain.cacheDefinition, problems) : null;
+  const cacheSource = chain.cacheDefinition ? readCacheSource(chain.cacheDefinition, problems, chain.cacheDefinitionPath ?? partPath) : null;
 
   let cacheFieldNames: string[] | null = null;
   if (chain.cacheDefinition?.documentElement) {
@@ -694,14 +724,15 @@ const readPivotTable = (parts: PackageParts, partPath: string, ownerPath: string
     // array from @count and then reads by index gets the wrong field or none.
     const declared = cacheFieldsEl?.getAttribute('count');
     if (declared !== null && declared !== undefined && Number.parseInt(declared, 10) !== cacheFields.length) {
-      problems.push({
+      problems.push(pivotFinding({
+        part: partPath,
         kind: 'field-count-mismatch',
         hop: null,
         severity: 'error',
         message: `cacheFields/@count says ${declared} but ${cacheFields.length} cacheField elements are present. Consumers that size their field table from @count read the wrong field, or none, for every index past the shorter of the two.`,
         remediation: `Set cacheFields/@count to ${cacheFields.length}.`,
         silent: true
-      });
+      }));
     }
   }
 
@@ -709,7 +740,8 @@ const readPivotTable = (parts: PackageParts, partPath: string, ownerPath: string
   const pivotFields = pivotFieldsEl ? descendants(pivotFieldsEl, 'pivotField') : [];
 
   if (cacheFieldNames !== null && pivotFields.length > 0 && pivotFields.length !== cacheFieldNames.length) {
-    problems.push({
+    problems.push(pivotFinding({
+      part: partPath,
       kind: 'field-count-mismatch',
       hop: null,
       severity: 'error',
@@ -720,10 +752,10 @@ const readPivotTable = (parts: PackageParts, partPath: string, ownerPath: string
       }. pivotField has no index attribute — a pivot field *is* its position in the list — so once the two lists differ in length every index past the difference names a different field than the author meant.`,
       remediation: 'Write one pivotField per cacheField, in the same order.',
       silent: true
-    });
+    }));
   }
 
-  const fieldReferences = readFieldReferences(definition, cacheFieldNames, problems);
+  const fieldReferences = readFieldReferences(definition, cacheFieldNames, problems, partPath);
 
   return {
     partPath,
@@ -781,7 +813,7 @@ export function readPivotTables(parts: PackageParts): PivotTable[] {
  * a design decision, and listing it beside genuine breakage would train a reader to
  * ignore the list.
  */
-export function pivotTableErrors(table: PivotTable): PivotProblem[] {
+export function pivotTableErrors(table: PivotTable): Finding[] {
   return [...table.chain.problems, ...table.problems].filter(p => p.severity === 'error');
 }
 
@@ -819,4 +851,50 @@ export function describeBrokenHop(chain: PivotCacheChain): string | null {
     default:
       return null;
   }
+}
+
+/**
+ * Evidence lines for the AI panel.
+ *
+ * Needs the workbook and the cache parts alongside the worksheet, because every hop of
+ * the chain lives somewhere else. A pivot table part read on its own always looks fine.
+ */
+export function computePivotEvidenceForMarkup(
+  parts: Record<string, string>
+): { lines: string[]; unresolved: string[] } | null {
+  const tables = readPivotTables(parts);
+  if (tables.length === 0) return null;
+
+  const lines: string[] = [];
+  const unresolved: string[] = [];
+
+  lines.push(`${tables.length} pivot table(s) in this workbook.`);
+
+  for (const table of tables) {
+    lines.push(
+      `Pivot table "${table.name ?? 'unnamed'}" (${table.partPath}) uses cacheId ${table.chain.cacheId ?? 'none'}${
+        table.chain.cacheDefinitionPath ? `, whose definition is ${table.chain.cacheDefinitionPath}` : ''
+      }.`
+    );
+    const broken = describeBrokenHop(table.chain);
+    if (broken) lines.push(broken);
+    lines.push(...renderFindings([...table.chain.problems, ...table.problems]));
+  }
+
+  const silent = findSilentlyBrokenPivotTables(tables);
+  if (silent.length > 0) {
+    lines.push(
+      `${silent.length} of these pivot table(s) still display the values from their last refresh, so the workbook looks correct and no visual check will catch the break. It surfaces on the next refresh.`
+    );
+  }
+
+  // The cache records hold what the pivot was built from; whether they still agree with
+  // the live source range is not knowable without recomputing the source.
+  if (tables.some(t => t.chain.cacheRecordsPath !== null)) {
+    unresolved.push(
+      'Cached pivot records were located but not compared against their source range, so whether the cache is stale is unverified.'
+    );
+  }
+
+  return { lines, unresolved };
 }

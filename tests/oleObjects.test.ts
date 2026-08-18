@@ -73,7 +73,7 @@ describe('the preview that hides breakage', () => {
     delete parts['word/embeddings/oleObject1.bin'];
     const [object] = readOleObjects(parts, 'word/document.xml');
 
-    const problem = object.problems.find(p => p.kind === 'data-part-missing');
+    const problem = object.problems.find(p => p.code === 'ole/data-part-missing');
     expect(problem?.silent).toBe(true);
     expect(problem?.message).toContain('double-clicks');
     expect(object.preview?.partExists).toBe(true);
@@ -85,7 +85,7 @@ describe('the preview that hides breakage', () => {
     delete parts['ppt/embeddings/oleObject1.bin'];
     const [object] = readOleObjects(parts, 'ppt/slides/slide1.xml');
 
-    expect(object.problems.map(p => p.kind)).toContain('data-part-missing');
+    expect(object.problems.map(p => p.code)).toContain('ole/data-part-missing');
     expect(object.preview?.partExists).toBe(true);
   });
 
@@ -102,7 +102,7 @@ describe('the preview that hides breakage', () => {
       'word/document.xml'
     );
 
-    expect(noPreview[0].problems.find(p => p.kind === 'no-preview')?.silent).toBe(false);
+    expect(noPreview[0].problems.find(p => p.code === 'ole/no-preview')?.silent).toBe(false);
     expect(findSilentlyBrokenOleObjects(noPreview)).toEqual([]);
   });
 
@@ -125,7 +125,7 @@ describe('the preview that hides breakage', () => {
     });
     const objects = readOleObjects(parts, 'word/document.xml');
 
-    expect(objects[0].problems.map(p => p.kind)).toEqual(['no-prog-id']);
+    expect(objects[0].problems.map(p => p.code)).toEqual(['ole/no-prog-id']);
     expect(findSilentlyBrokenOleObjects(objects)).toEqual([]);
   });
 });
@@ -199,7 +199,7 @@ describe('binding and relationship must agree', () => {
     });
     const [object] = readOleObjects(parts, 'word/document.xml');
 
-    expect(object.problems.find(p => p.kind === 'binding-mismatch')?.message).toContain('TargetMode');
+    expect(object.problems.find(p => p.code === 'ole/binding-mismatch')?.message).toContain('TargetMode');
   });
 
   it('flags an embedded object whose data is external to the package', () => {
@@ -210,7 +210,7 @@ describe('binding and relationship must agree', () => {
     });
     const [object] = readOleObjects(parts, 'word/document.xml');
 
-    const problem = object.problems.find(p => p.kind === 'binding-mismatch');
+    const problem = object.problems.find(p => p.code === 'ole/binding-mismatch');
     expect(problem?.message).toContain('not in the package');
     expect(oleDataIsPresent(object)).toBeNull();
   });
@@ -246,7 +246,7 @@ describe('undetermined bindings', () => {
     const [object] = readOleObjects(parts, 'word/document.xml');
 
     expect(object.binding).toBe('unknown');
-    expect(object.problems.map(p => p.kind)).toContain('unknown-binding');
+    expect(object.problems.map(p => p.code)).toContain('ole/unknown-binding');
   });
 
   it('flags a slide object declaring both p:embed and p:link', () => {
@@ -259,7 +259,7 @@ describe('undetermined bindings', () => {
     const [object] = readOleObjects(parts, 'ppt/slides/slide1.xml');
 
     expect(object.binding).toBe('unknown');
-    expect(object.problems.find(p => p.kind === 'unknown-binding')?.message).toContain('alternatives');
+    expect(object.problems.find(p => p.code === 'ole/unknown-binding')?.message).toContain('alternatives');
   });
 
   it('flags a slide object declaring neither', () => {
@@ -285,7 +285,7 @@ describe('broken references', () => {
     });
     const [object] = readOleObjects(parts, 'word/document.xml');
 
-    expect(object.problems.map(p => p.kind)).toContain('no-data-reference');
+    expect(object.problems.map(p => p.code)).toContain('ole/no-data-reference');
   });
 
   it('reports a relationship id absent from the rels part', () => {
@@ -294,7 +294,7 @@ describe('broken references', () => {
     });
     const [object] = readOleObjects(parts, 'word/document.xml');
 
-    expect(object.problems.find(p => p.kind === 'relationship-missing')?.message).toContain('rId4');
+    expect(object.problems.find(p => p.code === 'ole/relationship-missing')?.message).toContain('rId4');
   });
 
   it('reports a part with no relationships at all', () => {
@@ -302,7 +302,7 @@ describe('broken references', () => {
     delete parts['word/_rels/document.xml.rels'];
     const [object] = readOleObjects(parts, 'word/document.xml');
 
-    expect(object.problems.map(p => p.kind)).toContain('relationship-missing');
+    expect(object.problems.map(p => p.code)).toContain('ole/relationship-missing');
     expect(object.preview?.target).toBeNull();
   });
 });

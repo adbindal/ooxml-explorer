@@ -625,16 +625,39 @@ Matching a `/spreadsheetml/2006/main` suffix therefore matches **Transitional on
 
 **Known gap this exposes:** the Word and Excel resolvers (`wordStyleResolver`, `wordBookmarks`, `excelStyleResolver`, …) match element namespaces against **exact Transitional constants**, so they read nothing out of Strict packages either. Unlike `oleObjects` they never *claimed* otherwise, so this is a limitation rather than a false claim — but it is repo-wide and undocumented. Relationship-type matching is fine everywhere (it matches the trailing segment, which Strict preserves).
 
+## 8r. The spine — diff grounded, one Finding type, nothing orphaned (2026-08-18)
+
+An audit before answering "where is this converging" found the real problem was not too many features but **almost none of them connected**: 16 analyzers, ~10,000 lines, 6 reachable from the UI and only on the *explain selected tag* path. Three had no caller at all — including `ooxmlDiff.ts`, 489 lines built for the user's most-wanted case.
+
+**The reframe.** This is not a RAG system. It parses parts, resolves inheritance, walks relationships and emits diagnostics with severities and remediations — it is **a compiler front-end for OOXML** with a model as a narration layer. Reference architecture is ESLint or a language server: a rule registry, one diagnostic type, several consumers. The deliverable is the **engine**; the panel is its first consumer. (User confirmed: *"based on those we can build further agents for our use-cases."*)
+
+⚠️ **Findings are not embeddings, and the distinction is load-bearing.** A finding is a claim with a traceable origin — this code, in this part, about this subject — and that traceability is what computes the Verified badge. A vector has no origin to name. Compressing findings into an embedding space keeps the size saving and throws away the property the whole design rests on. Embeddings may still belong on the *prose corpus* for fuzzy retrieval (§8h, task #21); never on the findings.
+
+**Shipped:**
+
+1. **The diff is grounded** (`829c2eb`). `diffPackages` now runs before the model sees anything, marked authoritative on both provider paths with an explicit instruction not to report differences it does not list. Parts are pivoted into a before-package and an after-package and diffed *together*, so content moved between parts is visible. `unresolved` travels with it, so a partial derivation caps the tier.
+
+2. **One `Finding` type** (`cb26b8d`), in `services/findings.ts`: `code`, `severity`, `part`, `message`, `remediation`, `silent`, `subject`. Codes are namespaced `analyzer/kind` — necessary, not cosmetic: **bookmarks and comments both emit `duplicate-id`**. Prose is now *rendered* from findings (`renderFinding` is the only place a sentence is built) rather than authored as strings, which is what makes the output consumable by another agent.
+
+3. **Severity and silence became explicit judgements.** Moving them into per-analyzer rule tables forced the call once per kind. The finding: **most integrity and bookmark faults are silent** — the package opens, the page renders, navigation is broken. Pivot keeps its severity per-call-site because there it genuinely depends on the occurrence (absent cache records are an `error` normally, a `note` under `refreshOnLoad`).
+
+4. **Nothing is orphaned.** `wordComments` and `excelPivotTables` gained evidence functions and `ANALYSIS_TARGETS` entries. Every analyzer now has a caller.
+
+**Method note.** The cross-analyzer contract tests run all five analyzers over deliberately broken input and assert every record is namespaced, names its part, carries a fix, and survives a JSON round-trip — a shared type is only worth having if nothing quietly opts out. Nine mutants; **one escaped and found a real gap**: the silent-ordering test used codes that already sorted correctly alphabetically, so it passed with the tiebreak deleted.
+
 ## 9. Next actions
 
 Stages 0–2 are complete for all three formats and the Verified tier is live. Remaining work is per-subsystem, tracked as tasks #11–#28.
 
 All four subsystems the user named are **DONE**: #26 bookmarks (§8m), #27 OLE (§8n), #25 comments (§8o), #28 pivot tables (§8p).
 
-**Next, in rough priority order:**
-1. **Wire comments and pivot tables into the panel.** Bookmarks and OLE have `ANALYSIS_TARGETS` entries; `wordComments.ts` and `excelPivotTables.ts` have **no caller yet**. Both need a `compute*EvidenceForMarkup` in the shape the others use. Comments need three sibling parts fetched (`comments.xml`, `commentsExtended.xml`, `commentsIds.xml`); pivot tables need the workbook, its rels, and the cache parts.
-2. **Source or cut the "67 variations" figure** (§8p) before anything feeds the RAG corpus.
-3. **Decide on Strict support repo-wide** (§8q). Currently a documented limitation, not a claim.
+**Next, in rough priority order** — all of §8r's phases 1 and 2 are done:
+
+1. **The analyzer registry** (the remaining third of the plan). Each analyzer declares itself as data — id, formats, parts it needs, what it determines, and **what it explicitly cannot determine** — replacing the hand-maintained `ANALYSIS_TARGETS` array. Then route by *question* (`explain` / `validate` / `compare`) rather than only by part path, and compute a **capability ledger** from the registry so the engine can say "there is no analyzer for SmartArt, so I cannot verify this." That extends the honesty property from per-fact to per-capability, and it is the step that makes new features a linear cost.
+2. **A gap log**, on the `retrievalMetrics.ts` pattern: when a question lands on a part or element no analyzer covers, record it. Produces a backlog ranked by real usage rather than guesswork. This — plus the regression ratchet, where every defect found becomes a test — is what "self-improving" means here. **Not** a model that writes its own rules or grades its own output; that puts the model back on the trust path and makes Verified unprovable.
+3. **Source or cut the "67 variations" figure** (§8p) before anything feeds the RAG corpus.
+4. **Decide on Strict support repo-wide** (§8q). Currently a documented limitation, not a claim.
+5. Consider giving `ComputedEvidence` a home of its own and carrying `Finding[]` alongside the rendered lines, so structured findings survive all the way to the panel boundary instead of being flattened there. `geminiService` currently type-imports it from `aiService` to avoid a runtime cycle.
 
 **Method note.** Both modules shipped in §8m/§8n were **mutation-tested**: the implementation was deliberately broken several distinct ways and the tests re-run, to check they fail for the right reasons rather than agreeing with themselves. This found a real gap in the bookmark tests (no case had two range kinds in one document, the only arrangement where kind-matching is observable). Worth doing for every module here — a green suite on first run is not evidence.
 

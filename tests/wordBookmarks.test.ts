@@ -51,8 +51,8 @@ describe('readBookmarks — the range model', () => {
     );
 
     expect(index.bookmarks[0].end).toBeNull();
-    const problem = index.problems.find(p => p.kind === 'unmatched-start');
-    expect(problem?.name).toBe('Dangling');
+    const problem = index.problems.find(p => p.code === 'bookmark/unmatched-start');
+    expect(problem?.subject?.name).toBe('Dangling');
     expect(problem?.message).toContain('resolve to nothing');
     expect(problem?.remediation).toContain('w:bookmarkEnd');
   });
@@ -60,8 +60,8 @@ describe('readBookmarks — the range model', () => {
   it('reports a stray end, and admits the lost name is unrecoverable', () => {
     const index = readBookmarks(doc(`<w:p>${run('text')}<w:bookmarkEnd w:id="9"/></w:p>`));
 
-    const problem = index.problems.find(p => p.kind === 'unmatched-end');
-    expect(problem?.id).toBe('9');
+    const problem = index.problems.find(p => p.code === 'bookmark/unmatched-end');
+    expect(problem?.subject?.id).toBe('9');
     // The end carries no name, so we can say a bookmark was lost but not which.
     expect(problem?.message).toContain('no way to tell which');
   });
@@ -74,7 +74,7 @@ describe('readBookmarks — the range model', () => {
     );
 
     expect(index.bookmarks[0].end).toBeNull();
-    expect(index.problems.map(p => p.kind).sort()).toEqual(['unmatched-end', 'unmatched-start']);
+    expect(index.problems.map(p => p.code).sort()).toEqual(['bookmark/unmatched-end', 'bookmark/unmatched-start']);
   });
 
   it('keeps the kinds separate when a document contains both', () => {
@@ -90,8 +90,8 @@ describe('readBookmarks — the range model', () => {
 
     expect(index.byName.get('Fine')![0].end).not.toBeNull();
     expect(index.byName.get('Broken')![0].end).toBeNull();
-    expect(index.problems.find(p => p.kind === 'unmatched-start')?.name).toBe('Broken');
-    expect(index.problems.find(p => p.kind === 'unmatched-end')?.id).toBe('5');
+    expect(index.problems.find(p => p.code === 'bookmark/unmatched-start')?.subject?.name).toBe('Broken');
+    expect(index.problems.find(p => p.code === 'bookmark/unmatched-end')?.subject?.id).toBe('5');
   });
 
   it('treats move bookmarks as their own kind of range', () => {
@@ -115,7 +115,7 @@ describe('readBookmarks — what silently loses a range', () => {
       )
     );
 
-    const problem = index.problems.find(p => p.kind === 'duplicate-id');
+    const problem = index.problems.find(p => p.code === 'bookmark/duplicate-id');
     expect(problem?.message).toContain('"A"');
     expect(problem?.message).toContain('"B"');
   });
@@ -142,7 +142,7 @@ describe('readBookmarks — what silently loses a range', () => {
       )
     );
 
-    expect(index.problems.filter(p => p.kind === 'duplicate-name')).toHaveLength(1);
+    expect(index.problems.filter(p => p.code === 'bookmark/duplicate-name')).toHaveLength(1);
     expect(index.byName.get('Dup')).toHaveLength(2);
   });
 
@@ -151,7 +151,7 @@ describe('readBookmarks — what silently loses a range', () => {
       doc(`<w:p><w:bookmarkEnd w:id="1"/>${run('x')}<w:bookmarkStart w:id="1" w:name="Backwards"/></w:p>`)
     );
 
-    expect(index.problems.find(p => p.kind === 'reversed-range')?.name).toBe('Backwards');
+    expect(index.problems.find(p => p.code === 'bookmark/reversed-range')?.subject?.name).toBe('Backwards');
   });
 
   it('flags a name over the 40-character cap', () => {
@@ -160,7 +160,7 @@ describe('readBookmarks — what silently loses a range', () => {
       doc(`<w:p><w:bookmarkStart w:id="1" w:name="${long}"/><w:bookmarkEnd w:id="1"/></w:p>`)
     );
 
-    expect(index.problems.find(p => p.kind === 'name-too-long')?.message).toContain('41 characters');
+    expect(index.problems.find(p => p.code === 'bookmark/name-too-long')?.message).toContain('41 characters');
   });
 
   it('accepts a name exactly at the cap', () => {
@@ -182,7 +182,7 @@ describe('readBookmarks — what silently loses a range', () => {
       doc(`<w:p><w:bookmarkStart w:id="-2" w:name="A"/><w:bookmarkEnd w:id="-2"/></w:p>`)
     );
 
-    expect(minusOne.problems.map(p => p.kind)).toContain('id-out-of-range');
+    expect(minusOne.problems.map(p => p.code)).toContain('bookmark/id-out-of-range');
     expect(minusTwo.problems).toEqual([]);
   });
 });
@@ -367,7 +367,7 @@ describe('malformed input is tolerated', () => {
   it('reports a missing name against the id that has it', () => {
     const index = readBookmarks(doc(`<w:p><w:bookmarkStart w:id="1"/><w:bookmarkEnd w:id="1"/></w:p>`));
 
-    expect(index.problems.find(p => p.kind === 'missing-name')?.id).toBe('1');
+    expect(index.problems.find(p => p.code === 'bookmark/missing-name')?.subject?.id).toBe('1');
   });
 
   it('returns an empty index for a document with no bookmarks', () => {

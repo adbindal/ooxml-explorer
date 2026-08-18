@@ -44,6 +44,7 @@
  */
 
 import { relsPathFor, resolveTarget, type PackageParts } from './packageIntegrity';
+import { finding, renderFindings, type Finding, type Severity } from './findings';
 
 /**
  * Namespace matching tolerates Strict as well as Transitional packages, which spell the
@@ -88,22 +89,33 @@ export type OleFormat = 'word' | 'excel' | 'powerpoint';
 /** How the object is bound to its data. `unknown` means the markup did not say. */
 export type OleBinding = 'embedded' | 'linked' | 'unknown';
 
-export type OleProblemKind =
-  | 'no-data-reference'
-  | 'relationship-missing'
-  | 'data-part-missing'
-  | 'binding-mismatch'
-  | 'no-preview'
-  | 'unknown-binding'
-  | 'no-prog-id';
+/**
+ * Severity and silence per kind, decided once here.
+ *
+ * `no-preview` is the only VISIBLE one: with nothing to draw, a consumer that cannot
+ * execute OLE shows blank space or an error box. Every other break leaves the page
+ * pixel-identical — which is the entire reason this analyzer exists. `no-prog-id` is a
+ * note, not damage: the object still works, you just cannot tell what owns it.
+ */
+const OLE_RULES = {
+  'no-data-reference':    { severity: 'error',   silent: true },
+  'relationship-missing': { severity: 'error',   silent: true },
+  'data-part-missing':    { severity: 'error',   silent: true },
+  'binding-mismatch':     { severity: 'warning', silent: true },
+  'no-preview':           { severity: 'warning', silent: false },
+  'unknown-binding':      { severity: 'warning', silent: true },
+  'no-prog-id':           { severity: 'note',    silent: false }
+} as const satisfies Record<string, { severity: Severity; silent: boolean }>;
 
-export interface OleProblem {
-  kind: OleProblemKind;
-  message: string;
-  remediation: string;
-  /** True when the page still renders correctly despite this problem. */
-  silent: boolean;
-}
+export type OleProblemKind = keyof typeof OLE_RULES;
+
+const oleFinding = (
+  kind: OleProblemKind,
+  part: string,
+  message: string,
+  remediation: string,
+  subject?: Record<string, string>
+): Finding => finding(`ole/${kind}`, part, message, remediation, { ...OLE_RULES[kind], subject });
 
 export interface OlePreview {
   /** 'vml' in Word and Excel, 'drawingml' in PowerPoint. */
@@ -115,6 +127,8 @@ export interface OlePreview {
 
 export interface OleObject {
   format: OleFormat;
+  /** The package part this object was found in. Relationships resolve relative to it. */
+  part: string;
   element: Element;
   binding: OleBinding;
   /** Where the binding was read from — differs per format, so state it. */
@@ -129,7 +143,7 @@ export interface OleObject {
   /** null when the target is external and so not checkable from the package. */
   dataPartExists: boolean | null;
   preview: OlePreview | null;
-  problems: OleProblem[];
+  problems: Finding[];
 }
 
 interface Relationship {
@@ -173,36 +187,33 @@ const resolveData = (
   ownerPart: string,
   rels: Map<string, Relationship> | null,
   relId: string | null,
-  problems: OleProblem[]
+  problems: Finding[]
 ): Pick<OleObject, 'dataTarget' | 'dataIsExternal' | 'dataPartExists'> => {
   if (relId === null) {
-    problems.push({
-      kind: 'no-data-reference',
-      message: 'The object names no relationship, so it has no data at all — there is nothing for a double-click to open.',
-      remediation: 'Add an r:id pointing at an oleObject relationship.',
-      silent: true
-    });
+    problems.push(oleFinding(
+      'no-data-reference', ownerPart,
+      'The object names no relationship, so it has no data at all — there is nothing for a double-click to open.',
+      'Add an r:id pointing at an oleObject relationship.'
+    ));
     return { dataTarget: null, dataIsExternal: false, dataPartExists: null };
   }
 
   if (rels === null) {
-    problems.push({
-      kind: 'relationship-missing',
-      message: `${ownerPart} has no relationship part, so relationship "${relId}" cannot be resolved and the object data cannot be found.`,
-      remediation: `Create ${relsPathFor(ownerPart)} with a relationship for "${relId}".`,
-      silent: true
-    });
+    problems.push(oleFinding(
+      'relationship-missing', ownerPart,
+      `${ownerPart} has no relationship part, so relationship "${relId}" cannot be resolved and the object data cannot be found.`,
+      `Create ${relsPathFor(ownerPart)} with a relationship for "${relId}".`
+    ));
     return { dataTarget: null, dataIsExternal: false, dataPartExists: null };
   }
 
   const rel = rels.get(relId);
   if (!rel) {
-    problems.push({
-      kind: 'relationship-missing',
-      message: `Relationship "${relId}" is referenced by the object but not declared in ${relsPathFor(ownerPart)}.`,
-      remediation: `Add a Relationship with Id="${relId}" targeting the embedded object part.`,
-      silent: true
-    });
+    problems.push(oleFinding(
+      'relationship-missing', ownerPart,
+      `Relationship "${relId}" is referenced by the object but not declared in ${relsPathFor(ownerPart)}.`,
+      `Add a Relationship with Id="${relId}" targeting the embedded object part.`
+    ));
     return { dataTarget: null, dataIsExternal: false, dataPartExists: null };
   }
 
@@ -215,12 +226,11 @@ const resolveData = (
   const target = resolveTarget(ownerPart, rel.target);
   const exists = parts[target] !== undefined;
   if (!exists) {
-    problems.push({
-      kind: 'data-part-missing',
-      message: `The object points at "${target}", which is not in the package. The preview image still renders, so the page looks unchanged and the file opens without warning — the object only fails when someone double-clicks it to edit.`,
-      remediation: `Restore ${target}, or remove the object and its relationship together.`,
-      silent: true
-    });
+    problems.push(oleFinding(
+      'data-part-missing', ownerPart,
+      `The object points at "${target}", which is not in the package. The preview image still renders, so the page looks unchanged and the file opens without warning — the object only fails when someone double-clicks it to edit.`,
+      `Restore ${target}, or remove the object and its relationship together.`
+    ));
   }
   return { dataTarget: target, dataIsExternal: false, dataPartExists: exists };
 };
@@ -232,19 +242,18 @@ const readWordObject = (
   ownerPart: string,
   rels: Map<string, Relationship> | null
 ): OleObject => {
-  const problems: OleProblem[] = [];
+  const problems: Finding[] = [];
   const ole = descendants(wObject, el => el.namespaceURI === OFFICE_NS && el.localName === 'OLEObject')[0] ?? null;
 
   // Unprefixed, PascalCase — see the file header.
   const type = ole?.getAttribute('Type') ?? null;
   const binding: OleBinding = type === 'Embed' ? 'embedded' : type === 'Link' ? 'linked' : 'unknown';
   if (binding === 'unknown') {
-    problems.push({
-      kind: 'unknown-binding',
-      message: `o:OLEObject/@Type is ${type === null ? 'absent' : `"${type}"`}; it must be "Embed" or "Link", so whether this object carries its data or points elsewhere is undetermined.`,
-      remediation: 'Set Type="Embed" for an embedded object or Type="Link" for a linked one.',
-      silent: true
-    });
+    problems.push(oleFinding(
+      'unknown-binding', ownerPart,
+      `o:OLEObject/@Type is ${type === null ? 'absent' : `"${type}"`}; it must be "Embed" or "Link", so whether this object carries its data or points elsewhere is undetermined.`,
+      'Set Type="Embed" for an embedded object or Type="Link" for a linked one.'
+    ));
   }
 
   const relId = ole ? relAttr(ole, 'id') : null;
@@ -264,6 +273,7 @@ const readWordObject = (
   return finish(
     {
       format: 'word',
+      part: ownerPart,
       element: wObject,
       binding,
       bindingEvidence: 'o:OLEObject/@Type',
@@ -284,22 +294,20 @@ const readPresentationObject = (
   ownerPart: string,
   rels: Map<string, Relationship> | null
 ): OleObject => {
-  const problems: OleProblem[] = [];
+  const problems: Finding[] = [];
   const children = Array.from(oleObj.children).filter(isPresentation);
   const hasEmbed = children.some(c => c.localName === 'embed');
   const hasLink = children.some(c => c.localName === 'link');
 
   const binding: OleBinding = hasEmbed && !hasLink ? 'embedded' : hasLink && !hasEmbed ? 'linked' : 'unknown';
   if (binding === 'unknown') {
-    problems.push({
-      kind: 'unknown-binding',
-      message:
-        hasEmbed && hasLink
+    problems.push(oleFinding(
+      'unknown-binding', ownerPart,
+      hasEmbed && hasLink
           ? 'p:oleObj declares both p:embed and p:link. They are alternatives, not options, so the object is both embedded and linked and consumers need not agree on which wins.'
           : 'p:oleObj declares neither p:embed nor p:link. In PresentationML the binding is a choice of child element, so with neither present the object states no binding at all.',
-      remediation: 'Keep exactly one of p:embed or p:link.',
-      silent: true
-    });
+      'Keep exactly one of p:embed or p:link.'
+    ));
   }
 
   const relId = relAttr(oleObj, 'id');
@@ -323,6 +331,7 @@ const readPresentationObject = (
   return finish(
     {
       format: 'powerpoint',
+      part: ownerPart,
       element: oleObj,
       binding,
       bindingEvidence: 'p:embed / p:link child element',
@@ -343,7 +352,7 @@ const readSpreadsheetObject = (
   ownerPart: string,
   rels: Map<string, Relationship> | null
 ): OleObject => {
-  const problems: OleProblem[] = [];
+  const problems: Finding[] = [];
   // @link holds a formula referring to the source. Its presence *is* the statement
   // that the object is linked; there is no attribute that says "embedded".
   const binding: OleBinding = oleObject.getAttribute('link') === null ? 'embedded' : 'linked';
@@ -354,6 +363,7 @@ const readSpreadsheetObject = (
   return finish(
     {
       format: 'excel',
+      part: ownerPart,
       element: oleObject,
       binding,
       bindingEvidence: '@link attribute presence',
@@ -385,44 +395,39 @@ const resolvePreviewTarget = (
 };
 
 /** Shared closing checks, run after every format-specific read. */
-const finish = (partial: Omit<OleObject, 'problems'>, problems: OleProblem[]): OleObject => {
+const finish = (partial: Omit<OleObject, 'problems'>, problems: Finding[]): OleObject => {
+  const ownerPart = partial.part;
   if (partial.progId === null) {
-    problems.push({
-      kind: 'no-prog-id',
-      message:
-        'No progId, so nothing identifies which application owns the embedded binary. A consumer cannot tell an embedded spreadsheet from an embedded drawing without opening the compound file.',
-      remediation: 'Set progId to the owning application, e.g. "Excel.Sheet.12" or "Package" for an embedded OOXML document.',
-      silent: true
-    });
+    problems.push(oleFinding(
+      'no-prog-id', ownerPart,
+      'No progId, so nothing identifies which application owns the embedded binary. A consumer cannot tell an embedded spreadsheet from an embedded drawing without opening the compound file.',
+      'Set progId to the owning application, e.g. "Excel.Sheet.12" or "Package" for an embedded OOXML document.'
+    ));
   }
 
   // Only meaningful for the formats whose preview is reachable from the element.
   if (partial.format !== 'excel' && partial.preview === null) {
-    problems.push({
-      kind: 'no-preview',
-      message:
-        'The object has no preview image. Unlike a missing embedding this one is visible: consumers that cannot execute OLE have nothing to draw, so the object renders as blank space or an error box.',
-      remediation: 'Add the preview image the producing application would normally write alongside the object.',
-      silent: false
-    });
+    problems.push(oleFinding(
+      'no-preview', ownerPart,
+      'The object has no preview image. Unlike a missing embedding this one is visible: consumers that cannot execute OLE have nothing to draw, so the object renders as blank space or an error box.',
+      'Add the preview image the producing application would normally write alongside the object.'
+    ));
   }
 
   if (partial.binding === 'linked' && partial.dataTarget !== null && !partial.dataIsExternal) {
-    problems.push({
-      kind: 'binding-mismatch',
-      message: `The object declares itself linked, but its relationship resolves inside the package ("${partial.dataTarget}") instead of carrying TargetMode="External". A linked object points at a file outside the document; a relationship without TargetMode does not.`,
-      remediation: 'Either set TargetMode="External" on the relationship, or change the binding to embedded.',
-      silent: true
-    });
+    problems.push(oleFinding(
+      'binding-mismatch', ownerPart,
+      `The object declares itself linked, but its relationship resolves inside the package ("${partial.dataTarget}") instead of carrying TargetMode="External". A linked object points at a file outside the document; a relationship without TargetMode does not.`,
+      'Either set TargetMode="External" on the relationship, or change the binding to embedded.'
+    ));
   }
 
   if (partial.binding === 'embedded' && partial.dataIsExternal) {
-    problems.push({
-      kind: 'binding-mismatch',
-      message: `The object declares itself embedded, but its relationship is TargetMode="External" and points at "${partial.dataTarget}" — a path on the machine that produced the file. The data is not in the package, so it will not resolve anywhere else.`,
-      remediation: 'Embed the object data as a package part, or change the binding to linked.',
-      silent: true
-    });
+    problems.push(oleFinding(
+      'binding-mismatch', ownerPart,
+      `The object declares itself embedded, but its relationship is TargetMode="External" and points at "${partial.dataTarget}" — a path on the machine that produced the file. The data is not in the package, so it will not resolve anywhere else.`,
+      'Embed the object data as a package part, or change the binding to linked.'
+    ));
   }
 
   return { ...partial, problems };
@@ -465,7 +470,10 @@ export function readOleObjects(parts: PackageParts, partPath: string): OleObject
  * test will catch them.
  */
 export function findSilentlyBrokenOleObjects(objects: OleObject[]): OleObject[] {
-  return objects.filter(o => o.problems.some(p => p.silent && p.kind !== 'no-prog-id'));
+  // `silent` now carries the whole meaning: a missing progId is unhelpful but the
+  // object still works, so OLE_RULES marks it not-silent and it drops out here without
+  // needing to be named as an exception.
+  return objects.filter(o => o.problems.some(p => p.silent));
 }
 
 /** Body parts that can carry an OLE object, in any of the three formats. */
@@ -508,7 +516,7 @@ export function computeOleEvidenceForMarkup(
       unresolved.push(`The external target "${object.dataTarget}" cannot be checked from inside the package.`);
     }
 
-    for (const problem of object.problems) lines.push(`${problem.message} ${problem.remediation}`);
+    lines.push(...renderFindings(object.problems));
   }
 
   const silent = findSilentlyBrokenOleObjects(objects);
