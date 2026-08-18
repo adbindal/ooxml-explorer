@@ -7,7 +7,7 @@ import {
 import { ThemeClasses } from '../types';
 import { runSystemChecks, LogEntry, CoverageModule } from '../services/testService';
 import { loadZipFile, readPackageParts } from '../services/zipService';
-import { checkPackageIntegrity } from '../services/packageIntegrity';
+import { analyzePackage, capabilityLedger } from '../services/analyzers';
 import { compareFindings } from '../services/findings';
 import { readRetrievalMetrics, summariseRetrieval, resetRetrievalMetrics } from '../services/retrievalMetrics';
 import {
@@ -123,9 +123,17 @@ const ValidatorView: React.FC<ValidatorViewProps> = ({ themeClasses }) => {
         try {
             const { zip } = await loadZipFile(files.a);
             const parts = await readPackageParts(zip);
-            const findings = checkPackageIntegrity(parts);
+            // Every analyzer that applies, not just package integrity. This surface
+            // previously ran one of them, so "is this file correct?" checked content
+            // types and relationships and nothing else.
+            const run = analyzePackage(parts);
+            const findings = run.findings;
+            const ledger = capabilityLedger(run);
 
-            addLog(`Inspected ${Object.keys(parts).length} parts.`, 'info');
+            addLog(`Inspected ${Object.keys(parts).length} parts with ${ledger.ran.length} analyzer(s): ${ledger.ran.map(a => a.title).join(', ')}.`, 'info');
+            if (ledger.skipped.length > 0) {
+                addLog(`Not applicable to this package: ${ledger.skipped.map(a => a.title).join(', ')}.`, 'info');
+            }
 
             // Markup compatibility is reported separately from integrity on purpose.
             // The integrity checks deliberately run against the *unresolved* markup,
@@ -160,7 +168,10 @@ const ValidatorView: React.FC<ValidatorViewProps> = ({ themeClasses }) => {
             }
 
             if (findings.length === 0) {
-                addLog('✅ No integrity problems found. Content types and relationships are internally consistent.', 'success');
+                // Deliberately narrow wording. A clean run means the checks that ran
+                // found nothing - not that the file is correct. The ledger below says
+                // which checks those were and what they cannot see.
+                addLog('✅ No problems found by the checks that ran.', 'success');
             } else {
                 const errors = findings.filter(f => f.severity === 'error').length;
                 const warnings = findings.length - errors;
@@ -176,6 +187,13 @@ const ValidatorView: React.FC<ValidatorViewProps> = ({ themeClasses }) => {
                         finding.severity === 'note' ? 'info' : finding.severity
                     );
                 }
+            }
+
+            // The honest half: what the checks that ran still cannot see. Computed from
+            // the registry, never asserted by a model.
+            if (ledger.limits.length > 0) {
+                addLog('These checks cannot establish:', 'info');
+                for (const limit of ledger.limits) addLog(`  • ${limit}`, 'info');
             }
             setIntegrityStatus('done');
         } catch (e) {
