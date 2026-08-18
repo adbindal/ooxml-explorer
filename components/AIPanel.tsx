@@ -13,12 +13,14 @@ import {
   AIDiffAnalysis
 } from '../services/geminiService';
 import { explainElement, ElementExplanation } from '../services/aiService';
+import type { ComputedEvidence } from '../services/aiService';
 import { computeEvidenceForMarkup } from '../services/wordFormattingAnalysis';
 import { computeExcelEvidenceForMarkup } from '../services/excelFormattingAnalysis';
 import { computePowerpointEvidenceForMarkup } from '../services/powerpointFormattingAnalysis';
 import { computeChartEvidenceForMarkup } from '../services/chartSemantics';
 import { computeBookmarkEvidenceForMarkup } from '../services/wordBookmarks';
 import { computeOleEvidenceForMarkup } from '../services/oleObjects';
+import { diffPackages, explainDiff } from '../services/ooxmlDiff';
 import { ThemeClasses } from '../types';
 import MarkdownContent from './MarkdownContent';
 
@@ -95,6 +97,38 @@ const ANALYSIS_TARGETS = [
     compute: computeOleEvidenceForMarkup
   }
 ] as const;
+
+/**
+ * Turns the two sides of a diff into a computed evidence bundle.
+ *
+ * A `DiffFileContext` carries one part's before and after text; several of them make
+ * up the two packages. `diffPackages` wants both as `PackageParts`, so this pivots the
+ * per-file pairs into a before-package and an after-package and diffs them together —
+ * a change that moves content between parts is only visible when they are compared as
+ * packages rather than file by file.
+ *
+ * Returns null when nothing could be derived, so the caller degrades to the previous
+ * raw-text behaviour rather than showing an empty computed block.
+ */
+const computeDiffEvidence = (files: DiffFileContext[]): ComputedEvidence | null => {
+  const before: Record<string, string> = {};
+  const after: Record<string, string> = {};
+  for (const file of files) {
+    if (typeof file.original === 'string') before[file.fileName] = file.original;
+    if (typeof file.modified === 'string') after[file.fileName] = file.modified;
+  }
+  if (Object.keys(before).length === 0 && Object.keys(after).length === 0) return null;
+
+  try {
+    const result = diffPackages(before, after);
+    const lines = explainDiff(result);
+    if (lines.length === 0) return null;
+    return { lines, unresolved: result.unresolved };
+  } catch {
+    // A malformed part must not take the whole panel down; fall back to raw text.
+    return null;
+  }
+};
 
 const buildComputedEvidence = async (
   context: AIPanelProps['context'],
@@ -298,7 +332,16 @@ const AIPanel: React.FC<AIPanelProps> = ({ onClose, context, themeClasses }) => 
             finalContext = [...finalContext, ...extraContext];
         }
 
-        const result = await analyzeDiff(finalContext, mode);
+        // Run the real semantic diff over both sides before asking the model anything.
+        // Two saves of one document differ in thousands of bytes that mean nothing -
+        // rewritten revision ids, text redistributed across runs, formatting moved
+        // between a style and direct properties. Handing the model only the raw text
+        // invites it to narrate that noise as change. `diffPackages` decides what is
+        // actually different, and `equivalent` answers the question people open a diff
+        // to ask: would Word treat these the same?
+        const computed = computeDiffEvidence(finalContext);
+
+        const result = await analyzeDiff(finalContext, mode, computed);
         setDiffResponse(result);
     } catch (e: unknown) {
         const err = e as Error;
