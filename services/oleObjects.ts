@@ -46,15 +46,28 @@
 import { relsPathFor, resolveTarget, type PackageParts } from './packageIntegrity';
 
 /**
- * Namespace matching tolerates Strict as well as Transitional packages, which use
- * different URIs (`schemas.openxmlformats.org/...` vs `purl.oclc.org/ooxml/...`) for
- * the same vocabulary. Comparing whole URIs reports every Strict package as broken.
+ * Namespace matching tolerates Strict as well as Transitional packages, which spell the
+ * same vocabulary differently. Comparing whole URIs reports every Strict package as
+ * broken.
+ *
+ * ⚠️ Strict does not merely change the host — **it also drops the year segment**, and
+ * the year sits in the middle of the URI rather than at either end:
+ *
+ *   Transitional  http://schemas.openxmlformats.org/spreadsheetml/2006/main
+ *   Strict        http://purl.oclc.org/ooxml/spreadsheetml/main
+ *
+ * So a suffix test for `/spreadsheetml/2006/main` matches Transitional only, while
+ * *looking* Strict-tolerant. Both spellings have to be accepted explicitly, which is
+ * why this takes the vocabulary name and builds the two forms itself rather than
+ * accepting a caller-supplied suffix that can silently pin one of them.
  */
-const nsEndsWith = (uri: string | null, suffix: string) => uri !== null && uri.endsWith(suffix);
+const nsIs = (uri: string | null, vocabulary: string) =>
+  uri !== null && (uri.endsWith(`/${vocabulary}/2006/main`) || uri.endsWith(`/${vocabulary}/main`));
 
-const isWordprocessing = (el: Element) => nsEndsWith(el.namespaceURI, '/wordprocessingml/2006/main');
-const isPresentation = (el: Element) => nsEndsWith(el.namespaceURI, '/presentationml/2006/main');
-const isSpreadsheet = (el: Element) => nsEndsWith(el.namespaceURI, '/spreadsheetml/2006/main');
+const isWordprocessing = (el: Element) => nsIs(el.namespaceURI, 'wordprocessingml');
+const isPresentation = (el: Element) => nsIs(el.namespaceURI, 'presentationml');
+const isSpreadsheet = (el: Element) => nsIs(el.namespaceURI, 'spreadsheetml');
+const isDrawing = (el: Element) => nsIs(el.namespaceURI, 'drawingml');
 
 const OFFICE_NS = 'urn:schemas-microsoft-com:office:office';
 const VML_NS = 'urn:schemas-microsoft-com:vml';
@@ -296,7 +309,7 @@ const readPresentationObject = (
   // slide with no object data behind it looks perfectly normal.
   const pic = children.find(c => c.localName === 'pic') ?? null;
   const blip = pic
-    ? descendants(pic, el => nsEndsWith(el.namespaceURI, '/drawingml/2006/main') && el.localName === 'blip')[0] ?? null
+    ? descendants(pic, el => isDrawing(el) && el.localName === 'blip')[0] ?? null
     : null;
   const previewRelId = blip ? relAttr(blip, 'embed') : null;
   const preview = pic
