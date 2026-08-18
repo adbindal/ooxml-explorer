@@ -144,6 +144,26 @@ export interface ResolvedFormatting {
   isOn(name: string): boolean;
 }
 
+/**
+ * Numbering-level `pPr` children Word actually honours.
+ *
+ * [MS-OI29500] on §17.9.22 states Word allows only these three as children of a
+ * numbering level's `pPr`. Passing the rest through would let a level definition set
+ * properties Word ignores, so the resolver would report formatting the user never sees.
+ */
+const NUMBERING_PPR_ALLOWED = new Set(['jc', 'ind', 'tabs']);
+
+/** Copies a numbering level's `pPr`, keeping only the children Word honours. */
+const restrictNumberingPPr = (pPr: Element): Element => {
+  const filtered = pPr.cloneNode(false) as Element;
+  for (const child of Array.from(pPr.children)) {
+    if (child.namespaceURI === W_NAMESPACE && NUMBERING_PPR_ALLOWED.has(child.localName)) {
+      filtered.appendChild(child.cloneNode(true));
+    }
+  }
+  return filtered;
+};
+
 const childElements = (parent: Element | undefined): Element[] =>
   parent ? Array.from(parent.children).filter(el => el.namespaceURI === W_NAMESPACE) : [];
 
@@ -371,6 +391,28 @@ export interface CascadeContext {
   tableStyle?: { type: ConditionalFormatType; pPr?: Element; rPr?: Element }[];
   /** Resolved level for a numbered paragraph; see wordNumbering. */
   numbering?: ResolvedNumbering | null;
+  /**
+   * How the paragraph acquired its numbering. This decides where numbering sits in
+   * the cascade, and the two placements give opposite answers.
+   *
+   * [MS-OI29500] §2.1.229 (Part 1 §17.7.2): *"Word applies the properties from a
+   * paragraph style applied to a paragraph before it applies the properties from a
+   * numbering style applied to a paragraph **via numbering properties**."* That
+   * qualifier is the whole rule:
+   *
+   *   - `paragraph` — numbering came from `w:numPr` on the paragraph, so Word applies
+   *     it AFTER the style chain and the level's `w:ind` wins.
+   *   - `style` — numbering was inherited through the paragraph style, so the ECMA
+   *     §17.7.2 order stands and the style wins.
+   *
+   * Corroborated independently by OpenXmlPowerTools, whose `FormattingAssembler`
+   * branches on exactly this distinction (`FromParagraph` vs `FromStyle`).
+   *
+   * Worth knowing: ECMA-376 contradicts itself here. §17.7.2's prose puts numbering
+   * at layer 3, but the figure on the same page orders Paragraph *above* Numbering —
+   * and the figure is the one that matches Word. The contradiction dates to 2006.
+   */
+  numberingSource?: 'paragraph' | 'style';
 }
 
 export interface RunResolutionInput extends CascadeContext {
@@ -455,15 +497,31 @@ export const resolveParagraphProperties = (
   for (const block of input.tableStyle ?? []) {
     layers.push({ label: `tableStyle:${block.type}`, container: block.pPr, isStyleLayer: false });
   }
-  // Layer 3 - numbering. The level's own w:ind overrides the paragraph style's
-  // indentation, which is why "I set an indent on my list style and nothing
-  // happened" is such a common complaint.
-  if (input.numbering?.pPr) {
-    layers.push({ label: `numbering:${input.numbering.numId}/${input.numbering.ilvl}`, container: input.numbering.pPr, isStyleLayer: false });
+  // Layer 3 - numbering, but only when it was inherited through the paragraph style.
+  // See CascadeContext.numberingSource: numbering that came from w:numPr on the
+  // paragraph is applied AFTER the style chain instead, because Word applies the
+  // paragraph style first in that case.
+  const numberingLayer = input.numbering?.pPr
+    ? {
+        label: `numbering:${input.numbering.numId}/${input.numbering.ilvl}`,
+        container: restrictNumberingPPr(input.numbering.pPr),
+        isStyleLayer: false
+      }
+    : null;
+
+  if (numberingLayer && input.numberingSource !== 'paragraph') {
+    layers.push(numberingLayer);
   }
 
   for (const style of input.paragraphStyleId ? styleChain(sheet, input.paragraphStyleId) : []) {
     layers.push({ label: `style:${style.styleId}`, container: style.pPr, isStyleLayer: false });
+  }
+
+  // Numbering from the paragraph's own w:numPr outranks the style chain, so the
+  // level's w:ind is what a reader sees - which is why "I set an indent on my list
+  // style and nothing happened" is such a common complaint.
+  if (numberingLayer && input.numberingSource === 'paragraph') {
+    layers.push(numberingLayer);
   }
 
   layers.push({ label: 'direct', container: input.directPPr, isStyleLayer: false });

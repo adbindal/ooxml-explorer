@@ -244,10 +244,20 @@ export const analyzeParagraphFormatting = (
   // Direct numbering on the paragraph overrides numbering inherited from its style,
   // so only fall back to the style when the paragraph says nothing.
   let numberingRef = readNumberingReference(pPr);
+  // Where the numbering came from decides where it sits in the cascade, and the two
+  // placements give opposite answers - see CascadeContext.numberingSource.
+  let numberingSource: 'paragraph' | 'style' = 'paragraph';
   if (numberingRef.numId === null && paragraphStyleId) {
     const style = context.styles.styles.get(paragraphStyleId);
     numberingRef = readNumberingReference(style?.pPr ?? null);
+    numberingSource = 'style';
   }
+
+  // A w:numPr carrying numId="0" says this paragraph is NOT a numbered item, and Word
+  // additionally discards the indentation inherited from the style hierarchy when it
+  // sees one. Without this a cancelled list item keeps its list indent and sits out of
+  // line with the body text around it.
+  const cancelsNumbering = numberingRef.numId === '0';
 
   let numbering: ResolvedNumbering | null = null;
   if (numberingRef.numId !== null) {
@@ -298,8 +308,18 @@ export const analyzeParagraphFormatting = (
     directPPr: pPr ?? undefined,
     insideTable: position !== null,
     tableStyle: tableStyleLayers,
-    numbering
+    numbering,
+    numberingSource
   });
+
+  if (cancelsNumbering) {
+    paragraphResult.properties.delete('ind');
+    paragraphResult.trace.push({
+      layer: 'numbering:cancelled',
+      contributed: ['ind'],
+      note: 'numId="0" cancels numbering, and Word also discards the indentation inherited from the style hierarchy when it sees one.'
+    });
+  }
 
   const runResult = run
     ? resolveRunProperties(context.styles, {
@@ -308,7 +328,8 @@ export const analyzeParagraphFormatting = (
         directRPr: directRPr ?? undefined,
         insideTable: position !== null,
         tableStyle: tableStyleLayers,
-        numbering
+        numbering,
+        numberingSource
       })
     : null;
 
