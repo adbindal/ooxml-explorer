@@ -514,6 +514,19 @@ Tests verified to fail against the old placement: restoring it breaks 2 of the 5
 ### Deliverable
 Verbatim terms → clearly permitted → genuinely ambiguous → precedent → route to certainty → fallbacks, ending with **three or four questions a lawyer can be sent as-is**. Those questions are the most reusable output even if everything else is thin.
 
+## 8k. Charts — extraction for translation (2026-08-18)
+
+`services/chartSemantics.ts` + 26 tests, `8dcb923`. Built for **converting** a chart to another format (the stated tviz case), not for rendering — different jobs, and the difference is which properties *mean* something.
+
+**Three converter questions it answers:**
+1. **Where the data lives.** Values are a literal list or a reference to a range, and a reference carries a *cache*. The cache is what the producing app wrote at save time, not live data — but a chart in a `.docx`/`.pptx` often ships no workbook, so it is frequently the only data there is. `cacheIsOnlySource` says which case applies.
+2. **Structure vs paint.** `PRESENTATIONAL_ELEMENTS` names what is safe to drop. Dropping `spPr` loses styling; dropping `order` silently reorders the series — both are "just properties" in the markup.
+3. **What will not survive.** Combination charts, log scaling, reversed axes, undrawn axes that still affect scaling, `sourceLinked` number formats — named up front.
+
+**Traps encoded:** `idx` (identity) vs `order` (display position) coincide in simple charts, which is why conflating them hides; points are **sparse with explicit indices**, so reading in document order shifts later values by one; `sourceLinked="1"` means the format comes from the source cells so `formatCode` alone misleads.
+
+⚠️ **Not yet wired to the panel.** `readChart` has no caller — charts live in their own part (`*/charts/chart*.xml`) and would need a routing entry plus the drawing→chart relationship hop.
+
 ## 9. Next actions
 
 1. ~~Research (Word, architecture, tooling, storage)~~ — done.
