@@ -423,3 +423,29 @@ export const explainChart = (model: ChartModel): string[] => {
   }
   return lines;
 };
+
+/**
+ * Panel entry point, matching the other formats' `compute…ForMarkup` shape.
+ *
+ * A chart occupies a whole part, so unlike the Word, Excel and PowerPoint analyses
+ * there is nothing to locate — if the open part is a chart, the chart *is* the subject.
+ * `rawXml` is therefore unused, and saying so here is cheaper than a caller wondering
+ * why selecting different elements gives the same answer.
+ */
+export const computeChartEvidenceForMarkup = (
+  parts: Record<string, string>
+): { lines: string[]; unresolved: string[] } | null => {
+  const entry = Object.entries(parts).find(([path]) => /charts\/chart[^/]*\.xml$/.test(path));
+  if (!entry) return null;
+
+  const model = readChart(entry[1]);
+  if (!model) return null;
+
+  return {
+    lines: [`Chart part: ${entry[0]}`, ...explainChart(model)],
+    // Both lists cap the tier below Verified, and both should: a structural problem
+    // means the model is unreliable, and a translation note means a decision has been
+    // deferred rather than resolved.
+    unresolved: [...model.problems, ...model.translationNotes]
+  };
+};

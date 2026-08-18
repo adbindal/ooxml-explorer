@@ -16,6 +16,7 @@ import { explainElement, ElementExplanation } from '../services/aiService';
 import { computeEvidenceForMarkup } from '../services/wordFormattingAnalysis';
 import { computeExcelEvidenceForMarkup } from '../services/excelFormattingAnalysis';
 import { computePowerpointEvidenceForMarkup } from '../services/powerpointFormattingAnalysis';
+import { computeChartEvidenceForMarkup } from '../services/chartSemantics';
 import { ThemeClasses } from '../types';
 import MarkdownContent from './MarkdownContent';
 
@@ -62,6 +63,14 @@ const ANALYSIS_TARGETS = [
     siblings: [] as string[],
     siblingPattern: /^ppt\/(slides|slideLayouts|slideMasters|theme)\/(_rels\/)?[^/]+$/,
     compute: computePowerpointEvidenceForMarkup
+  },
+  {
+    // Charts occupy their own part in all three formats, so this entry is
+    // format-agnostic. The chart part is self-contained - the series cache travels
+    // with it - so no siblings are needed.
+    matches: (path: string) => /charts\/chart[^/]*\.xml$/.test(path),
+    siblings: [] as string[],
+    compute: computeChartEvidenceForMarkup
   }
 ] as const;
 

@@ -279,3 +279,22 @@ describe('remediation — "what do I do to make them the same"', () => {
     }
   });
 });
+
+describe('bookmarks are content, not noise', () => {
+  it('reports a deleted bookmark rather than filtering it away', () => {
+    // Bookmarks are hyperlink targets, cross-reference anchors and TOC entries.
+    // Stripping them as noise would report "no changes" for a document that just
+    // lost every cross-reference target.
+    const before = pkg('<w:p><w:bookmarkStart w:id="1" w:name="intro"/><w:r><w:t>x</w:t></w:r><w:bookmarkEnd w:id="1"/></w:p>');
+    const after = pkg(para('x'));
+    expect(diffPackages(before, after).equivalent).toBe(false);
+  });
+
+  it('still treats _GoBack as noise, because Word writes it unprompted', () => {
+    const before = pkg('<w:p><w:bookmarkStart w:id="0" w:name="_GoBack"/><w:r><w:t>x</w:t></w:r></w:p>');
+    const after = pkg(para('x'));
+    const result = diffPackages(before, after);
+    expect(result.equivalent).toBe(true);
+    expect(result.normalized.some(n => n.rule.includes('_GoBack'))).toBe(true);
+  });
+});
