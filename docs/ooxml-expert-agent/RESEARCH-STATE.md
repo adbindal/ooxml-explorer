@@ -525,31 +525,34 @@ Verbatim terms → clearly permitted → genuinely ambiguous → precedent → r
 
 **Traps encoded:** `idx` (identity) vs `order` (display position) coincide in simple charts, which is why conflating them hides; points are **sparse with explicit indices**, so reading in document order shifts later values by one; `sourceLinked="1"` means the format comes from the source cells so `formatCode` alone misleads.
 
-⚠️ **Not yet wired to the panel.** `readChart` has no caller — charts live in their own part (`*/charts/chart*.xml`) and would need a routing entry plus the drawing→chart relationship hop.
+✅ **Wired to the panel** in `d1be6d8` via `computeChartEvidenceForMarkup(parts)` and a format-agnostic `ANALYSIS_TARGETS` entry matching `/charts\/chart[^/]*\.xml$/`. Chart parts are self-contained, so the entry declares no sibling parts.
+
+## 8l. Bookmarks were being deleted by the diff — fixed (2026-08-18)
+
+`d1be6d8`. `services/ooxmlDiff.ts` listed `bookmarkStart`/`bookmarkEnd` in `EPHEMERAL_ELEMENTS`, next to `proofErr` and `rsid`. **They are not noise.** A bookmark is the target of every hyperlink, cross-reference and TOC entry, so a document that lost all of them was reported as having *no semantic changes*.
+
+Two parts to the fix, and the second is the one that is easy to miss:
+1. Removed them from the strip list. `NOISE_BOOKMARK_NAMES = new Set(['_GoBack'])` keeps out the one that genuinely is noise — Word writes it to remember the last edit position and rewrites it on every save.
+2. **Bookmarks are direct children of `w:p`, not of `w:r`.** The atomizer only walked runs, so they stayed invisible even after surviving normalisation. `ContentAtom.kind` gained `'anchor'` and atomize now walks paragraph direct children.
 
 ## 9. Next actions
 
-1. ~~Research (Word, architecture, tooling, storage)~~ — done.
-2. ~~Write the build plan~~ — done, Part 3 above.
-3. ~~Fix the `geminiService.ts` context bug~~ — done, `3af80df`.
-4. ~~Stage 0~~ — done, see §8b. **All work is consolidated on the single branch `feat/schema-derived-rag-corpus`; `main` is untouched.**
-5. ~~Stage 1a — package integrity~~ — done, `1a7905f`. See §8c.
-6. ~~Stage 1c — surface findings in the UI~~ — done, `af11bf5`.
-7. ~~Stage 1b — MCE preprocessing~~ — done, `2ad039f`. **Stage 1 complete.**
-8. ~~Stage 2 — Word~~ — done, see §8d.
-9. **Extend Verified coverage in Word** — headers, footers, footnotes and endnotes each have their own part and their own `.rels`; the panel currently only computes for `word/document.xml`.
-10. ~~Stage 2 — Excel resolver + composition~~ — done, see §8f. Word and Excel both reach the Verified tier.
-11. **Stage 2 — PowerPoint resolver.** Placeholder match on `@idx` (slide→layout) and `@type` (notesSlide→notesMaster); layout→master matching is **undocumented**. `clrMap`/`clrMapOvr` with three disjoint colour alphabets. `a:xfrm` absent = inherit, never zero. Group transform `sx = ext.cx / chExt.cx`.
-12. Decide: which format goes next (Word done) (recommend sequencing, not parallelising — resolvers are genuinely different per format).
-13. Decide: MS-OI29500 licensing — ask or not. Gates Stage 3 only.
-14. Decide: audience (self vs onboarding engineers). If mentoring is primary, Stage 5 moves up.
+Stages 0–2 are complete for all three formats and the Verified tier is live. Remaining work is per-subsystem, tracked as tasks #11–#28.
+
+**In flight (2026-08-18)** — four subsystems the user named, each needing separate handling:
+- **#26 bookmarks** — `bookmarkStart`/`bookmarkEnd` match by **`@w:id`, not by name**; an unmatched end means the bookmark silently does not exist. `@w:id` is document-scoped and **shared with tracked-change ids**, so generated `w:ins`/`w:del` ids can collide with bookmark ids — Word rejects the file, lenient readers open it fine.
+- **#25 comments** — three parts, not one. Anchoring is `commentRangeStart`/`End` matched by `@w:id` in the body; bodies are in `comments.xml`; **threading and resolved-state live only in the w15 side-car `commentsExtended.xml`, keyed on the `w14:paraId` of the comment's last paragraph**, not on the comment id. "Is this a reply?" is unanswerable from `comments.xml` alone.
+- **#27 OLE objects** — cross-format. `p:oleObj` carries a `p:pic` thumbnail rendered in place of the real object, so **"the slide looks fine" is not evidence the embedding is intact.**
+- **#28 pivot tables** — the largest. 67 MS-OI29500 variations for Part 1 §18.10, second only to formulas. Three hops: `pivotTable/@cacheId` → `workbook.xml` `pivotCache` → `@r:id` → cache definition → `@r:id` → cache records. `@cacheId` and `@r:id` are **different identifier spaces on the same element**; conflating them is a real bug. A break at any hop is invisible from the pivot table part.
+
+**Still open:**
+- **#11** Pin a real `styles.xml` regression fixture — **blocked** on the licensing question in §8j / `LICENSING.md`.
+- **#21** Replace the substring NL fallback with BM25. Counters are live (§8h), so **measure before building**.
 
 ## 10. Known gaps at time of writing
 
-Everything researched so far is **WordprocessingML-heavy**. For the tri-format ambition these remain thin:
-
-- ~~SpreadsheetML semantics~~ — **DONE**, see §4. 
-- **PresentationML semantics** — placeholder inheritance via `p:ph/@type` and `@idx`, `clrMap`/`clrMapOvr` resolution, `p:txStyles` list-style chain, `a:fmtScheme` style references and their indexing convention, group transform math (`chOff`/`chExt`).
-- **DrawingML** — the biggest blind spot. Shared across all three formats; ~475 element declarations; **264 variations for Part 1 §21 plus 180 for §20.**
-
-Agents were dispatched on the first two. If their reports are missing from this file, they did not land.
+- ~~SpreadsheetML semantics~~ — **DONE**, see §4.
+- ~~PresentationML semantics~~ — **DONE**, see §8g; resolver shipped.
+- **DrawingML** — the largest remaining blind spot. Shared across all three formats; ~475 element declarations; **264 variations for Part 1 §21 plus 180 for §20.** Charts (§8k) cover one corner of it; shape geometry, effects and the theme style matrices are untouched.
+- **Formulas** — the single biggest MS-OI29500 cluster in SpreadsheetML, never researched.
+- **Fields** (`w:fldSimple`, `w:instrText`) — TOC, cross-references and page numbers all run through them, and they interact directly with bookmarks (#26).
