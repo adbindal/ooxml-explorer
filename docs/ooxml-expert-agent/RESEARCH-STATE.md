@@ -1,6 +1,6 @@
 # OOXML Expert Agent — Research State & Resume Point
 
-**Status:** Stages 0–2 complete (Word, Excel, PowerPoint); structured semantic diff shipped; **toggle conflict fixed, numbering conflict settled but NOT yet fixed — see §8i** (see §8b).
+**Status:** Stages 0–2 complete (Word, Excel, PowerPoint); structured semantic diff shipped; **both Word conflicts settled AND fixed — see §8i** (see §8b).
 **Last updated:** 2026-08-17
 **Purpose:** durable record so this work can resume after a session ends. If you are picking this up cold, read this file top to bottom before doing anything else.
 
@@ -464,7 +464,7 @@ Research found both answers already documented. **Prefer [MS-OI29500] over ECMA 
 
 Now reports a **divergence** ("Word applies on; a strictly conformant consumer would apply off") rather than an uncertainty. ⚠️ Caveat: reset notes cover paragraph and table styles only — no equivalent note for **character** styles, so applying it there is inference.
 
-### Numbering — conditional on provenance. 🔴 NOT YET FIXED
+### Numbering — conditional on provenance. ✅ FIXED (`c1d1969`)
 
 [MS-OI29500] **§2.1.229** (Part 1 §17.7.2, Style Hierarchy): *"Word applies the properties from a paragraph style applied to a paragraph before it applies the properties from a numbering style applied to a paragraph **via numbering properties**."*
 
@@ -478,7 +478,9 @@ OpenXmlPowerTools `FormattingAssembler.cs` lines 2163–2192 encodes exactly thi
 
 **ECMA contradicts itself:** §17.7.2's prose puts numbering at layer 3, but the **figure on the same page** orders it Document Defaults → Table → **Paragraph → Numbering** → Character → Direct. Verified by coordinate extraction *and* by rasterising the page. The figure sides with Word, and the contradiction has been there since 2006.
 
-**TO FIX:** `ParagraphResolutionInput` must carry numbering provenance; when direct, push numbering after the style chain. `wordFormattingAnalysis` already computes provenance (it falls back to the style only when `pPr` has no `numPr`) — it just needs threading through. Also worth adding: restrict numbering-level `pPr` to `jc`/`ind`/`tabs` per §17.9.22(b), and drop style-hierarchy `w:ind` when `numId` is 0.
+**Fixed.** `CascadeContext.numberingSource` carries the provenance; `wordFormattingAnalysis` sets it (`paragraph` unless it had to fall back to the style). Also implemented from the same research: numbering-level `pPr` restricted to `jc`/`ind`/`tabs` per §17.9.22(b) — a level setting `keepNext` was being honoured when Word ignores it — and style-hierarchy `w:ind` dropped when `numId="0"`, without which a cancelled list item keeps its list indent and sits out of line.
+
+Tests verified to fail against the old placement: restoring it breaks 2 of the 5.
 
 ⚠️ **LibreOffice diverges from Word here** (`SwTextNode::AreListLevelIndentsApplicableImpl`): a paragraph style setting `w:ind` *suppresses* the list level's indent. Known interop bug class.
 
