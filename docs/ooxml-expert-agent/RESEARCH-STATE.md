@@ -482,9 +482,20 @@ OpenXmlPowerTools `FormattingAssembler.cs` lines 2163–2192 encodes exactly thi
 
 ⚠️ **LibreOffice diverges from Word here** (`SwTextNode::AreListLevelIndentsApplicableImpl`): a paragraph style setting `w:ind` *suppresses* the list level's indent. Known interop bug class.
 
-## 8j. MS-OI29500 licensing — research brief (re-run this if the report was lost)
+## 8j. MS-OI29500 licensing — ✅ RESEARCH COMPLETE
 
-A research pass was in flight when the session ran low on context. **If no findings appear below this heading, it was lost — re-run using this brief.** It is cheap to repeat and the question gates the highest-value asset in the project.
+**Findings are in [`LICENSING.md`](./LICENSING.md)** — verbatim IPR notice (landing page and DOCX verified word-for-word identical), what is clearly permitted, what is genuinely ambiguous, verified precedent, contact routes, and **four questions a lawyer can be sent as-is**.
+
+### The three things that matter most
+1. ✅ **Patents are settled.** `[MS-OI29500]` is expressly covered by the Open Specification Promise — confirmed via the OSP page *and* the machine-readable Patent Map (`ows_Programs=";#OSP;#"`). Not the Community Promise.
+2. 🔴 **Copyright is not settled, and the OSP does not touch it.** Microsoft's own OSP FAQ: *"Copyrights in the Covered Specifications are not provided through the OSP."* ⚠️ **Apache POI cites the OSP as authority for a copyright question** — a widely-copied conflation, not a safe basis.
+3. 🔴 **The general Learn terms of use flatly prohibit this**, and the IPR notice is the only carve-out — *"Regardless of any other terms…"*. So the scope of that carve-out is load-bearing, not academic.
+
+**Precedent worth showing a lawyer:** Samba ships **52,098 lines** of bulk-scraped Open Specifications tables in a public GPL repo with the notice reproduced verbatim — further than we plan to go. ⚠️ But Samba holds a **separately negotiated PFIF agreement**, so show that fact at the same time. At the other end, python-docx has **zero** references and documents the same facts from its own observation of Word.
+
+**The asymmetry to notice in the notice itself:** schemas, IDLs and code samples get *"with or without modification, **any**"*; the prose gets only *"portions… as necessary"*. A structured transformation of the prose falls in that gap, and Reservation of Rights means silence is no.
+
+*(Original brief retained below in case the research is ever re-run.)*
 
 ### What to establish
 1. **The verbatim IPR notice** on an actual [MS-OI29500] document (landing page, DOCX or PDF) — Copyrights, Patents, No Trade Secrets, Reservation of Rights, Trademarks, Tools. **Quote it exactly.** Paraphrasing a licence is the failure mode to avoid; a summary of licence terms is worth less than a URL.
