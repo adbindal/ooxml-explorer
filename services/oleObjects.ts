@@ -455,6 +455,68 @@ export function findSilentlyBrokenOleObjects(objects: OleObject[]): OleObject[] 
   return objects.filter(o => o.problems.some(p => p.silent && p.kind !== 'no-prog-id'));
 }
 
+/** Body parts that can carry an OLE object, in any of the three formats. */
+const OLE_HOST_PART =
+  /^(?:word\/(?:document\d*|header[^/]*|footer[^/]*|footnotes\d*|endnotes\d*)\.xml|xl\/worksheets\/[^/]+\.xml|ppt\/slides\/[^/]+\.xml)$/;
+
+/**
+ * Evidence lines for the AI panel, format-agnostic.
+ *
+ * The point of surfacing this is that nothing else will: an object with no data behind
+ * it renders identically to one that is intact, so neither the user nor a screenshot
+ * test can see the difference.
+ */
+export function computeOleEvidenceForMarkup(
+  parts: Record<string, string>
+): { lines: string[]; unresolved: string[] } | null {
+  const hostPath = Object.keys(parts).find(path => OLE_HOST_PART.test(path));
+  if (hostPath === undefined) return null;
+
+  const objects = readOleObjects(parts, hostPath);
+  if (objects.length === 0) return null;
+
+  const lines: string[] = [];
+  const unresolved: string[] = [];
+
+  lines.push(`${hostPath} contains ${objects.length} OLE object(s).`);
+
+  for (const object of objects) {
+    const what = object.progId ?? 'an unidentified application';
+    lines.push(
+      `An OLE object owned by ${what}, declared ${object.binding} (read from ${object.bindingEvidence}), ` +
+        `with its data at ${object.dataTarget ?? 'no resolvable target'}.`
+    );
+
+    const present = oleDataIsPresent(object);
+    if (present === null) {
+      lines.push(
+        'Whether the data resolves cannot be determined from the package: the target is external, so it lives on the machine that produced the file.'
+      );
+      unresolved.push(`The external target "${object.dataTarget}" cannot be checked from inside the package.`);
+    }
+
+    for (const problem of object.problems) lines.push(`${problem.message} ${problem.remediation}`);
+  }
+
+  const silent = findSilentlyBrokenOleObjects(objects);
+  if (silent.length > 0) {
+    lines.push(
+      `${silent.length} of these object(s) will render exactly as intended and are broken anyway — the preview image is intact while the embedded data is not, so no visual check will catch this.`
+    );
+  }
+
+  // The relationship resolves and the part exists; whether the bytes are a valid
+  // compound file for the declared progId is a different question and not one this
+  // code can answer.
+  if (objects.some(o => o.dataPartExists === true)) {
+    unresolved.push(
+      'The embedded binaries were confirmed present but not opened, so whether their contents match the declared progId is unverified.'
+    );
+  }
+
+  return { lines, unresolved };
+}
+
 /**
  * Whether an object's data is actually present, stated plainly.
  *

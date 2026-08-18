@@ -5,7 +5,8 @@ import {
   findMarkupIdCollisions,
   nextSafeMarkupId,
   findBookmarkReferences,
-  MAX_BOOKMARK_NAME_LENGTH
+  MAX_BOOKMARK_NAME_LENGTH,
+  computeBookmarkEvidenceForMarkup
 } from '../services/wordBookmarks';
 
 const W = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
@@ -374,5 +375,89 @@ describe('malformed input is tolerated', () => {
 
     expect(index.bookmarks).toEqual([]);
     expect(index.problems).toEqual([]);
+  });
+});
+
+describe('computeBookmarkEvidenceForMarkup — panel wiring', () => {
+  const part = (body: string) => ({
+    'word/document.xml': `<?xml version="1.0"?><w:document ${W}><w:body>${body}</w:body></w:document>`
+  });
+
+  it('returns null when the part has no bookmarks, so the panel degrades quietly', () => {
+    expect(computeBookmarkEvidenceForMarkup(part(`<w:p>${run('plain')}</w:p>`), '')).toBeNull();
+  });
+
+  it('returns null for a part that carries no bookmarks at all', () => {
+    expect(computeBookmarkEvidenceForMarkup({ 'word/styles.xml': '<w:styles/>' }, '')).toBeNull();
+  });
+
+  it('counts visible and hidden bookmarks separately', () => {
+    const evidence = computeBookmarkEvidenceForMarkup(
+      part(
+        `<w:p><w:bookmarkStart w:id="1" w:name="Chapter"/><w:bookmarkEnd w:id="1"/>` +
+          `<w:bookmarkStart w:id="2" w:name="_Toc99"/><w:bookmarkEnd w:id="2"/></w:p>`
+      ),
+      ''
+    );
+
+    expect(evidence!.lines[0]).toContain('2 bookmark range(s): 1 user-visible, 1 hidden');
+  });
+
+  it('reports the covered text of the selected bookmark', () => {
+    const evidence = computeBookmarkEvidenceForMarkup(
+      part(`<w:p><w:bookmarkStart w:id="1" w:name="Sel"/>${run('covered text')}<w:bookmarkEnd w:id="1"/></w:p>`),
+      '<w:bookmarkStart w:id="1" w:name="Sel"/>'
+    );
+
+    expect(evidence!.lines.some(l => l.includes('covers: "covered text"'))).toBe(true);
+  });
+
+  it('says a selected bookmark is unreferenced without calling it an error', () => {
+    const evidence = computeBookmarkEvidenceForMarkup(
+      part(`<w:p><w:bookmarkStart w:id="1" w:name="Sel"/>${run('x')}<w:bookmarkEnd w:id="1"/></w:p>`),
+      '<w:bookmarkStart w:id="1" w:name="Sel"/>'
+    );
+
+    const line = evidence!.lines.find(l => l.includes('Nothing in word/document.xml references'));
+    expect(line).toContain('not itself an error');
+  });
+
+  it('caps what it claims: cross-part references go to unresolved', () => {
+    // Only the open part is read, so a reference from a header cannot be seen. The
+    // tier must be capped rather than the absence reported as fact.
+    const evidence = computeBookmarkEvidenceForMarkup(
+      part(`<w:p><w:bookmarkStart w:id="1" w:name="Sel"/><w:bookmarkEnd w:id="1"/></w:p>`),
+      '<w:bookmarkStart w:id="1" w:name="Sel"/>'
+    );
+
+    expect(evidence!.unresolved.some(u => u.includes('other parts of the package'))).toBe(true);
+  });
+
+  it('surfaces an id collision with the id to renumber from', () => {
+    const evidence = computeBookmarkEvidenceForMarkup(
+      part(
+        `<w:p><w:bookmarkStart w:id="1" w:name="A"/>` +
+          `<w:ins w:id="1" w:author="g" w:date="2026-01-01T00:00:00Z">${run('x')}</w:ins>` +
+          `<w:bookmarkEnd w:id="1"/></w:p>`
+      ),
+      ''
+    );
+
+    const line = evidence!.lines.find(l => l.includes('is used by'));
+    expect(line).toContain('Word rejects');
+    expect(line).toContain('Renumber from 2');
+  });
+
+  it('reports problems even when nothing is selected', () => {
+    const evidence = computeBookmarkEvidenceForMarkup(
+      part(`<w:p><w:bookmarkStart w:id="1" w:name="Open"/>${run('x')}</w:p>`),
+      ''
+    );
+
+    expect(evidence!.lines.some(l => l.includes('opens but never closes'))).toBe(true);
+  });
+
+  it('returns null rather than throwing on malformed XML', () => {
+    expect(computeBookmarkEvidenceForMarkup({ 'word/document.xml': '<w:document><oops>' }, '')).toBeNull();
   });
 });

@@ -17,6 +17,8 @@ import { computeEvidenceForMarkup } from '../services/wordFormattingAnalysis';
 import { computeExcelEvidenceForMarkup } from '../services/excelFormattingAnalysis';
 import { computePowerpointEvidenceForMarkup } from '../services/powerpointFormattingAnalysis';
 import { computeChartEvidenceForMarkup } from '../services/chartSemantics';
+import { computeBookmarkEvidenceForMarkup } from '../services/wordBookmarks';
+import { computeOleEvidenceForMarkup } from '../services/oleObjects';
 import { ThemeClasses } from '../types';
 import MarkdownContent from './MarkdownContent';
 
@@ -71,6 +73,26 @@ const ANALYSIS_TARGETS = [
     matches: (path: string) => /charts\/chart[^/]*\.xml$/.test(path),
     siblings: [] as string[],
     compute: computeChartEvidenceForMarkup
+  },
+  {
+    // Bookmarks are self-contained within a body part: ids are unique per part, not
+    // per package, so nothing outside the open file is needed to pair the ranges.
+    matches: (path: string) =>
+      /^word\/(?:document\d*|header[^/]*|footer[^/]*|footnotes\d*|endnotes\d*|comments\d*)\.xml$/.test(path),
+    siblings: [] as string[],
+    compute: computeBookmarkEvidenceForMarkup
+  },
+  {
+    // OLE objects appear in all three formats, so this entry is format-agnostic. The
+    // check needs the part's .rels to resolve the object data, and the target part
+    // itself to see whether it is actually there - which is the whole point.
+    matches: (path: string) =>
+      /^(?:word\/(?:document\d*|header[^/]*|footer[^/]*|footnotes\d*|endnotes\d*)\.xml|xl\/worksheets\/[^/]+\.xml|ppt\/slides\/[^/]+\.xml)$/.test(
+        path
+      ),
+    siblings: [] as string[],
+    siblingPattern: /^(?:word|xl|ppt)\/(?:.*\/)?(?:_rels\/[^/]+\.rels|embeddings\/[^/]+|media\/[^/]+)$/,
+    compute: computeOleEvidenceForMarkup
   }
 ] as const;
 
@@ -81,18 +103,26 @@ const buildComputedEvidence = async (
   const openPath = context.fileName;
   if (!openPath || !context.content) return null;
 
-  const target = ANALYSIS_TARGETS.find(t => t.matches(openPath));
-  if (!target) return null;
+  // Every matching target runs, not just the first. A word/document.xml carries
+  // formatting AND bookmarks AND possibly OLE objects, and they are independent
+  // questions - stopping at the first match silently dropped the others.
+  const targets = ANALYSIS_TARGETS.filter(t => t.matches(openPath));
+  if (targets.length === 0) return null;
 
   const parts: Record<string, string> = { [openPath]: context.content };
 
-  const pattern = 'siblingPattern' in target ? target.siblingPattern : null;
-  const wanted = pattern
-    ? (context.relatedFiles ?? []).filter(path => path !== openPath && pattern.test(path))
-    : target.siblings.filter(path => context.relatedFiles?.includes(path));
-  if (wanted.length > 0 && context.onLoadContext) {
+  // Union the sibling requests so a part is fetched once however many targets want it.
+  const wanted = new Set<string>();
+  for (const target of targets) {
+    const pattern = 'siblingPattern' in target ? target.siblingPattern : null;
+    const paths = pattern
+      ? (context.relatedFiles ?? []).filter(path => path !== openPath && pattern.test(path))
+      : target.siblings.filter(path => context.relatedFiles?.includes(path));
+    for (const path of paths) wanted.add(path);
+  }
+  if (wanted.size > 0 && context.onLoadContext) {
     try {
-      const loaded = await context.onLoadContext(wanted);
+      const loaded = await context.onLoadContext([...wanted]);
       for (const file of loaded as { fileName: string; content: string }[]) {
         if (file?.fileName && typeof file.content === 'string') {
           parts[file.fileName] = file.content;
@@ -104,11 +134,23 @@ const buildComputedEvidence = async (
     }
   }
 
-  try {
-    return target.compute(parts, rawXml);
-  } catch {
-    return null;
+  const lines: string[] = [];
+  const unresolved: string[] = [];
+  for (const target of targets) {
+    let result: { lines: string[]; unresolved: string[] } | null = null;
+    try {
+      result = target.compute(parts, rawXml);
+    } catch {
+      // One analysis failing must not suppress the others.
+      continue;
+    }
+    if (!result) continue;
+    lines.push(...result.lines);
+    unresolved.push(...result.unresolved);
   }
+
+  if (lines.length === 0 && unresolved.length === 0) return null;
+  return { lines: [...new Set(lines)], unresolved: [...new Set(unresolved)] };
 };
 
 interface AIPanelProps {

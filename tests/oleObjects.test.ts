@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
   readOleObjects,
   findSilentlyBrokenOleObjects,
-  oleDataIsPresent
+  oleDataIsPresent,
+  computeOleEvidenceForMarkup
 } from '../services/oleObjects';
 import type { PackageParts } from '../services/packageIntegrity';
 
@@ -333,5 +334,70 @@ describe('tolerating input', () => {
 
     expect(object.binding).toBe('embedded');
     expect(object.dataPartExists).toBe(true);
+  });
+});
+
+describe('computeOleEvidenceForMarkup — panel wiring', () => {
+  it('returns null when the part has no OLE objects', () => {
+    const parts = wordPackage({
+      'word/document.xml': `<?xml version="1.0"?><w:document ${W}><w:body/></w:document>`
+    });
+
+    expect(computeOleEvidenceForMarkup(parts)).toBeNull();
+  });
+
+  it('returns null when no part in the bundle can host an OLE object', () => {
+    expect(computeOleEvidenceForMarkup({ 'word/styles.xml': '<w:styles/>' })).toBeNull();
+  });
+
+  it('names the owning application and where the binding was read from', () => {
+    const evidence = computeOleEvidenceForMarkup(wordPackage());
+
+    expect(evidence!.lines.some(l => l.includes('Excel.Sheet.12') && l.includes('o:OLEObject/@Type'))).toBe(true);
+  });
+
+  it('calls out objects that render correctly and are broken anyway', () => {
+    const parts = wordPackage();
+    delete parts['word/embeddings/oleObject1.bin'];
+    const evidence = computeOleEvidenceForMarkup(parts);
+
+    expect(evidence!.lines.some(l => l.includes('render exactly as intended and are broken anyway'))).toBe(true);
+  });
+
+  it('does not claim silent breakage when everything resolves', () => {
+    const evidence = computeOleEvidenceForMarkup(wordPackage());
+
+    expect(evidence!.lines.some(l => l.includes('broken anyway'))).toBe(false);
+  });
+
+  it('caps the claim: a present binary is not a validated binary', () => {
+    // The relationship resolves and the part exists. Whether the bytes are a valid
+    // compound file for the declared progId is a different question, and asserting
+    // it would be exactly the kind of unearned confidence the tier exists to prevent.
+    const evidence = computeOleEvidenceForMarkup(wordPackage());
+
+    expect(evidence!.unresolved.some(u => u.includes('not opened'))).toBe(true);
+  });
+
+  it('sends an unresolvable external target to unresolved, not to problems', () => {
+    const parts = wordPackage({
+      'word/document.xml': `<?xml version="1.0"?><w:document ${W} ${O} ${V} ${R}><w:body><w:p><w:r><w:object>
+        <v:shape><v:imagedata r:id="rId5"/></v:shape>
+        <o:OLEObject Type="Link" ProgID="Excel.Sheet.12" r:id="rId4"/>
+      </w:object></w:r></w:p></w:body></w:document>`,
+      'word/_rels/document.xml.rels': rels(
+        rel('rId4', 'oleObject', 'file:///C:/book.xlsx', true) + rel('rId5', 'image', 'media/image1.emf')
+      )
+    });
+    const evidence = computeOleEvidenceForMarkup(parts);
+
+    expect(evidence!.unresolved.some(u => u.includes('cannot be checked from inside the package'))).toBe(true);
+  });
+
+  it('works for a slide as well as a document', () => {
+    const evidence = computeOleEvidenceForMarkup(slidePackage());
+
+    expect(evidence!.lines[0]).toContain('ppt/slides/slide1.xml');
+    expect(evidence!.lines.some(l => l.includes('p:embed / p:link child element'))).toBe(true);
   });
 });
