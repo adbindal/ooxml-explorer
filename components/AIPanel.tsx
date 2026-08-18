@@ -23,6 +23,8 @@ import { computeOleEvidenceForMarkup } from '../services/oleObjects';
 import { computeCommentEvidenceForMarkup } from '../services/wordComments';
 import { computePivotEvidenceForMarkup } from '../services/excelPivotTables';
 import { diffPackages, explainDiff } from '../services/ooxmlDiff';
+import { diffFindings } from '../services/analyzers';
+import { renderFindings } from '../services/findings';
 import { ThemeClasses } from '../types';
 import MarkdownContent from './MarkdownContent';
 
@@ -141,6 +143,31 @@ const computeDiffEvidence = (files: DiffFileContext[]): ComputedEvidence | null 
   try {
     const result = diffPackages(before, after);
     const lines = explainDiff(result);
+
+    // What the change did to the HEALTH of the package, which the structural diff
+    // cannot say. A dropped OLE embedding is one removed part and looks like any other
+    // removed part; here it becomes an introduced finding that says the document still
+    // renders correctly and is broken anyway.
+    const delta = diffFindings(before, after);
+    if (delta.introduced.length > 0) {
+      lines.push(
+        `This change INTRODUCES ${delta.introduced.length} problem(s) that the earlier file did not have:`,
+        ...renderFindings(delta.introduced).map(line => `  ${line}`)
+      );
+    }
+    if (delta.resolved.length > 0) {
+      lines.push(
+        `It also FIXES ${delta.resolved.length} problem(s) present in the earlier file:`,
+        ...renderFindings(delta.resolved).map(line => `  ${line}`)
+      );
+    }
+    if (delta.unchanged.length > 0) {
+      // Named so nobody attributes a pre-existing fault to this change.
+      lines.push(
+        `${delta.unchanged.length} problem(s) are present in both files and are not caused by this change.`
+      );
+    }
+
     if (lines.length === 0) return null;
     return { lines, unresolved: result.unresolved };
   } catch {
