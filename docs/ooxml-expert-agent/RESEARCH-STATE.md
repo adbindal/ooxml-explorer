@@ -535,15 +535,51 @@ Two parts to the fix, and the second is the one that is easy to miss:
 1. Removed them from the strip list. `NOISE_BOOKMARK_NAMES = new Set(['_GoBack'])` keeps out the one that genuinely is noise — Word writes it to remember the last edit position and rewrites it on every save.
 2. **Bookmarks are direct children of `w:p`, not of `w:r`.** The atomizer only walked runs, so they stayed invisible even after surviving normalisation. `ContentAtom.kind` gained `'anchor'` and atomize now walks paragraph direct children.
 
+## 8m. Bookmarks — the id/name split (2026-08-18)
+
+`services/wordBookmarks.ts` + 31 tests, `d0551a7`. Task #26 closed.
+
+**The model.** A bookmark is a pair of empty markers matched by **`@w:id`**, and **only the start carries `@w:name`**. So a lost end does not make a malformed bookmark — it makes *no* bookmark, and every hyperlink, cross-reference and TOC entry aimed at that name resolves to nothing while the file still opens and looks right. Because the end has no name, an unmatched end tells you a bookmark was lost but **not which one** — the module says so rather than inventing an answer.
+
+**The corruption class, and its provenance.** `@w:id` is drawn from a space shared with tracked changes (`w:ins`, `w:del`), permissions (`w:permStart`) and every `*Change` element — 22 element types. A generator numbering its revisions from 1 collides with existing bookmark ids in any document that has bookmarks, and documents routinely have hundreds. **Word rejects the file as corrupt; macOS Preview and most libraries open it fine**, so the bug passes every test and reaches users. `findMarkupIdCollisions` detects it; `nextSafeMarkupId` returns the id to start from — one past the max across *all* element types, never one past the max bookmark id.
+
+⚠️ This is **observed Word behaviour**, sourced to a concrete generator bug report ([anthropics/skills#489](https://github.com/anthropics/skills/issues/489)), **not a rule stated in ECMA-376**. The spec assigns `w:id` per element type without declaring the space shared; Word is stricter than the schema. Recorded as behaviour with its source, in line with §8's honesty ledger.
+
+**Verified against SDK schema data** (`CT_Bookmark`, `CT_MarkupRange`, `CT_MoveBookmark`, `CT_Markup`): `@w:name` and `@w:id` both required on `bookmarkStart`; **name capped at 40 characters**; `@w:id` is `ST_NonNegativeDecimalNumber` unioned with signed numbers ≤ -2, so **-1 is the one integer the union excludes**.
+
+`moveFromRangeStart`/`moveToRangeStart` are separate range kinds (`CT_MoveBookmark`) that must not close a `bookmarkStart` sharing their id.
+
+## 8n. OLE objects — the preview that hides breakage (2026-08-18)
+
+`services/oleObjects.ts` + 24 tests, `f6bfc91`. Task #27 closed. Cross-format.
+
+**The failure.** Every OLE object ships a preview image, because no OOXML consumer can render a foreign binary. Drop the embedding, keep the preview, and the page is **pixel-identical** — Word and PowerPoint open the file without complaint and it breaks months later on a double-click. *"It renders correctly" is not evidence the object survived.* `findSilentlyBrokenOleObjects` lists exactly the objects that look fine and are broken anyway, and deliberately excludes a missing preview (visible) and a missing `progId` (still works).
+
+**The same concept, three incompatible expressions** — directly relevant to the spec-translation use case, because a converter cannot ask one question of all three:
+
+| Format | Embedded-or-linked | Preview |
+|---|---|---|
+| Word | `o:OLEObject/@Type` = `Embed`\|`Link` — an **attribute** | sibling VML `v:shape > v:imagedata/@r:id` |
+| PowerPoint | `p:embed` vs `p:link` — a **child element choice** | `p:oleObj > p:pic`, a real DrawingML picture |
+| Excel | `@link` **presence** (a formula reference) | VML shape in the sheet's legacy drawing, reached from the worksheet |
+
+⚠️ **`o:OLEObject` attributes are unprefixed and PascalCase** — `Type`, `ProgID`, `ShapeID`, `DrawAspect`, `ObjectID`, `UpdateMode` — against the lowerCamelCase convention the rest of OOXML follows. A namespaced lowercase lookup finds nothing, twice over. Verified against the SDK schema for `urn:schemas-microsoft-com:office:office`.
+
+`oleDataIsPresent` returns **null** for a linked object rather than false: the target is outside the package by definition, so *"cannot check"* and *"is missing"* stay distinct and only one is a defect. Same discipline as the Verified tier.
+
 ## 9. Next actions
 
 Stages 0–2 are complete for all three formats and the Verified tier is live. Remaining work is per-subsystem, tracked as tasks #11–#28.
 
-**In flight (2026-08-18)** — four subsystems the user named, each needing separate handling:
-- **#26 bookmarks** — `bookmarkStart`/`bookmarkEnd` match by **`@w:id`, not by name**; an unmatched end means the bookmark silently does not exist. `@w:id` is document-scoped and **shared with tracked-change ids**, so generated `w:ins`/`w:del` ids can collide with bookmark ids — Word rejects the file, lenient readers open it fine.
-- **#25 comments** — three parts, not one. Anchoring is `commentRangeStart`/`End` matched by `@w:id` in the body; bodies are in `comments.xml`; **threading and resolved-state live only in the w15 side-car `commentsExtended.xml`, keyed on the `w14:paraId` of the comment's last paragraph**, not on the comment id. "Is this a reply?" is unanswerable from `comments.xml` alone.
-- **#27 OLE objects** — cross-format. `p:oleObj` carries a `p:pic` thumbnail rendered in place of the real object, so **"the slide looks fine" is not evidence the embedding is intact.**
-- **#28 pivot tables** — the largest. 67 MS-OI29500 variations for Part 1 §18.10, second only to formulas. Three hops: `pivotTable/@cacheId` → `workbook.xml` `pivotCache` → `@r:id` → cache definition → `@r:id` → cache records. `@cacheId` and `@r:id` are **different identifier spaces on the same element**; conflating them is a real bug. A break at any hop is invisible from the pivot table part.
+Four subsystems the user named, each needing separate handling:
+- ~~**#26 bookmarks**~~ — **DONE**, see §8m.
+- ~~**#27 OLE objects**~~ — **DONE**, see §8n.
+- **#25 comments** — three parts, not one. Anchoring is `commentRangeStart`/`End` matched by `@w:id` in the body; bodies are in `comments.xml`; **threading and resolved-state live only in the w15 side-car `commentsExtended.xml`, keyed on the `w14:paraId` of the comment's last paragraph**, not on the comment id. "Is this a reply?" is unanswerable from `comments.xml` alone. `wordBookmarks.ts` is the model — same paired-range problem.
+- **#28 pivot tables** — the largest. 67 MS-OI29500 variations for Part 1 §18.10, second only to formulas. Three hops: `pivotTable/@cacheId` → `workbook.xml` `pivotCache` → `@r:id` → cache definition → `@r:id` → cache records. `@cacheId` and `@r:id` are **different identifier spaces on the same element**; conflating them is a real bug. A break at any hop is invisible from the pivot table part. `oleObjects.ts` is the model — same broken-chain problem.
+
+**Method note.** Both modules shipped in §8m/§8n were **mutation-tested**: the implementation was deliberately broken several distinct ways and the tests re-run, to check they fail for the right reasons rather than agreeing with themselves. This found a real gap in the bookmark tests (no case had two range kinds in one document, the only arrangement where kind-matching is observable). Worth doing for every module here — a green suite on first run is not evidence.
+
+**Not yet wired to the panel.** `wordBookmarks.ts` and `oleObjects.ts` have no caller in `components/AIPanel.tsx`. Both need an `ANALYSIS_TARGETS` entry, as charts got in `d1be6d8`. OLE is format-agnostic and would apply to Word, Excel and PowerPoint body parts alike.
 
 **Still open:**
 - **#11** Pin a real `styles.xml` regression fixture — **blocked** on the licensing question in §8j / `LICENSING.md`.
