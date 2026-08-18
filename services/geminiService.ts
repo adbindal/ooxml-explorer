@@ -1,6 +1,10 @@
 import { GoogleGenAI } from "@google/genai";
 import { z } from "zod";
 import { getActiveAIProvider } from "./aiProvider";
+// Type-only: aiService imports getApiKey from this module, so a value import here
+// would close a runtime cycle. `import type` is erased at compile time, so it cannot.
+// ComputedEvidence wants a home of its own once the Finding type lands.
+import type { ComputedEvidence } from "./aiService";
 import {
   CLOUD_CONTENT_BUDGET_CHARS,
   allocateContentBudget,
@@ -342,10 +346,18 @@ export const analyzeFile = async (
 
 /**
  * Analyzes file differences in Diff Mode.
+ *
+ * `computed` carries the semantic diff produced by `services/ooxmlDiff.ts` — an actual
+ * derivation over both packages, not a retrieval. It matters most here of anywhere in
+ * the app: a raw XML diff of two saves of the same document is mostly rewritten
+ * revision ids and text redistributed across runs, and a model shown only the raw text
+ * will describe that noise as change. The computed block states plainly which
+ * differences are real, and whether the two files are equivalent despite them.
  */
 export const analyzeDiff = async (
     files: DiffFileContext[],
-    mode: 'summary' | 'technical'
+    mode: 'summary' | 'technical',
+    computed?: ComputedEvidence | null
 ): Promise<AIDiffAnalysis> => {
   const parsedFiles = z.array(DiffFileContextSchema).min(1, "No files provided for diff analysis.").safeParse(files);
   if (!parsedFiles.success) {
@@ -354,6 +366,24 @@ export const analyzeDiff = async (
   files = parsedFiles.data;
   try {
     const activeProvider = await getActiveAIProvider();
+
+    // Same contract as the element explainer: computed facts outrank the model's
+    // reading of the raw XML, and what could not be established is named so it cannot
+    // be filled in with a plausible guess.
+    const computedBlock = computed && computed.lines.length > 0
+      ? `
+      [COMPUTED DIFF - derived from both packages, authoritative]
+      ${computed.lines.join('\n      ')}
+      ${computed.unresolved.length > 0
+        ? `\n      The following could NOT be established. Do not state or guess them:\n      ${computed.unresolved.join('\n      ')}`
+        : ''}
+
+      Treat the computed diff above as authoritative. Where it disagrees with your own
+      reading of the raw XML below, the computed diff is correct. In particular, do not
+      report a difference it does not list - the raw text differs in ways that carry no
+      meaning, and those have already been filtered out.
+      `
+      : '';
 
     // A diff carries two versions per file, so the budget is split across 2N bodies -
     // the previous per-side cap let a single two-file diff reach four times its limit.
@@ -409,6 +439,7 @@ export const analyzeDiff = async (
     if (activeProvider === 'chrome-local') {
       return await promptLocalModelForJson(systemInstruction, (budgetChars) => `
       ${prompt}
+      ${computedBlock}
 
       Respond with ONLY a single JSON object - no markdown formatting, no backticks, no commentary
       before or after. Here is an EXAMPLE of a correctly formatted response for a different diff
@@ -432,6 +463,7 @@ export const analyzeDiff = async (
         },
         contents: `
         ${prompt}
+        ${computedBlock}
 
         ${buildFilesContext(CLOUD_CONTENT_BUDGET_CHARS)}
         `
