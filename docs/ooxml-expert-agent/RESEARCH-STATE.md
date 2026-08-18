@@ -567,15 +567,74 @@ Two parts to the fix, and the second is the one that is easy to miss:
 
 `oleDataIsPresent` returns **null** for a linked object rather than false: the target is outside the package by definition, so *"cannot check"* and *"is missing"* stay distinct and only one is a defect. Same discipline as the Verified tier.
 
+## 8o. Comments — three parts, and the one Word may not have written (2026-08-18)
+
+`services/wordComments.ts` + 43 tests, `878c26d`. Task #25 closed. Built by a subagent; facts below were re-verified before merging.
+
+**The anchor** is a range (`commentRangeStart`/`End` matched by `@w:id`) plus a `commentReference` marking the display point — the same paired-marker problem as bookmarks, and `commentRangeText` keeps the same three-state contract as `bookmarkText`: `null` = no answer exists, `''` = anchored to a point, text = the covered span.
+
+**Threading is in a side-car Word may not have written.** `w15:commentEx` in `word/commentsExtended.xml` is keyed on the **`w14:paraId` of the comment's *last* paragraph**, not on the comment id. So *"is this a reply?"* and *"is this resolved?"* are unanswerable from `comments.xml` alone. When the side-car is absent `threadingKnown` is false and `commentThreads()` returns **`null`, not a flat list of roots** — because a flat list of roots is exactly what a threaded document missing its side-car looks like, so returning one would manufacture the confusion the module exists to prevent.
+
+🔴 **My brief to the agent had the namespace URIs wrong, and the agent caught it.** Independently re-verified against `data/namespaces.json`:
+
+| | Correct | What I wrote |
+|---|---|---|
+| w15 | `http://schemas.microsoft.com/office/word/2012/wordml` | …`/2012/wordml/main` |
+| w14 | `http://schemas.microsoft.com/office/word/2010/wordml` | …`/2010/wordml/main` |
+
+**These Microsoft extension namespaces have no `/main` segment**, unlike the ECMA ones. Two mutants confirm it: adding `/main` to either URI fails 15 tests.
+
+Also verified: `w14:paraId` is 4-byte hex on `CT_P`; `w:author` required (max 255), `w:initials` max 9; the comment markers are `CT_MarkupRange`/`CT_Markup`, so they take **the same `@w:id` union as bookmarks** (-1 excluded).
+
+**Left unverified, deliberately:** whether Word *requires* a `commentReference` to display a comment (the schema makes all three markers optional, so the problem is worded as likely non-display, not a violation); whether `w15:paraIdParent` names the thread root or the immediate parent (`commentThreads` walks transitively so both readings agree on membership); and whether Word regenerates a missing `commentsExtended.xml` or discards threading on save.
+
+## 8p. Pivot tables — the three-hop chain (2026-08-18)
+
+`services/excelPivotTables.ts` + 41 tests, `d99046d`. Task #28 closed. Built by a subagent.
+
+**The chain**, and the point of the module is naming *which hop* broke, because none of them is visible from the pivot table part:
+
+```
+pivotTable1.xml @cacheId → workbook.xml pivotCache @r:id → cacheDefinition @r:id → cacheRecords
+```
+
+**`@cacheId` and `@r:id` are different identifier spaces on the same element**, both required — verified: `CT_PivotCache` declares both with `RequiredValidator`. Conflating them is a real bug and one mutant proves the test catches it.
+
+**Two schema facts that changed the design:**
+- `CT_PivotCacheDefinition`'s `@r:id` has **no** RequiredValidator, so **absent cache records are not a schema violation** — a cache set to refresh on load legitimately has none. That is why `PivotProblem` carries a `severity: 'error' | 'note'` the other modules don't need: it keeps a legitimate state off the error list instead of forcing a choice between calling it damage and dropping it.
+- **`CT_Worksheet`'s content model contains no pivot child at all**, so worksheet→pivotTable is a purely implicit relationship — nothing in the worksheet XML names it. Hence orphan detection: a pivot part under `xl/pivotTables/` that no relationship points at.
+
+⚠️ **The "67 MS-OI29500 variations" figure is unverified.** It came from an earlier research pass in this project and no MS-OI29500 text was consulted when writing the module; it is marked hearsay in the code. **Source it or cut it before it feeds the RAG corpus** — the honesty ledger applies to our own second-hand numbers too.
+
+Also flagged not-verified: that `pivotFields` runs parallel to `cacheFields` (nothing in the schema ties them; the cache field count is used as the bound for both, and says so), and `@x = -2` as the "values" pseudo-field (`@x` is a plain Int32 with no facet — it is convention, excluded from range checks so multi-measure pivots do not false-positive).
+
+## 8q. ISO Strict was decorative in `oleObjects.ts` — fixed (2026-08-18)
+
+`76b19ab`. Found by the pivot agent while following that file as a pattern.
+
+**Strict does not merely swap the host — it drops the year, which sits in the middle of the URI:**
+
+```
+Transitional  http://schemas.openxmlformats.org/spreadsheetml/2006/main
+Strict        http://purl.oclc.org/ooxml/spreadsheetml/main
+```
+
+Matching a `/spreadsheetml/2006/main` suffix therefore matches **Transitional only, while looking Strict-tolerant**. Every Strict document, workbook and deck reported zero OLE objects — the exact silent-failure shape the module exists to catch, in the module itself.
+
+🔴 **The test that should have caught it asserted a URI that does not exist** (`purl.oclc.org/ooxml/wordprocessingml/2006/main`), so it passed against the broken matcher and certified support the code never had. Replaced with three real Strict cases across all three formats; reverting the matcher now fails all three. The helper takes a *vocabulary name* and builds both spellings itself, so a caller can no longer pin one form by accident.
+
+**Known gap this exposes:** the Word and Excel resolvers (`wordStyleResolver`, `wordBookmarks`, `excelStyleResolver`, …) match element namespaces against **exact Transitional constants**, so they read nothing out of Strict packages either. Unlike `oleObjects` they never *claimed* otherwise, so this is a limitation rather than a false claim — but it is repo-wide and undocumented. Relationship-type matching is fine everywhere (it matches the trailing segment, which Strict preserves).
+
 ## 9. Next actions
 
 Stages 0–2 are complete for all three formats and the Verified tier is live. Remaining work is per-subsystem, tracked as tasks #11–#28.
 
-Four subsystems the user named, each needing separate handling:
-- ~~**#26 bookmarks**~~ — **DONE**, see §8m.
-- ~~**#27 OLE objects**~~ — **DONE**, see §8n.
-- **#25 comments** — three parts, not one. Anchoring is `commentRangeStart`/`End` matched by `@w:id` in the body; bodies are in `comments.xml`; **threading and resolved-state live only in the w15 side-car `commentsExtended.xml`, keyed on the `w14:paraId` of the comment's last paragraph**, not on the comment id. "Is this a reply?" is unanswerable from `comments.xml` alone. `wordBookmarks.ts` is the model — same paired-range problem.
-- **#28 pivot tables** — the largest. 67 MS-OI29500 variations for Part 1 §18.10, second only to formulas. Three hops: `pivotTable/@cacheId` → `workbook.xml` `pivotCache` → `@r:id` → cache definition → `@r:id` → cache records. `@cacheId` and `@r:id` are **different identifier spaces on the same element**; conflating them is a real bug. A break at any hop is invisible from the pivot table part. `oleObjects.ts` is the model — same broken-chain problem.
+All four subsystems the user named are **DONE**: #26 bookmarks (§8m), #27 OLE (§8n), #25 comments (§8o), #28 pivot tables (§8p).
+
+**Next, in rough priority order:**
+1. **Wire comments and pivot tables into the panel.** Bookmarks and OLE have `ANALYSIS_TARGETS` entries; `wordComments.ts` and `excelPivotTables.ts` have **no caller yet**. Both need a `compute*EvidenceForMarkup` in the shape the others use. Comments need three sibling parts fetched (`comments.xml`, `commentsExtended.xml`, `commentsIds.xml`); pivot tables need the workbook, its rels, and the cache parts.
+2. **Source or cut the "67 variations" figure** (§8p) before anything feeds the RAG corpus.
+3. **Decide on Strict support repo-wide** (§8q). Currently a documented limitation, not a claim.
 
 **Method note.** Both modules shipped in §8m/§8n were **mutation-tested**: the implementation was deliberately broken several distinct ways and the tests re-run, to check they fail for the right reasons rather than agreeing with themselves. This found a real gap in the bookmark tests (no case had two range kinds in one document, the only arrangement where kind-matching is observable). Worth doing for every module here — a green suite on first run is not evidence.
 
