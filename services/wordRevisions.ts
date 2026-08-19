@@ -264,24 +264,30 @@ const nearest = (el: Element, local: string): Element | null => {
 };
 
 /**
+ * `w:pPr` and `w:rPr` hold properties, never content — and `w:pPr/w:rPr/w:ins` is a leaf
+ * element in the schema, so it cannot legally contain a run at all.
+ *
+ * Text found inside either is out of schema and is not part of what the document says, in
+ * any reading. Scoring it would let a malformed paragraph mark inject words into the
+ * accepted text, which is the worst possible way to be wrong about a file that is already
+ * broken. This is also why `enclosingRevisions` needs no special case for paragraph-mark
+ * revisions: no text ever reaches it from inside one.
+ */
+const isInsideProperties = (el: Element): boolean =>
+  nearest(el, 'pPr') !== null || nearest(el, 'rPr') !== null;
+
+/**
  * The content revisions enclosing a node, innermost first.
  *
  * Revisions nest: text inserted by one author and later deleted by another sits inside a
  * `w:del` inside a `w:ins`. Both matter, and which is innermost decides whether the run
  * should be spelling its text as `w:t` or `w:delText`.
- *
- * Paragraph-mark revisions (inside `w:rPr`) are excluded: they mark the paragraph mark,
- * not the runs, and no text is ever their descendant anyway.
  */
 const enclosingRevisions = (el: Element): string[] => {
   const kinds: string[] = [];
   let node = el.parentElement;
   while (node) {
-    if (
-      node.namespaceURI === W_NAMESPACE &&
-      CONTENT_REVISIONS.has(node.localName) &&
-      !(node.parentElement && isW(node.parentElement, 'rPr'))
-    ) {
+    if (node.namespaceURI === W_NAMESPACE && CONTENT_REVISIONS.has(node.localName)) {
       kinds.push(node.localName);
     }
     node = node.parentElement;
@@ -518,6 +524,7 @@ export function readRevisions(doc: Document | Element, partPath = ''): RevisionI
   let orphanDeleted = 0;
   for (const el of elements) {
     if (!isW(el, 't') && !isW(el, 'delText')) continue;
+    if (isInsideProperties(el)) continue;
     const innermost = enclosingRevisions(el)[0] ?? null;
     const inDeletion = innermost !== null && REMOVED_BY_ACCEPT.has(innermost);
     if (isW(el, 't') && inDeletion) liveInDeletion += 1;
@@ -653,6 +660,7 @@ export function compareRevisionOutcomes(doc: Document | Element): RevisionOutcom
   const textByParagraph = new Map<Element, Element[]>();
   for (const el of elements) {
     if (!isW(el, 't') && !isW(el, 'delText')) continue;
+    if (isInsideProperties(el)) continue;
     const paragraph = nearest(el, 'p');
     if (!paragraph) continue;
     const bucket = textByParagraph.get(paragraph);

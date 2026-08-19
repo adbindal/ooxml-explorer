@@ -84,6 +84,52 @@ describe('readRevisions — what is in the file', () => {
     expect(paragraphMarkRevision(doc(para(del('gone'))).getElementsByTagName('w:p')[0])).toBeNull();
   });
 
+  it('looks only at w:pPr/w:rPr’s own children for the mark, not anywhere in the paragraph', () => {
+    // The paragraph HAS a pPr/rPr, so an early "no rPr, no mark" exit cannot decide this
+    // one — the revision has to be rejected because of where it sits. Without that, every
+    // paragraph containing a deleted run would report its mark as deleted and the
+    // accepted reading would lose a paragraph break that nothing deleted.
+    const paragraph = doc(para(del('gone'), '<w:pPr><w:rPr><w:b/></w:rPr></w:pPr>')).getElementsByTagName('w:p')[0];
+
+    expect(paragraphMarkRevision(paragraph)).toBeNull();
+
+    const body = para(del('gone'), '<w:pPr><w:rPr><w:b/></w:rPr></w:pPr>') + para(run('next'));
+    expect(compareRevisionOutcomes(doc(body)).accepted).toBe('\nnext');
+  });
+
+  it('ignores a run wrongly nested inside a paragraph-mark revision', () => {
+    // Out of schema: CT_TrackChange is a leaf, so w:pPr/w:rPr/w:del cannot contain runs.
+    // Text found there is not paragraph content and must not be scored as deleted.
+    const body = para(
+      run('body'),
+      `<w:pPr><w:rPr><w:del ${meta('9')}>${delRun('stray')}</w:del></w:rPr></w:pPr>`
+    );
+    const outcome = compareRevisionOutcomes(doc(body));
+
+    expect(outcome.accepted).toBe('body');
+    expect(outcome.rejected).toBe('body');
+  });
+
+  it('does not judge the spelling of text inside a paragraph mark either', () => {
+    // A w:t inside a paragraph-mark deletion is not a deleted run spelled wrongly; it is
+    // a run somewhere runs cannot go. Reporting it as live-text-in-deletion would hand
+    // the reader a fix ("use w:delText") that leaves the real fault in place.
+    const body = para(run('body'), `<w:pPr><w:rPr><w:del ${meta('9')}>${run('stray')}</w:del></w:rPr></w:pPr>`);
+
+    expect(readRevisions(doc(body)).problems.map(p => p.code)).not.toContain('revision/live-text-in-deletion');
+  });
+
+  it('treats run properties as properties too, not only paragraph properties', () => {
+    // Out of schema in the other direction: CT_RPr admits no revision elements at all.
+    // Without an w:rPr guard this text has no w:pPr above it and would be scored as
+    // inserted content, putting "stray" into the accepted reading.
+    const body = para(
+      `<w:r><w:rPr><w:ins ${meta('9')}>${run('stray')}</w:ins></w:rPr><w:t>real</w:t></w:r>`
+    );
+
+    expect(compareRevisionOutcomes(doc(body)).accepted).toBe('real');
+  });
+
   it('classifies format-only revisions, which change no character', () => {
     const index = readRevisions(
       doc(
@@ -208,16 +254,17 @@ describe('compareRevisionOutcomes — the two texts', () => {
 });
 
 describe('moves — paired by name, not by id', () => {
-  const moveBody = (fromName: string, toName: string) =>
+  /** Ids are distinct per call so two moves in one part do not collide. */
+  const moveBody = (fromName: string, toName: string, base = 1) =>
     para(
-      `<w:moveFromRangeStart w:id="1" w:name="${fromName}" w:author="Ann" w:date="2024-01-01T00:00:00Z"/>` +
-        `<w:moveFrom ${meta('2')}>${delRun('clause')}</w:moveFrom>` +
-        `<w:moveFromRangeEnd w:id="1"/>`
+      `<w:moveFromRangeStart w:id="${base}" w:name="${fromName}" w:author="Ann" w:date="2024-01-01T00:00:00Z"/>` +
+        `<w:moveFrom ${meta(String(base + 1))}>${delRun('clause')}</w:moveFrom>` +
+        `<w:moveFromRangeEnd w:id="${base}"/>`
     ) +
     para(
-      `<w:moveToRangeStart w:id="3" w:name="${toName}" w:author="Ann" w:date="2024-01-01T00:00:00Z"/>` +
-        `<w:moveTo ${meta('4')}>${run('clause')}</w:moveTo>` +
-        `<w:moveToRangeEnd w:id="3"/>`
+      `<w:moveToRangeStart w:id="${base + 2}" w:name="${toName}" w:author="Ann" w:date="2024-01-01T00:00:00Z"/>` +
+        `<w:moveTo ${meta(String(base + 3))}>${run('clause')}</w:moveTo>` +
+        `<w:moveToRangeEnd w:id="${base + 2}"/>`
     );
 
   it('pairs the two halves and names each one', () => {
@@ -239,8 +286,38 @@ describe('moves — paired by name, not by id', () => {
     expect(unpaired.find(p => p.subject?.name === 'move2')?.message).toContain('insertion');
   });
 
+  it('names each move half from the range it is actually inside', () => {
+    // Two moves in one part. Taking "the first range of the right half" would label both
+    // sources "alpha" and report a pairing that the markup does not support.
+    const index = readRevisions(doc(moveBody('alpha', 'alpha') + moveBody('beta', 'beta', 10)));
+
+    expect(index.revisions.filter(r => r.kind === 'moveFrom').map(r => r.moveName)).toEqual(['alpha', 'beta']);
+    expect(index.revisions.filter(r => r.kind === 'moveTo').map(r => r.moveName)).toEqual(['alpha', 'beta']);
+  });
+
+  it('leaves a move half outside every range unnamed rather than guessing', () => {
+    const body = moveBody('alpha', 'alpha') + para(`<w:moveFrom ${meta('20')}>${delRun('loose')}</w:moveFrom>`);
+    const index = readRevisions(doc(body));
+
+    expect(index.revisions.filter(r => r.kind === 'moveFrom').map(r => r.moveName)).toEqual(['alpha', null]);
+  });
+
+  it('does not name a source half from a destination range it happens to sit in', () => {
+    // Ranges nest and overlap freely, so a w:moveFrom can land inside a moveTo range.
+    // Only a moveFromRangeStart names a source; taking whichever range encloses it would
+    // report a pairing that does not exist.
+    const body = para(
+      `<w:moveToRangeStart w:id="1" w:name="alpha" w:author="Ann" w:date="2024-01-01T00:00:00Z"/>` +
+        `<w:moveFrom ${meta('2')}>${delRun('clause')}</w:moveFrom>` +
+        `<w:moveToRangeEnd w:id="1"/>`
+    );
+    const index = readRevisions(doc(body));
+
+    expect(index.revisions.find(r => r.kind === 'moveFrom')?.moveName).toBeNull();
+  });
+
   it('reports two source ranges sharing a name as ambiguous', () => {
-    const index = readRevisions(doc(moveBody('move1', 'move1') + moveBody('move1', 'move9')));
+    const index = readRevisions(doc(moveBody('move1', 'move1') + moveBody('move1', 'move9', 10)));
 
     const duplicate = index.problems.find(p => p.code === 'revision/duplicate-move-name');
     expect(duplicate?.subject?.name).toBe('move1');
