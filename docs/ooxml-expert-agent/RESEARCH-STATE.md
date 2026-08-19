@@ -8,10 +8,10 @@
 | | |
 |---|---|
 | **Branch** | `feat/schema-derived-rag-corpus` — **all work is here; `main` is untouched** |
-| **Tests** | 885 passing; typecheck, lint and production build clean |
+| **Tests** | 1005 passing; typecheck, lint and production build clean |
 | **Architecture** | **Complete.** Analyzer registry, one `Finding` type, question routing, capability ledger, gap log, versioned JSON report |
-| **Analyzers** | package integrity, conformance, bookmarks, comments, **fields**, OLE, pivot tables, charts, Word cascade, Excel formats, PowerPoint inheritance |
-| **In flight** | PowerPoint media and Word table grid (subagents) — fields **done**, see §8w |
+| **Analyzers** | package integrity, conformance, bookmarks, comments, fields, **tables**, **media**, OLE, pivot tables, charts, Word cascade, Excel formats, PowerPoint inheritance — **13** |
+| **In flight** | nothing. Fields, table grid and PowerPoint media all landed — §8w, §8x |
 
 ## How to resume in five minutes
 
@@ -804,6 +804,22 @@ Text extraction returns the stale value. A converter copies it. A reviewer proof
 Verified against the SDK schema: `w:fldChar/@w:fldCharType` required, exactly `begin|separate|end`; `w:fldSimple/@w:instr` required; both `w:fldChar` and `w:instrText` are children of `w:r`. There are **two** `fldSimple` declarations — `CT_SimpleField` and `CT_SimpleFieldRuby` — which is why matching is on element name, not parent.
 
 Ten mutants; one escaped and found a real gap: no fixture had `instrText` *after* a `separate`, so the guard stopping a field's result leaking into its own instruction could be deleted unnoticed.
+
+## 8x. Table geometry and PowerPoint media (2026-08-19) — and a salvage lesson
+
+Both built by subagents, **both killed mid-task by the session limit**, both recovered. `8448f27`. **1005 tests.**
+
+**`services/wordTableGrid.ts`** — a row whose `gridSpan` values do not sum to the declared `tblGrid`, and `vMerge` continuations with no `restart` above them in the same column. **Word silently repairs a broken table and renders something plausible**, so the document looks fine and a renderer in another environment mangles the layout. 71 documented deviations for Part 1 §17.4. Note `w:vMerge` with **no `w:val` at all means *continue*, not restart** — the opposite of most OOXML defaults, and the trap that makes orphan detection worth having.
+
+**`services/pptMedia.ts`** — the OLE pattern again (the poster frame renders whether or not the media is behind it) plus the case that matters more in practice: **`r:link` media lives outside the package**, so a deck that plays on the author's machine is silently not self-contained. PowerPoint links video by default above a size threshold, so this is common and almost never deliberate.
+
+### 🔴 Process lesson — worktree work is not safe until it is committed
+
+The brief for both agents said *"commit as soon as you have something green rather than saving it all for the end."* One followed it and had a commit to cherry-pick. The other did not, and **57 KB of finished, passing work was sitting uncommitted in a worktree** that would have been discarded with it.
+
+**Recovery is only possible because worktrees survive the agent.** Before removing any agent worktree, always check `git -C <worktree> status --short` for uncommitted files as well as `git log` for commits — the second agent's work was invisible to a log check alone.
+
+**Strengthen future briefs:** tell the agent to commit after the *first* green test run, not after the module is finished, and to keep committing. An agent that treats its commit as a final deliverable is one quota reset away from losing everything.
 
 ## 9. Next actions
 
