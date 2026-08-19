@@ -8,10 +8,10 @@
 | | |
 |---|---|
 | **Branch** | `feat/schema-derived-rag-corpus` — **all work is here; `main` is untouched** |
-| **Tests** | 851 passing; typecheck, lint and production build clean |
+| **Tests** | 885 passing; typecheck, lint and production build clean |
 | **Architecture** | **Complete.** Analyzer registry, one `Finding` type, question routing, capability ledger, gap log, versioned JSON report |
-| **Analyzers** | package integrity, conformance, bookmarks, comments, OLE, pivot tables, charts, Word cascade, Excel formats, PowerPoint inheritance |
-| **In flight** | PowerPoint media and Word table grid (subagents); **fields analyzer next** |
+| **Analyzers** | package integrity, conformance, bookmarks, comments, **fields**, OLE, pivot tables, charts, Word cascade, Excel formats, PowerPoint inheritance |
+| **In flight** | PowerPoint media and Word table grid (subagents) — fields **done**, see §8w |
 
 ## How to resume in five minutes
 
@@ -778,6 +778,32 @@ Counted from the public TOC (§8p). **Deviation count says where Office and the 
 🔴 **Provenance, and a bug caught by checking it.** Strict URIs come from `pjfanning/ooxml-strict-converter`; **every Transitional target was verified independently against the SDK's `namespaces.json`**. That check found an error in *their* mapping file — it maps wordprocessingml to `.../wordprocessingml/main`, missing the `/2006`. Copying it wholesale would have left every Strict Word document unreadable. A test pins the correct value.
 
 **Honest note on ordering:** longest-key-first replacement is *insurance*, not a live fix — no pair in the current table needs it, because `chart` and `chartDrawing` both gain the same `/2006`. Pinned as an invariant with the reasoning recorded, and a test comment claiming otherwise was corrected.
+
+## 8w. Fields — the text on the page is a cache, and it can lie (2026-08-19)
+
+`services/wordFields.ts` + 34 tests, registered as the `field` analyzer. Top of the §8u backlog: **72 deviations for Part 1 §17.16**, and the strongest invisible failure in the format.
+
+**The headline.** A field is a small program (`REF`, `PAGEREF`, `TOC`, `HYPERLINK`, `PAGE`) whose displayed text is **the result from the last time Word ran it**, stored in the file. So:
+
+> Delete the bookmark a cross-reference points at, and the cross-reference keeps displaying the old text — correctly formatted, indefinitely, until someone presses F9.
+
+Text extraction returns the stale value. A converter copies it. A reviewer proofreads it. Nothing anywhere flags it. This is how *"see section 4.2"* survives in documents whose section 4.2 was deleted years earlier.
+
+**Three states, and only one is safe:**
+- `@w:dirty="true"` — Word recalculates on open, so a stale result is temporary. But **anything reading the file without evaluating fields is reading a value Word has already declared out of date.**
+- neither flag — **the dangerous case.** The cached text is presented as current and will not recalculate on its own.
+- `@w:fldLock="true"` — **worse.** The field will not update even on F9; the stale value is permanent by instruction. Escalated to its own code.
+
+**Why it needed the bookmark analyzer.** The field says which bookmark it targets; only the bookmark index knows whether that bookmark still exists. `crossCheckFieldTargets` is the first finding in this codebase that **neither analyzer could reach alone** — the argument for the registry, demonstrated rather than asserted.
+
+**Traps encoded:**
+- **Fields nest** — a `TOC` holds a `PAGEREF` per entry *inside its own result*. Pairing the first `begin` with the first `end` grabs the inner field and mis-reads everything after it, so the walk keeps a stack. A nested field's result is also part of its parent's, because that is what a reader sees.
+- **`separate` is optional.** A field that has never been calculated goes `begin → instruction → end`. Treating its absence as a fault would put noise on every clean document. `cachedResult` is `null` for that and `''` for a field that ran and produced nothing.
+- **False positives were the real design risk.** `HYPERLINK` targets a bookmark only with `\l`; without it the argument is a URL. `STYLEREF` takes a style name. Reporting either as a dead bookmark would make the report unreadable on a real document, so both are tested explicitly.
+
+Verified against the SDK schema: `w:fldChar/@w:fldCharType` required, exactly `begin|separate|end`; `w:fldSimple/@w:instr` required; both `w:fldChar` and `w:instrText` are children of `w:r`. There are **two** `fldSimple` declarations — `CT_SimpleField` and `CT_SimpleFieldRuby` — which is why matching is on element name, not parent.
+
+Ten mutants; one escaped and found a real gap: no fixture had `instrText` *after* a `separate`, so the guard stopping a field's result leaking into its own instruction could be deleted unnoticed.
 
 ## 9. Next actions
 
