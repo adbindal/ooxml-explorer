@@ -37,6 +37,7 @@ import { tableGridFindings, computeTableEvidenceForMarkup } from './wordTableGri
 import { mediaFindings, computeMediaEvidenceForMarkup, MEDIA_HOST_PART } from './pptMedia';
 import { formulaFindings, computeFormulaEvidenceForMarkup, FORMULA_HOST_PART } from './excelFormulas';
 import { contentControlFindings, computeContentControlEvidenceForMarkup, SDT_HOST_PART } from './wordContentControls';
+import { styleReferenceFindings, computeStyleReferenceEvidenceForMarkup, hasStyleReferences } from './styleReferences';
 import { hyperlinkFindings, computeHyperlinkEvidenceForMarkup, HYPERLINK_HOST_PART } from './hyperlinks';
 import { readOleObjects } from './oleObjects';
 import { readPivotTables, computePivotEvidenceForMarkup } from './excelPivotTables';
@@ -423,6 +424,29 @@ export const ANALYZERS: readonly Analyzer[] = [
       siblingPattern:
         /^xl\/(?:workbook\.xml|_rels\/workbook\.xml\.rels|worksheets\/_rels\/[^/]+\.rels|pivotTables\/(?:_rels\/)?[^/]+|pivotCache\/(?:_rels\/)?[^/]+)$/,
       compute: computePivotEvidenceForMarkup
+    }
+  },
+  {
+    id: 'styleRef',
+    title: 'Style and format references',
+    formats: ['docx', 'xlsx'],
+    determines: [
+      'whether every pStyle, rStyle and tblStyle names a style that is defined',
+      'whether every numId names a numbering definition that exists',
+      'whether a cell’s format index, and its font, fill, border and custom number format ids, are all in range'
+    ],
+    cannotDetermine: [
+      'whether a style that IS defined produces the intended appearance — only that the reference lands somewhere',
+      'references against a stylesheet not supplied with the request; a style defined in an unloaded part would be reported as missing'
+    ],
+    appliesTo: hasStyleReferences,
+    analyze: parts => styleReferenceFindings(parts),
+    explain: {
+      matches: path =>
+        /^word\/(?:document\d*|header[^/]*|footer[^/]*|footnotes\d*|endnotes\d*)\.xml$/.test(path) ||
+        /^xl\/worksheets\/[^/]+\.xml$/.test(path),
+      siblings: ['word/styles.xml', 'word/numbering.xml', 'xl/styles.xml'],
+      compute: computeStyleReferenceEvidenceForMarkup
     }
   },
   {
