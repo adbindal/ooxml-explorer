@@ -604,7 +604,14 @@ pivotTable1.xml @cacheId → workbook.xml pivotCache @r:id → cacheDefinition @
 - `CT_PivotCacheDefinition`'s `@r:id` has **no** RequiredValidator, so **absent cache records are not a schema violation** — a cache set to refresh on load legitimately has none. That is why `PivotProblem` carries a `severity: 'error' | 'note'` the other modules don't need: it keeps a legitimate state off the error list instead of forcing a choice between calling it damage and dropping it.
 - **`CT_Worksheet`'s content model contains no pivot child at all**, so worksheet→pivotTable is a purely implicit relationship — nothing in the worksheet XML names it. Hence orphan detection: a pivot part under `xl/pivotTables/` that no relationship points at.
 
-⚠️ **The "67 MS-OI29500 variations" figure is unverified.** It came from an earlier research pass in this project and no MS-OI29500 text was consulted when writing the module; it is marked hearsay in the code. **Source it or cut it before it feeds the RAG corpus** — the honesty ledger applies to our own second-hand numbers too.
+✅ **The "67 variations" figure is now VERIFIED — and the claim attached to it was wrong.** Settled 2026-08-19 by counting clause-keyed entries in [MS-OI29500]'s **public table of contents** (`toc.json`, 1,892 clause-keyed entries). Only headings and clause references were read, never the prose — the distinction `LICENSING.md` §5 draws between "a dataset of URLs and headings" and Microsoft's expression.
+
+- **Part 1 §18.10 (pivot tables): 67.** Exactly as claimed.
+- 🔴 **"Second only to formulas" is false.** §18.10 is **third**: §18.17 formulas **218**, §18.3 worksheet **83**, then §18.10 at 67. Formulas deviate more than three times as much. The exaggerated version invites the wrong triage, so the module now states the ranking explicitly.
+
+Corrected in `services/excelPivotTables.ts`; the pivot analyzer's `cannotDetermine` now says the *count* is settled while the per-file impact is not.
+
+**Distribution cross-check** against the numbers recorded earlier in this file — near-identical, with drift of at most one entry, so it is the same corpus at a slightly different revision. Recorded rather than silently overwritten: Part 1 §18 **534** (was 534), §17 **528** (was 529), §21 **264** (264), §20 **179** (was 180), §22 **106** (106), Part 4 §19 **104** (104), Part 1 §19 **100** (100). Total clause-keyed **1,892** (was 1,894/1,895).
 
 Also flagged not-verified: that `pivotFields` runs parallel to `cacheFields` (nothing in the schema ties them; the cache field count is used as the bound for both, and says so), and `@x = -2` as the "values" pseudo-field (`@x` is a plain Int32 with no facet — it is convention, excluded from range checks so multi-measure pivots do not false-positive).
 
@@ -676,7 +683,7 @@ All four subsystems the user named are **DONE**: #26 bookmarks (§8m), #27 OLE (
 
 **All three phases of the §8r plan are done.** The architecture work is finished; what remains is content and cleanup.
 
-1. **Source or cut the "67 variations" figure** (§8p) before anything feeds the RAG corpus. Currently declared as a known limit in the pivot analyzer's `cannotDetermine`, which is honest but not a fix. *Cheapest open honesty debt.*
+1. ~~Source or cut the "67 variations" figure~~ — **DONE**, see §8p. Verified at 67; the "second only to formulas" half was false and is corrected.
 2. **Carry `Finding[]` to the panel boundary.** `explainPart` returns prose; findings are flattened there. Giving `ComputedEvidence` a home of its own and letting it carry structured findings would complete the agent-consumable path end to end. `geminiService` type-imports it from `aiService` to avoid a runtime cycle — that is the seam to fix.
 3. **Decide on Strict support repo-wide** (§8q). Word and Excel resolvers match exact Transitional constants. A documented limitation, not a claim.
 4. **#11** Pin a real `styles.xml` regression fixture — **blocked** on the licensing question (§8j / `LICENSING.md`).

@@ -38,11 +38,23 @@
  * relationship with *nothing in the worksheet XML referring to it*, exactly like
  * slideLayout in PresentationML. Drop the relationship and the worksheet is still valid.
  *
- * INTEROPERABILITY. This brief's source reports [MS-OI29500] logging 67 normative
- * variations against Part 1 §18.10, second only to formulas — plausible given the size
- * of the clause, but **not verified here**: this module was written against the Open XML
- * SDK schema, and no MS-OI29500 text was consulted. Treat the number as hearsay. What
- * *is* verified below is marked as such; what is inferred says so.
+ * INTEROPERABILITY. ✅ **[MS-OI29500] logs exactly 67 normative variations against Part 1
+ * §18.10** — verified by counting the clause-keyed entries in the specification's public
+ * table of contents (2026-08-19). Only headings and clause references were read, never
+ * the prose; see docs/ooxml-expert-agent/LICENSING.md on why that distinction matters.
+ *
+ * 🔴 The claim this figure usually travels with is WRONG. §18.10 is **third**, not
+ * "second only to formulas":
+ *
+ *     §18.17 formulas   218
+ *     §18.3  worksheet   83
+ *     §18.10 pivots      67   ← here
+ *
+ * So pivot tables are a heavily-deviating corner of SpreadsheetML, but formulas deviate
+ * more than three times as much, and the worksheet clause more too. Worth stating
+ * accurately: the exaggerated version invites the wrong triage.
+ *
+ * Everything else below is marked verified-or-inferred individually.
  */
 
 import { relsPathFor, resolveTarget, type PackageParts } from './packageIntegrity';
