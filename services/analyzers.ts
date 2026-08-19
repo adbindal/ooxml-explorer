@@ -35,6 +35,7 @@ import { readFields, crossCheckFieldTargets, computeFieldEvidenceForMarkup } fro
 import { tableGridFindings, computeTableEvidenceForMarkup } from './wordTableGrid';
 import { mediaFindings, computeMediaEvidenceForMarkup, MEDIA_HOST_PART } from './pptMedia';
 import { formulaFindings, computeFormulaEvidenceForMarkup, FORMULA_HOST_PART } from './excelFormulas';
+import { contentControlFindings, computeContentControlEvidenceForMarkup, SDT_HOST_PART } from './wordContentControls';
 import { readOleObjects } from './oleObjects';
 import { readPivotTables, computePivotEvidenceForMarkup } from './excelPivotTables';
 import { normaliseParts, detectConformance, conformanceFindings, toTransitionalXml } from './conformance';
@@ -229,6 +230,27 @@ export const ANALYZERS: readonly Analyzer[] = [
     explain: {
       matches: path => WORD_BODY.test(path),
       compute: computeFieldEvidenceForMarkup
+    }
+  },
+  {
+    id: 'contentControl',
+    title: 'Content controls and data bindings',
+    formats: ['docx'],
+    determines: [
+      'whether a control’s data binding names a custom XML part that exists in the package',
+      'whether a control is displaying its placeholder rather than data',
+      'whether two controls share an id, so that driving the document by id reaches only one'
+    ],
+    cannotDetermine: [
+      'whether a binding’s XPath selects anything inside the part it names — that needs a namespace-aware XPath engine and the binding’s prefixMappings',
+      'whether a control’s stored text is current with respect to the data it is bound to; the text is stored, not computed'
+    ],
+    appliesTo: parts => Object.keys(parts).some(p => SDT_HOST_PART.test(p)),
+    analyze: parts => contentControlFindings(parts),
+    explain: {
+      matches: path => SDT_HOST_PART.test(path),
+      siblingPattern: /^customXml\/(?:item|itemProps)\d*\.xml$/,
+      compute: computeContentControlEvidenceForMarkup
     }
   },
   {
