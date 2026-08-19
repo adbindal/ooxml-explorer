@@ -496,17 +496,23 @@ describe('Excel: the location, and the cells the link covers', () => {
 
   it('parses multi-letter columns rather than comparing letters', () => {
     // AA is column 27, which sorts before "B" as a string and after it as a column.
+    // Z1:AB1 and A1:B1 alone do NOT pin this: they are still on opposite sides of AA
+    // under any per-letter base, so a base-25 bug passes them both. Z1 against content
+    // at AA1 is the discriminating case — under base 25, AA and Z are both 26 and
+    // collide, and a link over an emptied cell reads as fine.
     const parts = excelPackage({
       'xl/worksheets/sheet1.xml': `<?xml version="1.0"?><x:worksheet ${X} ${R}><x:sheetData>
         <x:row r="1"><x:c r="AA1"><x:v>7</x:v></x:c></x:row>
       </x:sheetData><x:hyperlinks>
         <x:hyperlink ref="Z1:AB1" r:id="rId9"/><x:hyperlink ref="A1:B1" location="C1"/>
+        <x:hyperlink ref="Z1" location="C1"/>
       </x:hyperlinks></x:worksheet>`
     });
     const links = readHyperlinks(parts, 'xl/worksheets/sheet1.xml');
 
     expect(links[0].problems).toEqual([]);
     expect(links[1].problems.map(p => p.code)).toEqual(['hyperlink/empty-cell-range']);
+    expect(links[2].problems.map(p => p.code)).toEqual(['hyperlink/empty-cell-range']);
   });
 
   it('reports a missing @ref, which the schema makes required', () => {
@@ -560,6 +566,23 @@ describe('ambiguity and absence', () => {
       'hyperlink/ambiguous-destination',
       'hyperlink/dangling-anchor'
     ]);
+  });
+
+  it('does not call an ambiguous link resolved just because its anchor is live', () => {
+    // A working anchor beside an unverifiable URL is the one case where the two halves
+    // disagree, and it is the only path on which "external cannot be checked" is not
+    // already decided by both halves being unchecked. The honest verdict is null: half
+    // of this link was confirmed and half of it cannot be.
+    const parts = wordPackage({
+      'word/document.xml': `<?xml version="1.0"?><w:document ${W} ${R}><w:body>
+        <w:p><w:bookmarkStart w:id="1" w:name="Chapter2"/><w:bookmarkEnd w:id="1"/></w:p>
+        <w:p><w:hyperlink r:id="rId4" w:anchor="Chapter2"><w:r><w:t>both</w:t></w:r></w:hyperlink></w:p>
+      </w:body></w:document>`
+    });
+    const [both] = readHyperlinks(parts, 'word/document.xml');
+
+    expect(both.kind).toBe('external');
+    expect(hyperlinkResolves(both)).toBeNull();
   });
 
   it('reports a hyperlink element with no destination at all, per format', () => {
