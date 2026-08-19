@@ -32,6 +32,7 @@ import { checkPackageIntegrity } from './packageIntegrity';
 import { readBookmarks } from './wordBookmarks';
 import { readComments, COMMENT_PART_PATHS } from './wordComments';
 import { readFields, crossCheckFieldTargets, computeFieldEvidenceForMarkup } from './wordFields';
+import { readRevisions, checkRevisionVisibility, readRevisionSettings, computeRevisionEvidenceForMarkup } from './wordRevisions';
 import { tableGridFindings, computeTableEvidenceForMarkup } from './wordTableGrid';
 import { mediaFindings, computeMediaEvidenceForMarkup, MEDIA_HOST_PART } from './pptMedia';
 import { formulaFindings, computeFormulaEvidenceForMarkup, FORMULA_HOST_PART } from './excelFormulas';
@@ -231,6 +232,40 @@ export const ANALYZERS: readonly Analyzer[] = [
     explain: {
       matches: path => WORD_BODY.test(path),
       compute: computeFieldEvidenceForMarkup
+    }
+  },
+  {
+    id: 'revision',
+    title: 'Tracked changes',
+    formats: ['docx'],
+    determines: [
+      'what the document says with every change accepted, versus rejected — two different texts',
+      'whether both halves of a tracked move still pair up by name',
+      'whether a revision id collides with a bookmark or permission id'
+    ],
+    cannotDetermine: [
+      'what Word displays for markup that is out of schema, such as live text inside a deletion — the fault is reported, the rendering is not predicted',
+      'whether two adjacent paragraph-mark revisions by different authors interact; each mark is resolved independently'
+    ],
+    appliesTo: parts => matching(parts, WORD_BODY).length > 0,
+    analyze: parts => {
+      const settings = parse(parts['word/settings.xml']);
+      return matching(parts, WORD_BODY).flatMap(path => {
+        const doc = parse(parts[path]);
+        if (!doc) return [];
+        const { revisions, problems } = readRevisions(doc, path);
+        // Settings live in a different part, so the visibility check takes both and is
+        // a separate call rather than folded into readRevisions.
+        return [
+          ...problems,
+          ...(settings ? checkRevisionVisibility(readRevisionSettings(settings), revisions.length, path) : [])
+        ];
+      });
+    },
+    explain: {
+      matches: path => WORD_BODY.test(path),
+      siblings: ['word/settings.xml'],
+      compute: computeRevisionEvidenceForMarkup
     }
   },
   {
