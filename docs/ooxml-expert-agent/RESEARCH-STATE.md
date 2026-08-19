@@ -11,7 +11,7 @@
 | **Tests** | 1199 passing; typecheck, lint and production build clean |
 | **Architecture** | **Complete.** Analyzer registry, one `Finding` type, question routing, capability ledger, gap log, versioned JSON report |
 | **Analyzers** | package integrity, conformance, bookmarks, comments, fields, **tables**, **media**, OLE, pivot tables, formulas, content controls, hyperlinks, **revisions**, charts, Word cascade, Excel formats, PowerPoint inheritance — **17** |
-| **In flight** | Excel external links + PowerPoint animations (subagents, **nothing committed yet — see §8ab for the briefs so they can be rebuilt**) |
+| **In flight** | none. `excelExternalLinks.ts` + `pptAnimation.ts` are **salvaged but UNTESTED and UNREGISTERED** — see §8ab |
 
 ## How to resume in five minutes
 
@@ -877,9 +877,19 @@ Two codes here are deliberately **coarse** (`chart/structural-problem`, `chart/t
 
 **Its mutation round found a real defect, not just a test gap:** chasing a surviving mutant through what looked like dead code surfaced that text nested inside `w:pPr/w:rPr` (out of schema) was being scored as document content, so **a malformed paragraph mark could inject words into the *accepted* reading**. 25 mutants, three survivors, all three tests decided by an accident of the fixture rather than by the rule they targeted.
 
-## 8ab. In flight when the session ended — rebuild briefs
+## 8ab. Salvaged but unfinished — `excelExternalLinks.ts` and `pptAnimation.ts`
 
-Two subagents were running with **nothing committed**. Both are self-contained; if they did not land, rebuild from these.
+🔴 **START HERE ON RESUME.** Both subagents were killed by the quota reset **after writing their modules but before writing a single test**. The modules were recovered from their worktrees (39 KB and 32 KB) and committed, because losing them would mean re-deriving all the schema research. They **typecheck and lint clean**.
+
+**They are NOT registered in `services/analyzers.ts`, and must not be until they are tested.** An untested analyzer that reports findings under a Verified tier is exactly the failure this project exists to prevent.
+
+**What each still needs:**
+1. `tests/excelExternalLinks.test.ts` and `tests/pptAnimation.test.ts`.
+2. **Mutation testing** — non-negotiable here, since neither module has ever had a test run against it.
+3. `pptAnimation.ts` is **incomplete**: `computeAnimationEvidenceForMarkup` was cut off mid-function and is marked with a ⚠️ comment at the exact line. Its `explain` entry must not be registered until that function actually builds its lines. The `analyze` path may be complete — check before trusting it.
+4. Registration in `analyzers.ts` with `determines` / `cannotDetermine`.
+
+The original briefs follow, since the modules should be read against them rather than assumed correct.
 
 **`services/excelExternalLinks.ts`** — the other half of the formula analyzer. A workbook linking to another workbook **caches the values it last read**; open it where the source is unreachable and every linked cell shows numbers from an unknown date. Chain: `xl/workbook.xml` `<externalReferences><externalReference r:id>` → `xl/externalLinks/externalLink<N>.xml` `<externalBook r:id>` with `<sheetDataSet>` cached values → `TargetMode="External"` to the real workbook. **The `[1]` in a formula is a 1-based index into the `externalReferences` list** — verify that. Report the external target as *unverifiable*, never broken; never fetch. Check: reference with a missing relationship or absent part; an `externalBook` whose own `r:id` does not resolve (so even the path is unknown); a formula index with no matching reference; externalLink parts nothing references.
 
