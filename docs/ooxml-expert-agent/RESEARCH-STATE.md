@@ -675,6 +675,18 @@ An audit before answering "where is this converging" found the real problem was 
 
 **Method note.** `explainersFor`, `siblingsFor`, `explainPart` and `analyzePackage` all take an optional registry, added purely for testability: mutants survived because nothing could inject a stub — no test could force an analyzer to throw, produce a duplicate line, or match its own part as a sibling. **PowerPoint's sibling pattern does match `ppt/slides/slide1.xml` itself**, so that guard is load-bearing, not defensive. Across the two commits, 23 mutants and 7 real gaps found.
 
+## 8t. The report — the engine's output as a document (2026-08-19)
+
+`services/report.ts` + 14 tests, `3c02d3b`. **813 tests.**
+
+The engine's output could previously only be read as a log, which no other program can consume — a problem, given the stated direction that **the engine is the product**.
+
+`reportPackage` / `reportComparison` emit a structured report: sorted findings, counts by severity, how many are **silent**, and the capability ledger travelling alongside so a consumer knows what was checked and what could not be. Exported from the validator as JSON; with both files loaded it exports the comparison instead.
+
+**`schemaVersion` makes it a contract**, with the rules written into the module header: adding a field or a new finding code is MINOR; renaming or repurposing one is MAJOR; **finding codes are part of the contract**. `generatedAt` is the only non-deterministic field, so two runs over one file are byte-identical apart from the timestamp — which is what makes a report diffable in CI.
+
+**Deliberately absent: the explain path.** It describes how markup *resolves* rather than what is wrong with it, and forcing that into findings would mean inventing a fault for every fact. When an agent needs it, it wants a different shape; inventing that shape before there is a caller would be guessing.
+
 ## 9. Next actions
 
 Stages 0–2 are complete for all three formats and the Verified tier is live. Remaining work is per-subsystem, tracked as tasks #11–#28.
@@ -684,7 +696,7 @@ All four subsystems the user named are **DONE**: #26 bookmarks (§8m), #27 OLE (
 **All three phases of the §8r plan are done.** The architecture work is finished; what remains is content and cleanup.
 
 1. ~~Source or cut the "67 variations" figure~~ — **DONE**, see §8p. Verified at 67; the "second only to formulas" half was false and is corrected.
-2. **Carry `Finding[]` to the panel boundary.** `explainPart` returns prose; findings are flattened there. Giving `ComputedEvidence` a home of its own and letting it carry structured findings would complete the agent-consumable path end to end. `geminiService` type-imports it from `aiService` to avoid a runtime cycle — that is the seam to fix.
+2. ~~Carry `Finding[]` to the panel boundary~~ — **DONE for validate and compare**, see §8t. Those paths produce findings natively and now export as JSON. The *explain* path is still prose by design; revisit only when a caller actually needs it. `ComputedEvidence` still lives in `aiService` and is type-imported by `geminiService` to avoid a runtime cycle — a small seam worth tidying if that type ever grows.
 3. **Decide on Strict support repo-wide** (§8q). Word and Excel resolvers match exact Transitional constants. A documented limitation, not a claim.
 4. **#11** Pin a real `styles.xml` regression fixture — **blocked** on the licensing question (§8j / `LICENSING.md`).
 5. **#21** Replace the substring NL fallback with BM25 — **measure first**; the counters and now the gap log are both live, so this is a decision waiting on data rather than on argument.
