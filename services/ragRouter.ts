@@ -1,6 +1,7 @@
 import { KNOWLEDGE_BASE, ReferenceDoc } from './staticKnowledgeBase';
 import { querySchemaFromStorage, searchSchemasInStorage, selectBestMatch } from './storageService';
 import { recordRetrieval } from './retrievalMetrics';
+import { buildIndex, bestMatch } from './bm25';
 
 /**
  * Looks a tag up in the bundled fallback knowledge base.
@@ -115,13 +116,25 @@ export const getRagContext = async (
     recordRetrieval('naturalLanguageAttempts');
     const keywords = await extractKeywordsWithLocalAI(cleanTagName);
     try {
-      const searchResults = await searchSchemasInStorage(keywords, context.fileType);
-      if (searchResults.length > 0) {
-        // Takes the first substring hit with no ranking at all. Replacing this with
-        // BM25 is the evidence-backed improvement; the counters above exist to show
-        // whether this path is used enough to be worth it.
-        match = searchResults[0];
-        recordRetrieval('naturalLanguageHits');
+      // Candidates come from a substring sweep, which is cheap and recall-oriented, and
+      // are then RANKED by BM25. Previously the router took searchResults[0] - the
+      // first substring hit in whatever order the cursor yielded it - so a query for
+      // "table" returned whichever of the hundred table records IndexedDB reached
+      // first. Ranking is what turns that sweep into an answer.
+      //
+      // Both the original question and the extracted keywords are scored: keyword
+      // extraction can drop the one distinctive term, and the raw question still
+      // carries it.
+      const candidates = await searchSchemasInStorage(keywords, context.fileType);
+      if (candidates.length > 0) {
+        const ranked = bestMatch(buildIndex(candidates), `${cleanTagName} ${keywords}`);
+        if (ranked) {
+          match = ranked;
+          recordRetrieval('naturalLanguageHits');
+        }
+        // A candidate set that ranks below the floor is deliberately NOT used. It would
+        // otherwise be cited under a Grounded badge on the strength of one incidental
+        // shared word, which is the failure this tier exists to prevent.
       }
     } catch (e) {
       console.warn('[RAG Router] IndexedDB keyword search failed:', e);
