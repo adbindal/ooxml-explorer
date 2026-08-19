@@ -944,6 +944,42 @@ I suggested letting the **gap log** decide which analyzer to build next. **That 
 
 **Remaining by that criterion:** Excel defined names (`#REF!` propagation), Excel tables/ListObjects, document settings (§17.15, 70 deviations), data validation and conditional formatting.
 
+## 8ae. A skill for adding the next analyzer (2026-08-20)
+
+`.agents/skills/add-analyzer/` — `SKILL.md` plus `mutate.py`. Encodes the procedure that
+produced the 21 existing analyzers, because every step of it exists to prevent a specific
+defect that actually happened here.
+
+**What it encodes that a person would otherwise re-derive:**
+- **Step 1 is a gate, not a formality.** The invisible-failure criterion (§8u) with the
+  three signals, plus the [MS-OI29500] deviation-count script. **"Do not build this" is a
+  documented legitimate outcome** — it is how DrawingML, math and VML got correctly skipped
+  despite topping the deviation table.
+- **Verify the schema before writing.** With the exact SDK commands. Four briefs on this
+  project asserted element paths that do not exist and every one was caught here.
+- **The false-positive trap table.** `numId="0"`, footnote separators, Excel `numFmtId`
+  < 164, `HYPERLINK` without `\l`, `STYLEREF`, absent `separate`, shared-formula masters,
+  Strict dropping the year — plus the two JavaScript traps that caused real defects,
+  **`Number(null) === 0`** and **`undefined !== null`**.
+- **Mutation testing, with the failure modes named.** Suspect the *test* first: a fixture
+  that passes either way, an assertion decided by an earlier branch, an accidental
+  tie-break, a provably unreachable guard. Equivalent mutants get recorded, not papered
+  over with an invented test.
+
+**`mutate.py`** replaces the bash loop that was hand-written about a dozen times. It
+refuses ambiguous or absent patterns rather than mutating the wrong line, restores the
+source in a `finally` so a crash cannot leave a mutated file staged, and exits non-zero
+when a mutant survives so it can gate a commit. Verified end to end against `wordNotes`:
+a real mutation killed 4 tests, a deliberate no-op correctly survived, a bogus pattern was
+skipped, and the source came back byte-identical.
+
+⚠️ **Step 5 is deliberately gated and honest.** The user asked for "passing marks from
+real-world files"; **this project has no real-file corpus** — every test runs against
+hand-written fixtures, and acquiring one is blocked on the licensing question (task #11).
+The skill runs against `tests/fixtures/` if it exists and otherwise **says so and records
+the analyzer as fixture-verified only**. Building a step that silently passed would have
+manufactured exactly the false confidence the whole design exists to prevent.
+
 ## 9. Next actions
 
 Stages 0–2 are complete for all three formats and the Verified tier is live. Remaining work is per-subsystem, tracked as tasks #11–#28.
