@@ -340,12 +340,16 @@ const NO_TARGET: AnimationTarget = {
 };
 
 const readIndexRange = (range: Element): { start: number; end: number } | null => {
-  const start = Number(range.getAttribute('st'));
-  const end = Number(range.getAttribute('end'));
-  // Both are required unsignedInt. A missing or non-numeric one is a schema-validity
+  const start = range.getAttribute('st');
+  const end = range.getAttribute('end');
+  // Both are REQUIRED xsd:unsignedInt. A missing or non-numeric one is a schema-validity
   // problem, not an animation problem, so it is left unjudged rather than guessed at.
-  if (!Number.isInteger(start) || !Number.isInteger(end)) return null;
-  return { start, end };
+  //
+  // The digits test is doing real work: `Number(null)` is 0 and `Number('')` is 0, so
+  // reading these with `Number()` alone would turn `<p:pRg end="4"/>` — no `@st` at all —
+  // into a confident claim that the animation starts at paragraph 0.
+  if (start === null || end === null || !/^\d+$/.test(start) || !/^\d+$/.test(end)) return null;
+  return { start: Number(start), end: Number(end) };
 };
 
 /** Reads one `p:tgtEl`, resolving its shape target against the slide's shapes. */
@@ -613,24 +617,21 @@ export function computeAnimationEvidenceForMarkup(
   parts: Record<string, string>,
   rawXml: string
 ): { lines: string[]; unresolved: string[] } | null {
-  let hostPath: string | null = null;
-  let index: AnimationIndex | null = null;
+  // Held as one binding so the pair can be destructured into `const`s below: narrowing a
+  // `let` does not survive into the callbacks further down, and re-checking for null
+  // inside each one would read as though it could still happen.
+  let host: { path: string; index: AnimationIndex } | null = null;
 
   for (const path of Object.keys(parts).filter(p => ANIMATION_HOST_PART.test(p))) {
     const doc = parseXml(parts[path]);
     if (doc === null) continue;
     const found = readAnimations(doc, path);
     if (found.animations.length === 0 && found.triggers.length === 0 && found.builds.length === 0) continue;
-    hostPath = path;
-    index = found;
+    host = { path, index: found };
     break;
   }
-  if (index === null || hostPath === null) return null;
-  // ⚠️ INCOMPLETE. The agent writing this module was cut off here, so everything below
-  // this point is missing: `idx` was bound for narrowing and never used. Do not register
-  // this analyzer's `explain` entry until this function actually builds its lines.
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const idx: AnimationIndex = index;
+  if (host === null) return null;
+  const { path: hostPath, index } = host;
 
   const lines: string[] = [];
   const unresolved: string[] = [];
@@ -688,6 +689,11 @@ export function computeAnimationEvidenceForMarkup(
   if ([...index.animations, ...index.triggers].some(n => n.target.subShapeId !== null)) {
     unresolved.push(
       'A target narrows to a sub-shape (p:subSp) inside a group or diagram. Sub-shape ids are not p:cNvPr ids and are not resolved here.'
+    );
+  }
+  if ([...index.animations, ...index.triggers].some(n => n.target.characterRange)) {
+    unresolved.push(
+      'A target narrows to a character range (p:charRg) rather than whole paragraphs. Characters are not counted here, so whether that range is inside the text the shape still has is unverified.'
     );
   }
   if (
