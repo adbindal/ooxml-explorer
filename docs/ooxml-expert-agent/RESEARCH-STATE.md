@@ -8,9 +8,9 @@
 | | |
 |---|---|
 | **Branch** | `feat/schema-derived-rag-corpus` — **all work is here; `main` is untouched** |
-| **Tests** | 1199 passing; typecheck, lint and production build clean |
+| **Tests** | 1221 passing; typecheck, lint and production build clean |
 | **Architecture** | **Complete.** Analyzer registry, one `Finding` type, question routing, capability ledger, gap log, versioned JSON report |
-| **Analyzers** | package integrity, conformance, bookmarks, comments, fields, **tables**, **media**, OLE, pivot tables, formulas, content controls, hyperlinks, **revisions**, charts, Word cascade, Excel formats, PowerPoint inheritance — **17** |
+| **Analyzers** | package integrity, conformance, bookmarks, comments, fields, **tables**, **media**, OLE, pivot tables, formulas, content controls, hyperlinks, **revisions**, charts, **style references**, Word cascade, Excel formats, PowerPoint inheritance — **18** |
 | **In flight** | none. `excelExternalLinks.ts` + `pptAnimation.ts` are **salvaged but UNTESTED and UNREGISTERED** — see §8ab |
 
 ## How to resume in five minutes
@@ -896,6 +896,28 @@ The original briefs follow, since the modules should be read against them rather
 **`services/pptAnimation.ts`** — an animation targets a shape **by id**, and deleting the shape makes it **silently never fire**. `p:sld/p:timing/p:tnLst` holds time nodes (`p:par`, `p:seq`, `p:anim`, `p:animEffect`, `p:animMotion`, `p:set`); a node targets through `p:cTn/p:tgtEl/p:spTgt/@spid`, which must match a `p:cNvPr/@id` in the slide's shape tree. Check: `spid` naming a missing shape (the headline); `p:bldP`/`p:bldLst` `@spid` likewise; `p:cond/@evt` on a missing target; `p:txEl`/`p:pRg` selecting paragraph indices the shape does not have; duplicate `p:cNvPr/@id` making any id targeting ambiguous. Report counts — *"3 of 11 animations will never run"* is the sentence someone needs.
 
 Both briefs said: base on `feat/schema-derived-rag-corpus`, touch only their two files, do not edit `analyzers.ts` (registration is done here), verify names against the SDK schema, and **commit after the first green test run**.
+
+## 8ac. Dangling style and format references (2026-08-20)
+
+`services/styleReferences.ts` + 22 tests, registered as `styleRef`. **The top remaining gap, verified as uncovered before building**: nothing reported a `pStyle` naming a missing style, nor a cell `@s` past the end of `cellXfs`.
+
+**Why it is the highest-value one left.** Every formatting system in OOXML is a table plus references into it, and **every one falls back silently**:
+
+- `w:pStyle` naming an undefined style → **Word applies Normal.** A paragraph meant to be Heading 1 renders as body text. Right font, right size, wrong meaning, file opens cleanly.
+- A cell `@s` past `cellXfs` → default format.
+- A `@numFmtId` with no `numFmt` → General, so a currency column renders as bare numbers.
+
+None of it looks like breakage. It looks like **plainer formatting**, which reads as a design choice — which is exactly why it survives review. It is also the most common defect in *generated* documents, because a generator that writes a reference and forgets the definition produces a file that passes every structural check ever written for it.
+
+**Why a separate analyzer rather than folding into the resolvers.** The resolvers answer *"what does this element resolve to?"* — one element, asked when someone selects it. This asks *"does every reference in the package land?"* — the whole file, asked when nobody is looking at anything in particular. The resolvers were `explain`-only and contributed no findings; this is the missing half.
+
+**Two false-positive traps, both tested:**
+- ⚠️ **`w:numId="0"` is NOT a dangling reference** — it means *remove numbering*. Treating it as a lookup fires on every document that has ever had a list removed, which is most of them.
+- ⚠️ **Excel number formats 0–163 are built in and declared nowhere.** Only **164+** must appear in `numFmts`; checking all of them reports every ordinary workbook as broken.
+
+One finding per missing style, not per use — forty paragraphs referencing one broken style is one broken style.
+
+Seven mutants; one escaped and it was the classic: the "last valid index" test used a value far from the boundary, so a `<` vs `<=` bound was invisible. Fixed with the index exactly one past the end.
 
 ## 9. Next actions
 
