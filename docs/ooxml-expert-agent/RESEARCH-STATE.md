@@ -645,19 +645,43 @@ An audit before answering "where is this converging" found the real problem was 
 
 **Method note.** The cross-analyzer contract tests run all five analyzers over deliberately broken input and assert every record is namespaced, names its part, carries a fix, and survives a JSON round-trip — a shared type is only worth having if nothing quietly opts out. Nine mutants; **one escaped and found a real gap**: the silent-ordering test used codes that already sorted correctly alphabetically, so it passed with the tiebreak deleted.
 
+## 8s. The registry — Phase 3 complete (2026-08-18/19)
+
+`services/analyzers.ts` + `services/coverageGaps.ts`, `402fdf8` and `fab250b`. **799 tests.**
+
+**Two surfaces were running a fraction of the engine, for the same reason** — there was no way to say *"run everything that applies here"*:
+
+- **Validate ran ONE analyzer.** `ValidatorView` imported `checkPackageIntegrity` and nothing else, so *"is this file correct?"* checked content types and relationships while fifteen analyzers sat unused.
+- **Compare ran the structural diff and no analyzer at all**, so a file that had lost an OLE embedding or a bookmark's end marker reported the part change without reporting that anything was broken.
+
+**`ANALYSIS_TARGETS` is gone.** The set of markup the engine could explain lived in a table inside a React component — the UI layer defined the engine's capabilities and nothing else could see them. Routing is now registry-driven; the four resolver-only modules (Word cascade, Excel formats, PowerPoint inheritance, charts) are registry entries too.
+
+**Analyzers may validate, explain, or both** — different questions: `analyze` finds what is *wrong*; `explain` describes what a selected element *is* and how it resolves. An explain-only analyzer counts as **skipped** by the validate pass, so the ledger never overstates what was checked.
+
+**The capability ledger.** Every entry declares `cannotDetermine` beside `determines`, and the ledger is computed from the registry — never asserted by a model. The validate surface now says which checks ran, which were skipped, and what those checks cannot see; its clean-run message is narrowed to **"no problems found by the checks that ran"**, not "this file is fine". This extends the honesty property from per-fact to **per-capability**.
+
+**`diffFindings`** answers what a change did to the *health* of a package, which no structural diff can: a dropped embedding is one removed part and looks like any other, but as a finding it says the document still renders correctly and is broken anyway. Identity is **code + part + subject, never the message** — messages interpolate counts and paths, so including them reports the same fault as both fixed and reintroduced. Pre-existing faults are reported as `unchanged` so nothing is blamed on the wrong change.
+
+**The gap log** (`coverageGaps.ts`) is the "keeps improving" half, deliberately the boring half. When a part is opened with no analyzer behind it, that is recorded — a backlog ranked by real usage instead of guesswork. **Counts only, over spec vocabulary alone**: part paths normalised (`word/header3.xml` → `word/header#.xml`, so one gap does not become fifty), element names are ECMA-376 tags. Same DLP discipline as `retrievalMetrics`, and surfaced beside it.
+
+🔴 **What "self-improving" does NOT mean here, recorded so it is not re-proposed:** a model that writes its own analyzers, grades its own output, or learns from conversations. Each puts a model back on the trust path — the reason fine-tuning was ruled out — and a rule the model invented cannot produce a Verified badge, because nothing verified it. The loop closes **through a person**.
+
+**Method note.** `explainersFor`, `siblingsFor`, `explainPart` and `analyzePackage` all take an optional registry, added purely for testability: mutants survived because nothing could inject a stub — no test could force an analyzer to throw, produce a duplicate line, or match its own part as a sibling. **PowerPoint's sibling pattern does match `ppt/slides/slide1.xml` itself**, so that guard is load-bearing, not defensive. Across the two commits, 23 mutants and 7 real gaps found.
+
 ## 9. Next actions
 
 Stages 0–2 are complete for all three formats and the Verified tier is live. Remaining work is per-subsystem, tracked as tasks #11–#28.
 
 All four subsystems the user named are **DONE**: #26 bookmarks (§8m), #27 OLE (§8n), #25 comments (§8o), #28 pivot tables (§8p).
 
-**Next, in rough priority order** — all of §8r's phases 1 and 2 are done:
+**All three phases of the §8r plan are done.** The architecture work is finished; what remains is content and cleanup.
 
-1. **The analyzer registry** (the remaining third of the plan). Each analyzer declares itself as data — id, formats, parts it needs, what it determines, and **what it explicitly cannot determine** — replacing the hand-maintained `ANALYSIS_TARGETS` array. Then route by *question* (`explain` / `validate` / `compare`) rather than only by part path, and compute a **capability ledger** from the registry so the engine can say "there is no analyzer for SmartArt, so I cannot verify this." That extends the honesty property from per-fact to per-capability, and it is the step that makes new features a linear cost.
-2. **A gap log**, on the `retrievalMetrics.ts` pattern: when a question lands on a part or element no analyzer covers, record it. Produces a backlog ranked by real usage rather than guesswork. This — plus the regression ratchet, where every defect found becomes a test — is what "self-improving" means here. **Not** a model that writes its own rules or grades its own output; that puts the model back on the trust path and makes Verified unprovable.
-3. **Source or cut the "67 variations" figure** (§8p) before anything feeds the RAG corpus.
-4. **Decide on Strict support repo-wide** (§8q). Currently a documented limitation, not a claim.
-5. Consider giving `ComputedEvidence` a home of its own and carrying `Finding[]` alongside the rendered lines, so structured findings survive all the way to the panel boundary instead of being flattened there. `geminiService` currently type-imports it from `aiService` to avoid a runtime cycle.
+1. **Source or cut the "67 variations" figure** (§8p) before anything feeds the RAG corpus. Currently declared as a known limit in the pivot analyzer's `cannotDetermine`, which is honest but not a fix. *Cheapest open honesty debt.*
+2. **Carry `Finding[]` to the panel boundary.** `explainPart` returns prose; findings are flattened there. Giving `ComputedEvidence` a home of its own and letting it carry structured findings would complete the agent-consumable path end to end. `geminiService` type-imports it from `aiService` to avoid a runtime cycle — that is the seam to fix.
+3. **Decide on Strict support repo-wide** (§8q). Word and Excel resolvers match exact Transitional constants. A documented limitation, not a claim.
+4. **#11** Pin a real `styles.xml` regression fixture — **blocked** on the licensing question (§8j / `LICENSING.md`).
+5. **#21** Replace the substring NL fallback with BM25 — **measure first**; the counters and now the gap log are both live, so this is a decision waiting on data rather than on argument.
+6. **New analyzers**, driven by the gap log rather than guesswork. The obvious blind spots from §10: **DrawingML** (shape geometry, effects, theme style matrices), **formulas** (the biggest MS-OI29500 cluster in SpreadsheetML), and **fields** (`w:fldSimple`, `w:instrText` — TOC, cross-references and page numbers all run through them, and they interact directly with bookmarks).
 
 **Method note.** Both modules shipped in §8m/§8n were **mutation-tested**: the implementation was deliberately broken several distinct ways and the tests re-run, to check they fail for the right reasons rather than agreeing with themselves. This found a real gap in the bookmark tests (no case had two range kinds in one document, the only arrangement where kind-matching is observable). Worth doing for every module here — a green suite on first run is not evidence.
 
