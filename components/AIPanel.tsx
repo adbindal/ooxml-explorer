@@ -14,16 +14,9 @@ import {
 } from '../services/geminiService';
 import { explainElement, ElementExplanation } from '../services/aiService';
 import type { ComputedEvidence } from '../services/aiService';
-import { computeEvidenceForMarkup } from '../services/wordFormattingAnalysis';
-import { computeExcelEvidenceForMarkup } from '../services/excelFormattingAnalysis';
-import { computePowerpointEvidenceForMarkup } from '../services/powerpointFormattingAnalysis';
-import { computeChartEvidenceForMarkup } from '../services/chartSemantics';
-import { computeBookmarkEvidenceForMarkup } from '../services/wordBookmarks';
-import { computeOleEvidenceForMarkup } from '../services/oleObjects';
-import { computeCommentEvidenceForMarkup } from '../services/wordComments';
-import { computePivotEvidenceForMarkup } from '../services/excelPivotTables';
 import { diffPackages, explainDiff } from '../services/ooxmlDiff';
-import { diffFindings } from '../services/analyzers';
+import { diffFindings, explainPart, siblingsFor } from '../services/analyzers';
+import { recordCoverageGap } from '../services/coverageGaps';
 import { renderFindings } from '../services/findings';
 import { ThemeClasses } from '../types';
 import MarkdownContent from './MarkdownContent';
@@ -38,86 +31,6 @@ import MarkdownContent from './MarkdownContent';
  * Returns null when there is nothing to compute, so the caller degrades to the
  * ordinary retrieval-backed explanation.
  */
-/**
- * Which parts each format's analysis needs alongside the open file.
- *
- * Keyed on the open part rather than the file extension, because the analysis is only
- * meaningful for the parts that actually carry content - a selection inside
- * `xl/styles.xml` has no cell to resolve.
- */
-const ANALYSIS_TARGETS = [
-  {
-    // Every Word story, not just the main document. A paragraph in a header or a
-    // footnote resolves against the same styles.xml and numbering.xml, so limiting
-    // this to document.xml showed Unverified for markup the app resolves completely.
-    // Sub-folders are excluded deliberately: word/glossary/document.xml has its own
-    // stylesheet, and resolving it against the main one would report formatting Word
-    // never applies.
-    matches: (path: string) =>
-      /^word\/(?:document\d*|header[^/]*|footer[^/]*|footnotes\d*|endnotes\d*|comments\d*)\.xml$/.test(path),
-    siblings: ['word/styles.xml', 'word/numbering.xml'],
-    compute: computeEvidenceForMarkup
-  },
-  {
-    matches: (path: string) => /^xl\/worksheets\/[^/]+\.xml$/.test(path),
-    siblings: ['xl/styles.xml', 'xl/workbook.xml', 'xl/sharedStrings.xml'],
-    compute: computeExcelEvidenceForMarkup
-  },
-  {
-    // PowerPoint needs the whole inheritance chain, and every hop of it is an
-    // implicit relationship - so the .rels parts are as load-bearing as the content
-    // parts and have to be fetched alongside them.
-    matches: (path: string) => /^ppt\/slides\/[^/]+\.xml$/.test(path),
-    siblings: [] as string[],
-    siblingPattern: /^ppt\/(slides|slideLayouts|slideMasters|theme)\/(_rels\/)?[^/]+$/,
-    compute: computePowerpointEvidenceForMarkup
-  },
-  {
-    // Charts occupy their own part in all three formats, so this entry is
-    // format-agnostic. The chart part is self-contained - the series cache travels
-    // with it - so no siblings are needed.
-    matches: (path: string) => /charts\/chart[^/]*\.xml$/.test(path),
-    siblings: [] as string[],
-    compute: computeChartEvidenceForMarkup
-  },
-  {
-    // Bookmarks are self-contained within a body part: ids are unique per part, not
-    // per package, so nothing outside the open file is needed to pair the ranges.
-    matches: (path: string) =>
-      /^word\/(?:document\d*|header[^/]*|footer[^/]*|footnotes\d*|endnotes\d*|comments\d*)\.xml$/.test(path),
-    siblings: [] as string[],
-    compute: computeBookmarkEvidenceForMarkup
-  },
-  {
-    // Comments live across four parts: the body carries the anchors, comments.xml the
-    // text, and the w15/w16cid side-cars the threading. Without the side-cars a
-    // threaded discussion reads as a flat list, so they are fetched even though the
-    // body alone parses fine.
-    matches: (path: string) => /^word\/(?:document\d*|header[^/]*|footer[^/]*)\.xml$/.test(path),
-    siblings: ['word/comments.xml', 'word/commentsExtended.xml', 'word/commentsIds.xml'],
-    compute: computeCommentEvidenceForMarkup
-  },
-  {
-    // Every hop of the pivot chain lives in a different part, so the worksheet needs
-    // the workbook, both sets of .rels, and the cache parts to be resolvable at all.
-    matches: (path: string) => /^xl\/worksheets\/[^/]+\.xml$/.test(path),
-    siblings: [] as string[],
-    siblingPattern: /^xl\/(?:workbook\.xml|_rels\/workbook\.xml\.rels|worksheets\/_rels\/[^/]+\.rels|pivotTables\/(?:_rels\/)?[^/]+|pivotCache\/(?:_rels\/)?[^/]+)$/,
-    compute: computePivotEvidenceForMarkup
-  },
-  {
-    // OLE objects appear in all three formats, so this entry is format-agnostic. The
-    // check needs the part's .rels to resolve the object data, and the target part
-    // itself to see whether it is actually there - which is the whole point.
-    matches: (path: string) =>
-      /^(?:word\/(?:document\d*|header[^/]*|footer[^/]*|footnotes\d*|endnotes\d*)\.xml|xl\/worksheets\/[^/]+\.xml|ppt\/slides\/[^/]+\.xml)$/.test(
-        path
-      ),
-    siblings: [] as string[],
-    siblingPattern: /^(?:word|xl|ppt)\/(?:.*\/)?(?:_rels\/[^/]+\.rels|embeddings\/[^/]+|media\/[^/]+)$/,
-    compute: computeOleEvidenceForMarkup
-  }
-] as const;
 
 /**
  * Turns the two sides of a diff into a computed evidence bundle.
@@ -176,61 +89,48 @@ const computeDiffEvidence = (files: DiffFileContext[]): ComputedEvidence | null 
   }
 };
 
+/**
+ * Assembles the evidence for one selected element by asking the analyzer registry.
+ *
+ * Previously this walked a hand-maintained table inside this component, which meant the
+ * set of things the engine could explain was defined in the UI layer and invisible to
+ * everything else. It now comes from `services/analyzers.ts`, so registering an
+ * analyzer is enough to make it answer questions here.
+ *
+ * When nothing matches, the part is recorded as a coverage gap. That is the honest
+ * answer - no check applies - and it turns "we do not handle this" into a ranked
+ * backlog instead of a silence.
+ */
 const buildComputedEvidence = async (
   context: AIPanelProps['context'],
   rawXml: string
-): Promise<{ lines: string[]; unresolved: string[] } | null> => {
+): Promise<ComputedEvidence | null> => {
   const openPath = context.fileName;
   if (!openPath || !context.content) return null;
 
-  // Every matching target runs, not just the first. A word/document.xml carries
-  // formatting AND bookmarks AND possibly OLE objects, and they are independent
-  // questions - stopping at the first match silently dropped the others.
-  const targets = ANALYSIS_TARGETS.filter(t => t.matches(openPath));
-  if (targets.length === 0) return null;
-
   const parts: Record<string, string> = { [openPath]: context.content };
 
-  // Union the sibling requests so a part is fetched once however many targets want it.
-  const wanted = new Set<string>();
-  for (const target of targets) {
-    const pattern = 'siblingPattern' in target ? target.siblingPattern : null;
-    const paths = pattern
-      ? (context.relatedFiles ?? []).filter(path => path !== openPath && pattern.test(path))
-      : target.siblings.filter(path => context.relatedFiles?.includes(path));
-    for (const path of paths) wanted.add(path);
-  }
-  if (wanted.size > 0 && context.onLoadContext) {
+  const wanted = siblingsFor(openPath, context.relatedFiles ?? []);
+  if (wanted.length > 0 && context.onLoadContext) {
     try {
-      const loaded = await context.onLoadContext([...wanted]);
+      const loaded = await context.onLoadContext(wanted);
       for (const file of loaded as { fileName: string; content: string }[]) {
         if (file?.fileName && typeof file.content === 'string') {
           parts[file.fileName] = file.content;
         }
       }
     } catch {
-      // A failed sibling fetch is not fatal - the analysis reports the part as
+      // A failed sibling fetch is not fatal - the analyses report the part as
       // unavailable and the tier is capped below Verified accordingly.
     }
   }
 
-  const lines: string[] = [];
-  const unresolved: string[] = [];
-  for (const target of targets) {
-    let result: { lines: string[]; unresolved: string[] } | null = null;
-    try {
-      result = target.compute(parts, rawXml);
-    } catch {
-      // One analysis failing must not suppress the others.
-      continue;
-    }
-    if (!result) continue;
-    lines.push(...result.lines);
-    unresolved.push(...result.unresolved);
+  const result = explainPart(parts, openPath, rawXml);
+  if (!result) {
+    recordCoverageGap(openPath, context.selectedTag?.tagName);
+    return null;
   }
-
-  if (lines.length === 0 && unresolved.length === 0) return null;
-  return { lines: [...new Set(lines)], unresolved: [...new Set(unresolved)] };
+  return result.evidence;
 };
 
 interface AIPanelProps {

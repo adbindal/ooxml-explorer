@@ -26,14 +26,40 @@
  */
 
 import type { Finding } from './findings';
+import type { ComputedEvidence } from './aiService';
 import type { PackageParts } from './packageIntegrity';
 import { checkPackageIntegrity } from './packageIntegrity';
 import { readBookmarks } from './wordBookmarks';
 import { readComments, COMMENT_PART_PATHS } from './wordComments';
 import { readOleObjects } from './oleObjects';
-import { readPivotTables } from './excelPivotTables';
+import { readPivotTables, computePivotEvidenceForMarkup } from './excelPivotTables';
+import { computeBookmarkEvidenceForMarkup } from './wordBookmarks';
+import { computeCommentEvidenceForMarkup } from './wordComments';
+import { computeOleEvidenceForMarkup } from './oleObjects';
+import { computeEvidenceForMarkup } from './wordFormattingAnalysis';
+import { computeExcelEvidenceForMarkup } from './excelFormattingAnalysis';
+import { computePowerpointEvidenceForMarkup } from './powerpointFormattingAnalysis';
+import { computeChartEvidenceForMarkup } from './chartSemantics';
 
 export type OoxmlFormat = 'docx' | 'xlsx' | 'pptx';
+
+/**
+ * How an analyzer participates in "explain this element".
+ *
+ * Separate from `analyze` because the two answer different questions. `analyze` finds
+ * what is WRONG with a package; `explain` describes what a selected element IS and how
+ * it resolves — the six-layer Word cascade, the text a bookmark covers, where a chart's
+ * numbers come from. Most analyzers do one or the other; a few do both.
+ */
+export interface AnalyzerExplain {
+  /** True when this analyzer has something to say about the open part. */
+  matches: (partPath: string) => boolean;
+  /** Named sibling parts to fetch alongside the open one. */
+  siblings?: readonly string[];
+  /** Or a pattern applied to the package's part list, when the set is not fixed. */
+  siblingPattern?: RegExp;
+  compute: (parts: PackageParts, rawXml: string) => ComputedEvidence | null;
+}
 
 export interface Analyzer {
   /** Matches the namespace of the codes it emits, e.g. `bookmark` → `bookmark/…`. */
@@ -53,7 +79,10 @@ export interface Analyzer {
    * ledger honest about what actually ran versus what merely could have.
    */
   appliesTo: (parts: PackageParts) => boolean;
-  analyze: (parts: PackageParts) => Finding[];
+  /** Absent when this analyzer only explains and never reports faults. */
+  analyze?: (parts: PackageParts) => Finding[];
+  /** Absent when this analyzer only validates and has nothing to say about one element. */
+  explain?: AnalyzerExplain;
 }
 
 /** Word story parts, which is where bookmarks and comment anchors live. */
@@ -106,7 +135,13 @@ export const ANALYZERS: readonly Analyzer[] = [
       matching(parts, WORD_BODY).flatMap(path => {
         const doc = parse(parts[path]);
         return doc ? readBookmarks(doc, path).problems : [];
-      })
+      }),
+    explain: {
+      // Ids are unique per part, not per package, so nothing outside the open file is
+      // needed to pair the ranges.
+      matches: path => WORD_BODY.test(path) || /^word\/comments\d*\.xml$/.test(path),
+      compute: computeBookmarkEvidenceForMarkup
+    }
   },
   {
     id: 'comment',
@@ -132,6 +167,11 @@ export const ANALYZERS: readonly Analyzer[] = [
         commentsExtended: parse(parts[COMMENT_PART_PATHS.extended]),
         commentsIds: parse(parts['word/commentsIds.xml'])
       }).problems;
+    },
+    explain: {
+      matches: path => WORD_BODY.test(path),
+      siblings: ['word/comments.xml', 'word/commentsExtended.xml', 'word/commentsIds.xml'],
+      compute: computeCommentEvidenceForMarkup
     }
   },
   {
@@ -147,7 +187,14 @@ export const ANALYZERS: readonly Analyzer[] = [
       'whether a linked object resolves, since its target is outside the package by definition'
     ],
     appliesTo: parts => matching(parts, OLE_HOST).length > 0,
-    analyze: parts => matching(parts, OLE_HOST).flatMap(path => readOleObjects(parts, path).flatMap(o => o.problems))
+    analyze: parts => matching(parts, OLE_HOST).flatMap(path => readOleObjects(parts, path).flatMap(o => o.problems)),
+    explain: {
+      matches: path => OLE_HOST.test(path),
+      // Needs the .rels to resolve the object, and the target part itself to see
+      // whether it is actually there - which is the whole point.
+      siblingPattern: /^(?:word|xl|ppt)\/(?:.*\/)?(?:_rels\/[^/]+\.rels|embeddings\/[^/]+|media\/[^/]+)$/,
+      compute: computeOleEvidenceForMarkup
+    }
   },
   {
     id: 'pivot',
@@ -162,7 +209,94 @@ export const ANALYZERS: readonly Analyzer[] = [
       'the "67 MS-OI29500 variations" figure quoted in the module doc, which came from an earlier research pass and has not been checked against the source'
     ],
     appliesTo: parts => Object.keys(parts).some(p => p.startsWith('xl/pivotTables/') || p.startsWith('xl/pivotCache/')),
-    analyze: parts => readPivotTables(parts).flatMap(t => [...t.chain.problems, ...t.problems])
+    analyze: parts => readPivotTables(parts).flatMap(t => [...t.chain.problems, ...t.problems]),
+    explain: {
+      matches: path => /^xl\/worksheets\/[^/]+\.xml$/.test(path),
+      siblingPattern:
+        /^xl\/(?:workbook\.xml|_rels\/workbook\.xml\.rels|worksheets\/_rels\/[^/]+\.rels|pivotTables\/(?:_rels\/)?[^/]+|pivotCache\/(?:_rels\/)?[^/]+)$/,
+      compute: computePivotEvidenceForMarkup
+    }
+  },
+  {
+    id: 'word-formatting',
+    title: 'Word formatting cascade',
+    formats: ['docx'],
+    determines: [
+      'the value every formatting property resolves to, and which of the six cascade layers set it',
+      'where Word diverges from ECMA-376 — toggle properties, numbering precedence, table style banding'
+    ],
+    cannotDetermine: [
+      'how the resolved formatting actually renders — line breaking, font substitution and pagination are the renderer’s',
+      'formatting in word/glossary/, which resolves against its own stylesheet'
+    ],
+    appliesTo: parts => parts['word/styles.xml'] !== undefined,
+    explain: {
+      // Every Word story, not just document.xml: a paragraph in a header or footnote
+      // resolves against the same styles.xml and numbering.xml.
+      matches: path =>
+        /^word\/(?:document\d*|header[^/]*|footer[^/]*|footnotes\d*|endnotes\d*|comments\d*)\.xml$/.test(path),
+      siblings: ['word/styles.xml', 'word/numbering.xml'],
+      compute: computeEvidenceForMarkup
+    }
+  },
+  {
+    id: 'excel-formatting',
+    title: 'Excel cell formats and values',
+    formats: ['xlsx'],
+    determines: [
+      'the format a cell resolves to through cellXfs, which is a lookup and not a cascade',
+      'which date epoch the workbook uses, and what a serial number therefore means'
+    ],
+    cannotDetermine: [
+      'the result of a formula — nothing here evaluates one, only the cached value is read',
+      'whether a cached value is still current with respect to its formula'
+    ],
+    appliesTo: parts => parts['xl/styles.xml'] !== undefined,
+    explain: {
+      matches: path => /^xl\/worksheets\/[^/]+\.xml$/.test(path),
+      siblings: ['xl/styles.xml', 'xl/workbook.xml', 'xl/sharedStrings.xml'],
+      compute: computeExcelEvidenceForMarkup
+    }
+  },
+  {
+    id: 'powerpoint',
+    title: 'Slide placeholder and theme inheritance',
+    formats: ['pptx'],
+    determines: [
+      'what a shape inherits from its layout and master, matched on @idx or @type',
+      'which theme colour a colour-map reference resolves to'
+    ],
+    cannotDetermine: [
+      'layout-to-master placeholder matching, which the specification does not define — Office’s behaviour here is undocumented',
+      'the rendered position of a shape inside a group beyond the transform arithmetic'
+    ],
+    appliesTo: parts => Object.keys(parts).some(p => p.startsWith('ppt/slideLayouts/')),
+    explain: {
+      // Every hop is an implicit relationship, so the .rels parts are as load-bearing
+      // as the content parts and have to be fetched alongside them.
+      matches: path => /^ppt\/slides\/[^/]+\.xml$/.test(path),
+      siblingPattern: /^ppt\/(slides|slideLayouts|slideMasters|theme)\/(_rels\/)?[^/]+$/,
+      compute: computePowerpointEvidenceForMarkup
+    }
+  },
+  {
+    id: 'chart',
+    title: 'Chart structure for translation',
+    formats: ['docx', 'xlsx', 'pptx'],
+    determines: [
+      'where a series’ numbers come from, and whether the cache is the only source',
+      'which parts of a chart carry meaning and which are presentation only'
+    ],
+    cannotDetermine: [
+      'whether a cached series still agrees with the workbook it was read from',
+      'how the chart is laid out — axis scaling and label placement are the renderer’s'
+    ],
+    appliesTo: parts => Object.keys(parts).some(p => /charts\/chart[^/]*\.xml$/.test(p)),
+    explain: {
+      // Charts are self-contained: the series cache travels with the part.
+      matches: path => /charts\/chart[^/]*\.xml$/.test(path),
+      compute: computeChartEvidenceForMarkup
+    }
   }
 ] as const;
 
@@ -187,6 +321,12 @@ export function analyzePackage(parts: PackageParts, analyzers: readonly Analyzer
 
   for (const analyzer of analyzers) {
     if (!analyzer.appliesTo(parts)) {
+      skipped.push(analyzer.id);
+      continue;
+    }
+    if (!analyzer.analyze) {
+      // Explain-only: it applies to the package but contributes no faults, so counting
+      // it as "ran" would overstate what the validate pass actually checked.
       skipped.push(analyzer.id);
       continue;
     }
@@ -268,4 +408,87 @@ export function diffFindings(before: PackageParts, after: PackageParts): Finding
   for (const [id, f] of first) if (!second.has(id)) resolved.push(f);
 
   return { introduced, resolved, unchanged };
+}
+
+/**
+ * Which analyzers have something to say about one open part.
+ *
+ * Returned in registry order so the evidence bundle is stable between runs — a bundle
+ * that reshuffles makes two otherwise-identical answers look different.
+ */
+export const explainersFor = (partPath: string, analyzers: readonly Analyzer[] = ANALYZERS): Analyzer[] =>
+  analyzers.filter(a => a.explain?.matches(partPath));
+
+/**
+ * Every sibling part the matching analyzers want, resolved against what the package
+ * actually has.
+ *
+ * Unioned so a part wanted by three analyzers is fetched once. `available` is the list
+ * of part paths the caller can supply; a named sibling that is not there is dropped
+ * rather than requested, because the analyses report an absent part themselves.
+ */
+export const siblingsFor = (
+  partPath: string,
+  available: readonly string[],
+  analyzers: readonly Analyzer[] = ANALYZERS
+): string[] => {
+  const wanted = new Set<string>();
+  for (const analyzer of explainersFor(partPath, analyzers)) {
+    const explain = analyzer.explain!;
+    if (explain.siblingPattern) {
+      for (const path of available) {
+        if (path !== partPath && explain.siblingPattern.test(path)) wanted.add(path);
+      }
+    }
+    for (const path of explain.siblings ?? []) {
+      if (available.includes(path)) wanted.add(path);
+    }
+  }
+  return [...wanted];
+};
+
+/**
+ * Runs every matching explainer and merges what they produce.
+ *
+ * One analyzer throwing must not suppress the rest, and one returning nothing is not a
+ * failure — most parts are only interesting to two or three of them.
+ *
+ * Returns null when nothing matched at all, which is the signal the caller uses to
+ * record a coverage gap: the honest answer there is that no check applies, not that
+ * the markup is fine.
+ */
+export function explainPart(
+  parts: PackageParts,
+  partPath: string,
+  rawXml: string,
+  registry: readonly Analyzer[] = ANALYZERS
+): { evidence: ComputedEvidence; contributors: string[] } | null {
+  const analyzers = explainersFor(partPath, registry);
+  if (analyzers.length === 0) return null;
+
+  const lines: string[] = [];
+  const unresolved: string[] = [];
+  const contributors: string[] = [];
+
+  for (const analyzer of analyzers) {
+    let result: ComputedEvidence | null = null;
+    try {
+      result = analyzer.explain!.compute(parts, rawXml);
+    } catch {
+      continue;
+    }
+    if (!result) continue;
+    contributors.push(analyzer.id);
+    lines.push(...result.lines);
+    unresolved.push(...result.unresolved);
+  }
+
+  if (lines.length === 0 && unresolved.length === 0) return null;
+
+  // De-duplicated because analyzers legitimately overlap - bookmarks and the Word
+  // cascade both read document.xml and can reach the same conclusion about it.
+  return {
+    evidence: { lines: [...new Set(lines)], unresolved: [...new Set(unresolved)] },
+    contributors
+  };
 }

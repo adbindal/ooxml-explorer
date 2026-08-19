@@ -1,5 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { ANALYZERS, analyzePackage, capabilityLedger, diffFindings } from '../services/analyzers';
+import {
+  ANALYZERS,
+  analyzePackage,
+  capabilityLedger,
+  diffFindings,
+  explainersFor,
+  siblingsFor,
+  explainPart,
+  type Analyzer
+} from '../services/analyzers';
 import { analyzerOf } from '../services/findings';
 import type { PackageParts } from '../services/packageIntegrity';
 
@@ -255,5 +264,185 @@ describe('the part is part of a finding identity', () => {
     expect(delta.introduced.filter(unmatched).map(f => f.part)).toEqual(['word/header1.xml']);
     expect(delta.resolved.filter(unmatched).map(f => f.part)).toEqual(['word/document.xml']);
     expect(delta.unchanged.some(unmatched)).toBe(false);
+  });
+});
+
+describe('explain routing', () => {
+  it('covers every part the hand-maintained table used to', () => {
+    // A regression guard for the migration off ANALYSIS_TARGETS: each of these routed
+    // to an analyzer before, and losing one would silently drop the Verified tier for
+    // that part rather than failing loudly.
+    const covered = [
+      'word/document.xml',
+      'word/header1.xml',
+      'word/footnotes.xml',
+      'xl/worksheets/sheet1.xml',
+      'ppt/slides/slide1.xml',
+      'word/charts/chart1.xml',
+      'ppt/charts/chart2.xml'
+    ];
+
+    for (const path of covered) {
+      expect(explainersFor(path).length, path).toBeGreaterThan(0);
+    }
+  });
+
+  it('routes one part to several analyzers, which is the point', () => {
+    // word/document.xml carries formatting AND bookmarks AND comments AND possibly OLE.
+    const ids = explainersFor('word/document.xml').map(a => a.id);
+
+    expect(ids).toContain('word-formatting');
+    expect(ids).toContain('bookmark');
+    expect(ids).toContain('comment');
+    expect(ids.length).toBeGreaterThan(2);
+  });
+
+  it('returns nothing for a part no analyzer covers', () => {
+    // The signal the panel uses to record a coverage gap. Silence here must mean "no
+    // check applies", not "nothing is wrong".
+    expect(explainersFor('customXml/item1.xml')).toEqual([]);
+    expect(explainersFor('docProps/core.xml')).toEqual([]);
+  });
+
+  it('keeps registry order, so an evidence bundle does not reshuffle between runs', () => {
+    const first = explainersFor('word/document.xml').map(a => a.id);
+    const second = explainersFor('word/document.xml').map(a => a.id);
+
+    expect(first).toEqual(second);
+  });
+});
+
+describe('siblingsFor', () => {
+  const available = [
+    'word/document.xml',
+    'word/styles.xml',
+    'word/numbering.xml',
+    'word/comments.xml',
+    'word/commentsExtended.xml',
+    'word/_rels/document.xml.rels',
+    'word/embeddings/oleObject1.bin',
+    'word/media/image1.emf',
+    'docProps/app.xml'
+  ];
+
+  it('unions what every matching analyzer wants, without duplicates', () => {
+    const siblings = siblingsFor('word/document.xml', available);
+
+    expect(siblings).toContain('word/styles.xml');
+    expect(siblings).toContain('word/commentsExtended.xml');
+    expect(siblings).toContain('word/_rels/document.xml.rels');
+    expect(new Set(siblings).size).toBe(siblings.length);
+  });
+
+  it('never asks for the open part itself', () => {
+    expect(siblingsFor('word/document.xml', available)).not.toContain('word/document.xml');
+  });
+
+  it('drops a named sibling the package does not have', () => {
+    // The analyses report an absent part themselves; requesting one that cannot be
+    // supplied just wastes a fetch and muddies the failure.
+    const siblings = siblingsFor('word/document.xml', ['word/document.xml', 'word/styles.xml']);
+
+    expect(siblings).toEqual(['word/styles.xml']);
+  });
+
+  it('does not pull in unrelated parts', () => {
+    expect(siblingsFor('word/document.xml', available)).not.toContain('docProps/app.xml');
+  });
+});
+
+describe('explainPart', () => {
+  it('merges what several analyzers say about one part', () => {
+    const W_NS = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
+    const parts: PackageParts = {
+      'word/document.xml': `<?xml version="1.0"?><w:document ${W_NS}><w:body><w:p>
+        <w:bookmarkStart w:id="1" w:name="Ref"/><w:r><w:t>x</w:t></w:r></w:p></w:body></w:document>`
+    };
+
+    const result = explainPart(parts, 'word/document.xml', '<w:bookmarkStart w:id="1" w:name="Ref"/>');
+
+    expect(result).not.toBeNull();
+    expect(result!.contributors).toContain('bookmark');
+    expect(result!.evidence.lines.some(l => l.includes('never closes'))).toBe(true);
+  });
+
+  it('returns null for a part nothing covers, rather than an empty bundle', () => {
+    // An empty bundle would read as "checked, nothing found" and could earn a tier.
+    expect(explainPart({ 'docProps/core.xml': '<x/>' }, 'docProps/core.xml', '<x/>')).toBeNull();
+  });
+
+  it('survives one analyzer throwing and still returns the others', () => {
+    const W_NS = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
+    // styles.xml present but malformed: the cascade analyzer has to cope, and whatever
+    // it does must not take the bookmark evidence down with it.
+    const parts: PackageParts = {
+      'word/document.xml': `<?xml version="1.0"?><w:document ${W_NS}><w:body><w:p>
+        <w:bookmarkStart w:id="1" w:name="Ref"/></w:p></w:body></w:document>`,
+      'word/styles.xml': '<w:styles><unclosed>'
+    };
+
+    const result = explainPart(parts, 'word/document.xml', '<w:bookmarkStart w:id="1" w:name="Ref"/>');
+
+    expect(result?.contributors).toContain('bookmark');
+  });
+
+  it('de-duplicates lines two analyzers both produce', () => {
+    const W_NS = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
+    const parts: PackageParts = {
+      'word/document.xml': `<?xml version="1.0"?><w:document ${W_NS}><w:body><w:p>
+        <w:bookmarkStart w:id="1" w:name="Ref"/></w:p></w:body></w:document>`
+    };
+
+    const lines = explainPart(parts, 'word/document.xml', '')!.evidence.lines;
+
+    expect(new Set(lines).size).toBe(lines.length);
+  });
+});
+
+describe('routing edge cases, pinned with stubs', () => {
+  const stub = (id: string, over: Partial<Analyzer['explain']> = {}, lines: string[] = [`${id} says something`]) =>
+    ({
+      id,
+      title: id,
+      formats: ['docx'] as const,
+      determines: ['x'],
+      cannotDetermine: ['y'],
+      appliesTo: () => true,
+      explain: {
+        matches: () => true,
+        compute: () => ({ lines, unresolved: [] }),
+        ...over
+      }
+    }) as unknown as Analyzer;
+
+  it('never returns the open part as its own sibling', () => {
+    // Some sibling patterns legitimately match the part they are attached to -
+    // ppt/slides/slide1.xml matches the PowerPoint pattern - so the guard is
+    // load-bearing rather than defensive.
+    const registry = [stub('self', { siblingPattern: /^ppt\/slides\/[^/]+$/ })];
+    const siblings = siblingsFor('ppt/slides/slide1.xml', ['ppt/slides/slide1.xml', 'ppt/slides/slide2.xml'], registry);
+
+    expect(siblings).toEqual(['ppt/slides/slide2.xml']);
+  });
+
+  it('keeps the other analyzers when one explainer throws', () => {
+    const exploding = stub('boom');
+    exploding.explain!.compute = () => {
+      throw new Error('explainer bug');
+    };
+    const result = explainPart({ 'word/document.xml': '<x/>' }, 'word/document.xml', '', [exploding, stub('ok')]);
+
+    expect(result?.contributors).toEqual(['ok']);
+  });
+
+  it('de-duplicates a line two analyzers both produce', () => {
+    // Real overlap: bookmarks and the Word cascade both read document.xml and can
+    // reach the same conclusion. A repeated line wastes prompt budget and reads as
+    // corroboration when it is one fact stated twice.
+    const registry = [stub('a', {}, ['the same line']), stub('b', {}, ['the same line'])];
+    const result = explainPart({ 'word/document.xml': '<x/>' }, 'word/document.xml', '', registry);
+
+    expect(result!.evidence.lines).toEqual(['the same line']);
+    expect(result!.contributors).toEqual(['a', 'b']);
   });
 });
