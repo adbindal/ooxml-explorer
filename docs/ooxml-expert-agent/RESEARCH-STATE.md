@@ -687,6 +687,75 @@ The engine's output could previously only be read as a log, which no other progr
 
 **Deliberately absent: the explain path.** It describes how markup *resolves* rather than what is wrong with it, and forcing that into findings would mean inventing a fault for every fact. When an agent needs it, it wants a different shape; inventing that shape before there is a caller would be guessing.
 
+## 8v. ISO Strict, properly — normalised at one choke point (2026-08-19)
+
+`services/conformance.ts` + 17 tests, `93b3be2`. §8q fixed one module; this fixes the class.
+
+**Every analyzer compared namespaces by exact equality against a Transitional constant**, so a Strict package produced no findings at all — not an error, just silence. `oleObjects` had been caught doing this while *looking* Strict-tolerant; the other thirteen modules had the same blind spot and had simply never claimed otherwise.
+
+**Fixed at one choke point rather than sixty call sites.** ~60 namespace comparisons across 14 modules funnel through 6 constants. Teaching each of them both spellings would be 60 chances to get one wrong plus a rule every future analyzer author must remember. Mapping the URIs once, before any analyzer sees the markup, keeps the analyzers exact and makes Strict support a property of the pipeline. Rewriting is text-level, not tree-level: a DOM's `namespaceURI` is read-only, and rewriting the base URI fixes relationship `Type` attributes for free since a type is that URI plus a trailing segment.
+
+⚠️ **It is not a converter.** Namespace mapping makes Strict markup *readable* by Transitional-shaped code; it does not reconcile the classes. **Strict forbids VML**, so an embedded object there carries a DrawingML preview rather than the `v:imagedata` one the OLE check looks for — the `conformance` analyzer reports Strict as a **note** (it is valid, usually deliberate) and states that limit, because a clean report would otherwise imply coverage we do not have.
+
+`Analyzer` gained **`readsRawMarkup`** for this one analyzer — found by a test: normalising first left it permanently convinced every package was Transitional.
+
+🔴 **Provenance, and a bug caught by checking it.** Strict URIs come from `pjfanning/ooxml-strict-converter`; **every Transitional target was verified independently against the SDK's `namespaces.json`**. That check found an error in *their* mapping file — it maps wordprocessingml to `.../wordprocessingml/main`, missing the `/2006`. Copying it wholesale would have left every Strict Word document unreadable. A test pins the correct value.
+
+**Honest note on ordering:** longest-key-first replacement is *insurance*, not a live fix — no pair in the current table needs it, because `chart` and `chartDrawing` both gain the same `/2006`. Pinned as an invariant with the reasoning recorded, and a test comment claiming otherwise was corrected.
+
+## 8u. Which features deserve an analyzer — the criterion, and a measured backlog (2026-08-19)
+
+Asked directly: do shapes, tables, lists, audio/video each need their own analyzer? **No — and the answer is not "it depends".** There is a test.
+
+### The test: does this feature fail INVISIBLY?
+
+Every analyzer that has earned its keep detects something a person looking at the document cannot see. That is the entire pattern:
+
+| Analyzer | What renders fine while broken |
+|---|---|
+| OLE | preview image intact, embedding gone |
+| bookmarks | text all present, every cross-reference target lost |
+| comments | margin looks normal, replies flattened to top-level |
+| pivots | cells show last-refresh values, chain severed |
+| package | file opens, implicit relationship missing |
+
+A feature whose faults are *visible* does not need one. A wrong shape looks wrong; the user reports it without help.
+
+### Three signals that predict invisible failure
+
+1. **Indirection** — resolves through `r:id` or an implicit relationship. Break the link and a fallback renders. *(OLE, media, images, pivots, charts, slide layouts.)*
+2. **Paired markers** — two elements matched by id where losing one is silent. *(bookmarks, comments, revisions, permissions, moveFrom/To ranges.)*
+3. **Cached or duplicated state** — a stored copy that can drift from its source. *(pivot cache, chart series cache, field results, sharedStrings.)*
+
+If a feature hits none of these, it probably wants better *explanation*, not an analyzer.
+
+### Measured backlog — [MS-OI29500] deviations per clause
+
+Counted from the public TOC (§8p). **Deviation count says where Office and the spec disagree most, i.e. where "valid per spec" ≠ "renders right in Word."** Cross it with the invisibility test:
+
+| Clause | Deviations | Covered? | Invisible failure? |
+|---|---:|---|---|
+| §18.17 formulas | **218** | ✗ | partly — a stale cached result is invisible |
+| §21.2 charts | 172 | partial | cache-only series ✓ |
+| §20.1 DrawingML framework | 149 | ✗ | mostly visible |
+| §18.3 worksheet | 83 | partial | — |
+| §17.3 paragraphs | 77 | ✓ cascade | — |
+| §22.1 math | 75 | ✗ | mostly visible |
+| **§17.16 fields & hyperlinks** | **72** | ✗ | ✓✓ **strong** — a REF to a lost bookmark shows a stale cached result |
+| **§17.4 tables** | **71** | styling only | ✓ Word silently repairs a broken grid |
+| §17.15 settings | 70 | ✗ | ✓ but low impact |
+| §18.10 pivots | 67 | ✓ | — |
+| §17.13 annotations | 46 | ✓ | — |
+
+### Verdict on the four asked about
+
+- **Word tables** — ✅ yes, but *not the styling*: `wordTableStyles.ts` already covers banding and `tblLook`. The gap is the **grid model** — `gridSpan` sums that do not match `tblGrid`, and `vMerge` continuations orphaned with no `restart` above them. Word repairs these silently and renders something plausible; another renderer mangles the layout. **Being built.**
+- **PPT audio/video** — ✅ yes, and it is the OLE pattern exactly: the poster frame renders while the media is gone, and `r:link` media lives *outside* the package so a deck that plays on the author's machine is silently not self-contained. Low deviation count, high invisibility. **Being built.**
+- **Word lists** — ⚠️ mostly covered. `wordNumbering.ts` already handles the three patterns and the `numStyleLink` double-hop. Marginal gain.
+- **Word shapes** — ⚠️ biggest blind spot by deviation count (199 across §20.1 + §21.1) but **mostly visible**, so it ranks lower than the count suggests. The invisible parts are narrow: text inside `wps:txbx` that extraction misses, and dangling `a:blip/@r:embed`.
+
+**Next by this ranking: fields (§17.16).** 72 deviations, and it fails invisibly in the strongest way — a `REF` field caches its last-computed result, so a cross-reference to a deleted bookmark keeps displaying the old text indefinitely. It also interlocks with the bookmark analyzer already built.
+
 ## 9. Next actions
 
 Stages 0–2 are complete for all three formats and the Verified tier is live. Remaining work is per-subsystem, tracked as tasks #11–#28.
@@ -697,9 +766,9 @@ All four subsystems the user named are **DONE**: #26 bookmarks (§8m), #27 OLE (
 
 1. ~~Source or cut the "67 variations" figure~~ — **DONE**, see §8p. Verified at 67; the "second only to formulas" half was false and is corrected.
 2. ~~Carry `Finding[]` to the panel boundary~~ — **DONE for validate and compare**, see §8t. Those paths produce findings natively and now export as JSON. The *explain* path is still prose by design; revisit only when a caller actually needs it. `ComputedEvidence` still lives in `aiService` and is type-imported by `geminiService` to avoid a runtime cycle — a small seam worth tidying if that type ever grows.
-3. **Decide on Strict support repo-wide** (§8q). Word and Excel resolvers match exact Transitional constants. A documented limitation, not a claim.
+3. ~~Decide on Strict support repo-wide~~ — **DONE**, see §8v. Normalised at one choke point; the analyzers still compare exactly, and the `conformance` analyzer reports what the mapping does not cover.
 4. **#11** Pin a real `styles.xml` regression fixture — **blocked** on the licensing question (§8j / `LICENSING.md`).
-5. **#21** Replace the substring NL fallback with BM25 — **measure first**; the counters and now the gap log are both live, so this is a decision waiting on data rather than on argument.
+5. ~~**#21** Replace the substring NL fallback with BM25~~ — **DONE** (`00c3bd1`). Worth being precise about what this did and did not settle: the counters exist to decide **embeddings vs lexical**, and that stays open pending usage data. BM25 replaced *"take the first substring hit"*, which lost to lexical scoring under every hypothesis, so it raises the floor the measurement compares against rather than pre-empting it.
 6. **New analyzers**, driven by the gap log rather than guesswork. The obvious blind spots from §10: **DrawingML** (shape geometry, effects, theme style matrices), **formulas** (the biggest MS-OI29500 cluster in SpreadsheetML), and **fields** (`w:fldSimple`, `w:instrText` — TOC, cross-references and page numbers all run through them, and they interact directly with bookmarks).
 
 **Method note.** Both modules shipped in §8m/§8n were **mutation-tested**: the implementation was deliberately broken several distinct ways and the tests re-run, to check they fail for the right reasons rather than agreeing with themselves. This found a real gap in the bookmark tests (no case had two range kinds in one document, the only arrangement where kind-matching is observable). Worth doing for every module here — a green suite on first run is not evidence.
