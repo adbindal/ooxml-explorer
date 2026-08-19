@@ -206,7 +206,7 @@ export const ANALYZERS: readonly Analyzer[] = [
     ],
     cannotDetermine: [
       'whether the cached records still agree with their source range — staleness needs the source recomputed',
-      'the "67 MS-OI29500 variations" figure quoted in the module doc, which came from an earlier research pass and has not been checked against the source'
+      'which of the 67 documented [MS-OI29500] variations for this clause a given workbook actually relies on — the count is verified, the per-file impact is not'
     ],
     appliesTo: parts => Object.keys(parts).some(p => p.startsWith('xl/pivotTables/') || p.startsWith('xl/pivotCache/')),
     analyze: parts => readPivotTables(parts).flatMap(t => [...t.chain.problems, ...t.problems]),
