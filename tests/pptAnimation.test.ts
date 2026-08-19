@@ -98,15 +98,15 @@ describe('the animation that points at a shape that is gone', () => {
     expect(problem.message).toContain('shape id 3');
   });
 
-  it('scopes shapes to the shape tree, so a p:cNvPr elsewhere in the part is not a target', () => {
-    // A cNvPr outside p:spTree is not a shape an animation can reach. Counting it would
-    // silence a genuinely dead animation.
+  it('scopes shapes to the shape tree, so a shape elsewhere in the part is not a target', () => {
+    // A p:cNvPr outside p:spTree is not a shape an animation can reach. Counting it would
+    // silence a genuinely dead animation, and would invent duplicate ids besides.
+    //
+    // The fixture puts a whole p:sp outside the tree rather than a bare p:cNvPr: a loose
+    // p:cNvPr is discarded anyway by the walk out to its owning shape, so a fixture built
+    // that way passes whether the scoping happens or not.
     const found = index(
-      slide(
-        sp('2', 'Title'),
-        timing(behaviour('anim', '42')),
-        '<p:custDataLst><p:custData><p:cNvPr id="42" name="Not a shape"/></p:custData></p:custDataLst>'
-      )
+      slide(sp('2', 'Title'), timing(behaviour('anim', '42')), sp('42', 'Outside the tree'))
     );
 
     expect(found.shapes.has('42')).toBe(false);
@@ -311,6 +311,17 @@ describe('paragraph ranges — the text the shape no longer has', () => {
     expect(found.problems.map(f => f.code)).toEqual(['animation/dead-target']);
   });
 
+  it('does not report an inverted range on a shape that is not there either', () => {
+    // The inverted-range check needs no shape to run against, so it is the one range
+    // problem that can be reported about a shape the slide does not have. The dead target
+    // is the finding worth reading; a second one about the range it does not have is noise.
+    const found = index(
+      slide(sp('2', 'Title'), timing(behaviour('animEffect', '99', '<p:txEl><p:pRg st="2" end="1"/></p:txEl>')))
+    );
+
+    expect(found.problems.map(f => f.code)).toEqual(['animation/dead-target']);
+  });
+
   it('does not range-check a table or chart frame, whose text p:pRg does not index', () => {
     const found = index(
       slide(graphicFrame('7', 'Table'), timing(behaviour('animEffect', '7', '<p:txEl><p:pRg st="0" end="9"/></p:txEl>')))
@@ -369,6 +380,9 @@ describe('@spid is not always a shape id', () => {
     expect(found.animations[0].target.shapeId).toBe('_x0000_s1026');
     expect(found.animations[0].target.exists).toBeNull();
     expect(found.problems).toEqual([]);
+    // And it is not counted among the dead either: "1 of 1 animations will never run" is
+    // the same wrong answer as the finding, in the sentence people actually read.
+    expect(deadAnimations(found)).toEqual([]);
   });
 
   it('declines to judge the string form on a condition and on a build entry', () => {
@@ -541,7 +555,9 @@ describe('computeAnimationEvidenceForMarkup — panel wiring', () => {
     const evidence = computeAnimationEvidenceForMarkup({ [SLIDE]: deadDeck() }, '');
 
     expect(evidence!.lines[1]).toContain('2 of 3 animations will never run');
-    expect(evidence!.lines[1]).toContain('3, 5');
+    // The ids are matched with their brackets on purpose: "3, 5" is a substring of the
+    // list every targeted id would produce, so the loose form passes either way.
+    expect(evidence!.lines[1]).toContain('(3, 5)');
   });
 
   it('says so plainly when every animation resolves', () => {
