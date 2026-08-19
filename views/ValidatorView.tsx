@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { 
   ArrowLeft, Play, Loader2, Maximize2, GitCompare, ExternalLink, 
   CheckSquare, Square, Zap, AlertTriangle, Power, Activity,
-  PieChart, ShieldCheck
+  PieChart, ShieldCheck, FileJson
 } from 'lucide-react';
 import { ThemeClasses } from '../types';
 import { runSystemChecks, LogEntry, CoverageModule } from '../services/testService';
@@ -11,6 +11,7 @@ import { analyzePackage, capabilityLedger } from '../services/analyzers';
 import { compareFindings } from '../services/findings';
 import { readRetrievalMetrics, summariseRetrieval, resetRetrievalMetrics } from '../services/retrievalMetrics';
 import { summariseCoverageGaps, resetCoverageGaps } from '../services/coverageGaps';
+import { reportPackage, reportComparison, serialiseReport, summariseReport } from '../services/report';
 import {
     resolveAlternateContent,
     MODERN_CONSUMER_NAMESPACES,
@@ -35,6 +36,7 @@ const ValidatorView: React.FC<ValidatorViewProps> = ({ themeClasses }) => {
     const [debugEnabled, setDebugEnabled] = useState(getDebugMode());
     const [coverageReport, setCoverageReport] = useState<CoverageModule[]>([]);
     const [integrityStatus, setIntegrityStatus] = useState<'idle' | 'running' | 'done'>('idle');
+    const [exporting, setExporting] = useState(false);
     
     const consoleEndRef = useRef<HTMLDivElement>(null);
     
@@ -117,6 +119,56 @@ const ValidatorView: React.FC<ValidatorViewProps> = ({ themeClasses }) => {
             { msg: '🕳️ Coverage gaps — markup that was opened with no analyzer behind it:', type: 'info', timestamp: Date.now() },
             ...gaps.lines.map(line => ({ msg: line, type: 'info' as const, timestamp: Date.now() }))
         ]);
+    };
+
+    /**
+     * Writes the structured report to a file.
+     *
+     * The point of the engine is that its output can be consumed by something other
+     * than a person reading a log. When both files are selected this produces the
+     * comparison report instead - what the change broke and what it fixed - which is
+     * the shape a regression investigation actually wants.
+     */
+    const handleExportReport = async () => {
+        const addLog = (msg: string, type: 'info' | 'success' | 'warning' | 'error') =>
+            setLogs(prev => [...prev, { msg, type, timestamp: Date.now() }]);
+
+        if (!files.a) return;
+        setExporting(true);
+        try {
+            const readParts = async (file: File) => readPackageParts((await loadZipFile(file)).zip);
+            const partsA = await readParts(files.a);
+
+            // Branched rather than narrowed after the fact: the two reports are
+            // different shapes, and the summary line for each reads from fields the
+            // other does not have.
+            let json: string;
+            let summary: string;
+            if (files.b) {
+                const report = reportComparison(partsA, await readParts(files.b));
+                json = serialiseReport(report);
+                summary =
+                    `📄 Comparison report written — ${report.introduced.length} introduced, ` +
+                    `${report.resolved.length} resolved, ${report.unchanged.length} pre-existing.`;
+            } else {
+                const report = reportPackage(partsA);
+                json = serialiseReport(report);
+                summary = `📄 Report written. ${summariseReport(report)}`;
+            }
+
+            const url = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `${files.a.name.replace(/\.[^.]+$/, '')}-report.json`;
+            link.click();
+            URL.revokeObjectURL(url);
+
+            addLog(summary, 'success');
+        } catch (e) {
+            addLog(`❌ Could not build the report: ${(e as Error).message}`, 'error');
+        } finally {
+            setExporting(false);
+        }
     };
 
     const handleCheckIntegrity = async () => {
@@ -323,6 +375,19 @@ const ValidatorView: React.FC<ValidatorViewProps> = ({ themeClasses }) => {
                                 className={`w-full py-2 rounded font-medium flex items-center justify-center gap-2 transition-all ${!files.a ? 'bg-zinc-700 text-zinc-500 cursor-not-allowed' : 'bg-emerald-700 hover:bg-emerald-600 text-white'}`}
                             >
                                 {integrityStatus === 'running' ? <Loader2 className="animate-spin" size={16} /> : <ShieldCheck size={16} />} Check Package Integrity
+                            </button>
+
+                            {/* The engine's output as data rather than as a log. */}
+                            <button
+                                onClick={handleExportReport}
+                                disabled={!files.a || exporting}
+                                title={files.b
+                                    ? 'Download the comparison report: what this change broke, what it fixed, and what it left alone.'
+                                    : 'Download the structured findings as JSON, for another tool or agent to consume.'}
+                                className={`w-full py-2 rounded font-medium flex items-center justify-center gap-2 transition-all ${!files.a ? 'bg-zinc-700 text-zinc-500 cursor-not-allowed' : 'bg-indigo-700 hover:bg-indigo-600 text-white'}`}
+                            >
+                                {exporting ? <Loader2 className="animate-spin" size={16} /> : <FileJson size={16} />}
+                                {files.b ? 'Export Comparison Report' : 'Export Report (JSON)'}
                             </button>
 
                             {/* Counts only; never query text. */}
