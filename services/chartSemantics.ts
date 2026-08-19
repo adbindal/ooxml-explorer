@@ -26,6 +26,9 @@
  *      should be named up front, not discovered when the output looks wrong.
  */
 
+import { finding, type Finding, type Severity as FindingSeverity } from './findings';
+import { relsPathFor, resolveTarget, type PackageParts } from './packageIntegrity';
+
 export const C_NAMESPACE = 'http://schemas.openxmlformats.org/drawingml/2006/chart';
 
 /** Chart-type elements that may appear in a plot area, with their series-holder role. */
@@ -449,3 +452,139 @@ export const computeChartEvidenceForMarkup = (
     unresolved: [...model.problems, ...model.translationNotes]
   };
 };
+
+// ---------------------------------------------------------------------------
+// Findings
+//
+// `readChart` has always produced rich `problems` and `translationNotes`, but they
+// were plain strings that only ever reached the explain path — so charts, the
+// second-largest cluster of documented Office divergence in the format (172 variations
+// for Part 1 §21.2), contributed **nothing** to validation or to a before/after
+// comparison. This turns them into Findings and adds the one check the model never
+// made: whether the chart can still reach its own data.
+// ---------------------------------------------------------------------------
+
+/**
+ * Severity and silence per kind.
+ *
+ * `chart/structural-problem` and `chart/translation-risk` are deliberately COARSE, each
+ * carrying many distinct messages, because the underlying checks generate their text
+ * rather than selecting from an enumeration. That is the same shape as an ESLint rule
+ * with many messages under one rule id: the code stays stable for grouping and
+ * suppression while the message carries the specifics. The externalData checks get
+ * their own codes because they are discrete conditions, not generated prose.
+ */
+const CHART_RULES = {
+  'structural-problem': { severity: 'error', silent: true },
+  'translation-risk': { severity: 'note', silent: true },
+  'external-data-missing': { severity: 'error', silent: true },
+  'cache-is-only-source': { severity: 'warning', silent: true }
+} as const satisfies Record<string, { severity: FindingSeverity; silent: boolean }>;
+
+export type ChartProblemKind = keyof typeof CHART_RULES;
+
+const chartFinding = (
+  kind: ChartProblemKind,
+  part: string,
+  message: string,
+  remediation: string,
+  subject?: Record<string, string>
+): Finding => finding(`chart/${kind}`, part, message, remediation, { ...CHART_RULES[kind], subject });
+
+/** Chart parts, in all three formats. */
+export const CHART_HOST_PART = /charts\/chart[^/]*\.xml$/;
+
+export interface ChartExternalData {
+  relationshipId: string;
+  /** Resolved part path, or null when the relationship could not be resolved. */
+  target: string | null;
+  partExists: boolean;
+}
+
+/**
+ * The workbook a chart edits when you double-click it.
+ *
+ * A chart inside a `.docx` or `.pptx` keeps its source data as an embedded workbook
+ * part, named by `c:externalData/@r:id`. Lose that part and the chart still draws
+ * perfectly from its cached values — and can never be edited or refreshed again. It is
+ * the OLE preview problem wearing a different hat.
+ */
+export function readChartExternalData(parts: PackageParts, partPath: string): ChartExternalData | null {
+  const xml = parts[partPath];
+  if (xml === undefined) return null;
+  const doc = new DOMParser().parseFromString(xml, 'application/xml');
+  if (doc.getElementsByTagName('parsererror').length > 0) return null;
+
+  const el = Array.from(doc.getElementsByTagName('*')).find(
+    e => e.namespaceURI === C_NAMESPACE && e.localName === 'externalData'
+  );
+  if (!el) return null;
+
+  const relId =
+    Array.from(el.attributes).find(a => a.localName === 'id' && a.namespaceURI?.includes('/relationships'))?.value ??
+    null;
+  if (relId === null) return null;
+
+  const relsXml = parts[relsPathFor(partPath)];
+  if (relsXml === undefined) return { relationshipId: relId, target: null, partExists: false };
+
+  const relsDoc = new DOMParser().parseFromString(relsXml, 'application/xml');
+  const rel = Array.from(relsDoc.getElementsByTagName('Relationship')).find(r => r.getAttribute('Id') === relId);
+  if (!rel) return { relationshipId: relId, target: null, partExists: false };
+
+  const target = resolveTarget(partPath, rel.getAttribute('Target') ?? '');
+  return { relationshipId: relId, target, partExists: parts[target] !== undefined };
+}
+
+/** Every chart finding for one chart part. */
+export function chartFindings(parts: PackageParts, partPath: string): Finding[] {
+  const xml = parts[partPath];
+  if (xml === undefined) return [];
+  const model = readChart(xml);
+  if (!model) return [];
+
+  const problems: Finding[] = [];
+
+  for (const message of model.problems) {
+    problems.push(chartFinding(
+      'structural-problem', partPath,
+      `${message.charAt(0).toUpperCase()}${message.slice(1)}. The chart still draws — it falls back on its cached values — so this is invisible until something tries to rebuild or convert it.`,
+      'Correct the chart definition so the structure it declares matches the data it carries.'
+    ));
+  }
+
+  for (const message of model.translationNotes) {
+    problems.push(chartFinding(
+      'translation-risk', partPath,
+      `${message.charAt(0).toUpperCase()}${message.slice(1)}.`,
+      'No action needed for rendering in Office. Decide how to handle this before converting the chart to another format.'
+    ));
+  }
+
+  const external = readChartExternalData(parts, partPath);
+  // `s.values?.formula` yields undefined when the series has no values element at all,
+  // and `undefined !== null` is true - so the naive spelling reports every chart with a
+  // missing data source as reference-based. Coalesce before comparing.
+  const usesReferences = model.plots.some(p =>
+    p.series.some(s => (s.values?.formula ?? null) !== null || (s.categories?.formula ?? null) !== null)
+  );
+
+  if (external && !external.partExists) {
+    problems.push(chartFinding(
+      'external-data-missing', partPath,
+      `The chart names an embedded workbook through relationship "${external.relationshipId}"${external.target ? ` at ${external.target}` : ''}, which is not in the package. The chart still draws from its cached values and looks entirely normal, but double-clicking it can no longer open its data, and it can never be refreshed or edited again.`,
+      external.target
+        ? `Restore ${external.target}, or remove the c:externalData reference so the chart is honestly cache-only.`
+        : 'Declare the missing relationship, or remove the c:externalData reference.',
+      { relationshipId: external.relationshipId }
+    ));
+  } else if (!external && usesReferences) {
+    problems.push(chartFinding(
+      'cache-is-only-source', partPath,
+      'The series reference spreadsheet ranges, but the chart carries no embedded workbook, so those formulas name cells that exist nowhere in this package. The cached values are the only data there is — which renders correctly and cannot be verified, refreshed, or traced back to a source.',
+      'Treat the cached values as the authority when converting this chart. Add an embedded workbook if the data needs to remain editable.'
+    ));
+  }
+
+  return problems;
+}

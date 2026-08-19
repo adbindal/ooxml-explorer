@@ -3,7 +3,8 @@ import {
   readChart,
   explainChart,
   PRESENTATIONAL_ELEMENTS,
-  C_NAMESPACE
+  C_NAMESPACE,
+  chartFindings
 } from '../services/chartSemantics';
 
 /**
@@ -255,5 +256,109 @@ describe('robustness and output', () => {
     expect(prose).toContain('Revenue');
     expect(prose).toContain('range: Sheet1!$B$2:$B$4');
     expect(prose).toContain('Decide these before converting:');
+  });
+});
+
+describe('chart findings — charts finally contribute to validation', () => {
+  const C = 'xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"';
+  const R = 'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
+
+  const rels = (body: string) =>
+    `<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${body}</Relationships>`;
+
+  /** A minimal well-formed bar chart with one series referencing a range. */
+  const chartXml = (extra = '', formula = 'Sheet1!$B$1:$B$2') => `<?xml version="1.0"?>
+    <c:chartSpace ${C} ${R}><c:chart><c:plotArea>
+      <c:barChart><c:ser>
+        <c:idx val="0"/><c:order val="0"/>
+        <c:val><c:numRef><c:f>${formula}</c:f><c:numCache><c:ptCount val="2"/>
+          <c:pt idx="0"><c:v>1</c:v></c:pt><c:pt idx="1"><c:v>2</c:v></c:pt>
+        </c:numCache></c:numRef></c:val>
+      </c:ser><c:axId val="1"/><c:axId val="2"/></c:barChart>
+      <c:catAx><c:axId val="1"/><c:crossAx val="2"/></c:catAx>
+      <c:valAx><c:axId val="2"/><c:crossAx val="1"/></c:valAx>
+    </c:plotArea></c:chart>${extra}</c:chartSpace>`;
+
+  const path = 'word/charts/chart1.xml';
+
+  it('reports a chart whose embedded workbook is gone', () => {
+    // The OLE preview problem wearing a different hat: the chart draws perfectly from
+    // its cache and can never be edited or refreshed again.
+    const parts = {
+      [path]: chartXml('<c:externalData r:id="rId1"><c:autoUpdate val="0"/></c:externalData>'),
+      'word/charts/_rels/chart1.xml.rels': rels(
+        `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/package" Target="../embeddings/data.xlsx"/>`
+      )
+    };
+
+    const problem = chartFindings(parts, path).find(p => p.code === 'chart/external-data-missing');
+    expect(problem?.silent).toBe(true);
+    expect(problem?.message).toContain('never be refreshed');
+  });
+
+  it('says nothing about external data when the workbook is present', () => {
+    const parts = {
+      [path]: chartXml('<c:externalData r:id="rId1"/>'),
+      'word/charts/_rels/chart1.xml.rels': rels(
+        `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/package" Target="../embeddings/data.xlsx"/>`
+      ),
+      'word/embeddings/data.xlsx': 'BINARY'
+    };
+
+    expect(chartFindings(parts, path).map(p => p.code)).not.toContain('chart/external-data-missing');
+  });
+
+  it('reports a referencing chart that carries no workbook at all', () => {
+    // The formulas name cells that exist nowhere in the package, so the cache is the
+    // only data there is - correct on screen and impossible to verify.
+    const problem = chartFindings({ [path]: chartXml() }, path).find(p => p.code === 'chart/cache-is-only-source');
+
+    expect(problem?.message).toContain('only data there is');
+  });
+
+  it('does not claim cache-only for a chart with literal values', () => {
+    const literal = `<?xml version="1.0"?><c:chartSpace ${C}><c:chart><c:plotArea>
+      <c:barChart><c:ser><c:idx val="0"/><c:order val="0"/>
+        <c:val><c:numLit><c:ptCount val="1"/><c:pt idx="0"><c:v>5</c:v></c:pt></c:numLit></c:val>
+      </c:ser><c:axId val="1"/><c:axId val="2"/></c:barChart>
+      <c:catAx><c:axId val="1"/><c:crossAx val="2"/></c:catAx>
+      <c:valAx><c:axId val="2"/><c:crossAx val="1"/></c:valAx>
+    </c:plotArea></c:chart></c:chartSpace>`;
+
+    expect(chartFindings({ [path]: literal }, path).map(p => p.code)).not.toContain('chart/cache-is-only-source');
+  });
+
+  it('turns a structural problem into an error finding', () => {
+    const broken = `<?xml version="1.0"?><c:chartSpace ${C}><c:chart><c:plotArea>
+      <c:barChart><c:ser><c:idx val="0"/><c:order val="0"/></c:ser><c:axId val="99"/></c:barChart>
+      <c:catAx><c:axId val="1"/><c:crossAx val="2"/></c:catAx>
+    </c:plotArea></c:chart></c:chartSpace>`;
+
+    const problem = chartFindings({ [path]: broken }, path).find(p => p.code === 'chart/structural-problem');
+    expect(problem?.severity).toBe('error');
+    // Structural faults are silent: the chart still draws from its cache.
+    expect(problem?.silent).toBe(true);
+  });
+
+  it('reports translation risks as notes, not as defects', () => {
+    const logAxis = `<?xml version="1.0"?><c:chartSpace ${C}><c:chart><c:plotArea>
+      <c:barChart><c:ser><c:idx val="0"/><c:order val="0"/>
+        <c:val><c:numLit><c:ptCount val="1"/><c:pt idx="0"><c:v>5</c:v></c:pt></c:numLit></c:val>
+      </c:ser><c:axId val="1"/><c:axId val="2"/></c:barChart>
+      <c:catAx><c:axId val="1"/><c:crossAx val="2"/></c:catAx>
+      <c:valAx><c:axId val="2"/><c:crossAx val="1"/><c:scaling><c:logBase val="10"/></c:scaling></c:valAx>
+    </c:plotArea></c:chart></c:chartSpace>`;
+
+    const notes = chartFindings({ [path]: logAxis }, path).filter(p => p.code === 'chart/translation-risk');
+    expect(notes.length).toBeGreaterThan(0);
+    for (const n of notes) expect(n.severity).toBe('note');
+  });
+
+  it('returns nothing for a part that is not in the package', () => {
+    expect(chartFindings({}, path)).toEqual([]);
+  });
+
+  it('returns nothing rather than throwing on malformed chart XML', () => {
+    expect(chartFindings({ [path]: '<c:chartSpace><unclosed>' }, path)).toEqual([]);
   });
 });

@@ -46,7 +46,7 @@ import { computeOleEvidenceForMarkup } from './oleObjects';
 import { computeEvidenceForMarkup } from './wordFormattingAnalysis';
 import { computeExcelEvidenceForMarkup } from './excelFormattingAnalysis';
 import { computePowerpointEvidenceForMarkup } from './powerpointFormattingAnalysis';
-import { computeChartEvidenceForMarkup } from './chartSemantics';
+import { computeChartEvidenceForMarkup, chartFindings, CHART_HOST_PART } from './chartSemantics';
 
 export type OoxmlFormat = 'docx' | 'xlsx' | 'pptx';
 
@@ -461,10 +461,14 @@ export const ANALYZERS: readonly Analyzer[] = [
       'which parts of a chart carry meaning and which are presentation only'
     ],
     cannotDetermine: [
-      'whether a cached series still agrees with the workbook it was read from',
+      'whether a cached series still agrees with the workbook it was read from — the values are compared to nothing',
       'how the chart is laid out — axis scaling and label placement are the renderer’s'
     ],
-    appliesTo: parts => Object.keys(parts).some(p => /charts\/chart[^/]*\.xml$/.test(p)),
+    appliesTo: parts => Object.keys(parts).some(p => CHART_HOST_PART.test(p)),
+    analyze: parts =>
+      Object.keys(parts)
+        .filter(p => CHART_HOST_PART.test(p))
+        .flatMap(path => chartFindings(parts, path)),
     explain: {
       // Charts are self-contained: the series cache travels with the part.
       matches: path => /charts\/chart[^/]*\.xml$/.test(path),
