@@ -31,6 +31,7 @@ import type { PackageParts } from './packageIntegrity';
 import { checkPackageIntegrity } from './packageIntegrity';
 import { readBookmarks } from './wordBookmarks';
 import { readComments, COMMENT_PART_PATHS } from './wordComments';
+import { readFields, crossCheckFieldTargets, computeFieldEvidenceForMarkup } from './wordFields';
 import { readOleObjects } from './oleObjects';
 import { readPivotTables, computePivotEvidenceForMarkup } from './excelPivotTables';
 import { normaliseParts, detectConformance, conformanceFindings, toTransitionalXml } from './conformance';
@@ -199,6 +200,32 @@ export const ANALYZERS: readonly Analyzer[] = [
       matches: path => WORD_BODY.test(path),
       siblings: ['word/comments.xml', 'word/commentsExtended.xml', 'word/commentsIds.xml'],
       compute: computeCommentEvidenceForMarkup
+    }
+  },
+  {
+    id: 'field',
+    title: 'Fields and their cached results',
+    formats: ['docx'],
+    determines: [
+      'whether a cross-reference points at a bookmark that still exists',
+      'whether the text a field displays will be recalculated, or is being presented as current',
+      'whether every field opens and closes, including nested ones'
+    ],
+    cannotDetermine: [
+      'whether a page-dependent field (TOC, PAGE, NUMPAGES) shows the right number — that needs the document laid out',
+      'references to a bookmark in a different part; each story is checked against its own bookmarks',
+      'what a field would evaluate to if recalculated — nothing here executes a field'
+    ],
+    appliesTo: parts => matching(parts, WORD_BODY).length > 0,
+    analyze: parts =>
+      matching(parts, WORD_BODY).flatMap(path => {
+        const doc = parse(parts[path]);
+        if (!doc) return [];
+        return [...readFields(doc, path).problems, ...crossCheckFieldTargets(doc, path)];
+      }),
+    explain: {
+      matches: path => WORD_BODY.test(path),
+      compute: computeFieldEvidenceForMarkup
     }
   },
   {
