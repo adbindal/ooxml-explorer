@@ -33,6 +33,7 @@ import { readBookmarks } from './wordBookmarks';
 import { readComments, COMMENT_PART_PATHS } from './wordComments';
 import { readOleObjects } from './oleObjects';
 import { readPivotTables, computePivotEvidenceForMarkup } from './excelPivotTables';
+import { normaliseParts, detectConformance, conformanceFindings, toTransitionalXml } from './conformance';
 import { computeBookmarkEvidenceForMarkup } from './wordBookmarks';
 import { computeCommentEvidenceForMarkup } from './wordComments';
 import { computeOleEvidenceForMarkup } from './oleObjects';
@@ -81,6 +82,16 @@ export interface Analyzer {
   appliesTo: (parts: PackageParts) => boolean;
   /** Absent when this analyzer only explains and never reports faults. */
   analyze?: (parts: PackageParts) => Finding[];
+  /**
+   * Set when this analyzer must see the package exactly as written.
+   *
+   * Every other analyzer receives markup with Strict namespaces already mapped to
+   * Transitional (see conformance.ts) — that mapping is what lets them compare
+   * namespaces by exact equality. The conformance analyzer is the one that reports
+   * *whether that mapping happened*, so handing it normalised markup would leave it
+   * permanently convinced every package is Transitional.
+   */
+  readsRawMarkup?: boolean;
   /** Absent when this analyzer only validates and has nothing to say about one element. */
   explain?: AnalyzerExplain;
 }
@@ -100,6 +111,22 @@ const parse = (xml: string | undefined): Document | null => {
 const matching = (parts: PackageParts, pattern: RegExp) => Object.keys(parts).filter(p => pattern.test(p));
 
 export const ANALYZERS: readonly Analyzer[] = [
+  {
+    id: 'conformance',
+    title: 'Conformance class',
+    formats: ['docx', 'xlsx', 'pptx'],
+    determines: [
+      'whether the package is written in ISO Strict or in Transitional',
+      'that Strict namespaces were mapped to Transitional so the other checks could read the file at all'
+    ],
+    cannotDetermine: [
+      'the differences the two conformance classes genuinely disagree on — this maps namespaces, it does not convert',
+      'whether a Strict-only construct was misread by a check built against Transitional markup'
+    ],
+    readsRawMarkup: true,
+    appliesTo: parts => detectConformance(parts) === 'strict',
+    analyze: parts => conformanceFindings(parts)
+  },
   {
     id: 'package',
     title: 'Package integrity',
@@ -314,13 +341,18 @@ export interface AnalysisRun {
  * One analyzer throwing must not lose the others' findings — a malformed part in a
  * corner of the package is exactly when the rest of the report matters most.
  */
-export function analyzePackage(parts: PackageParts, analyzers: readonly Analyzer[] = ANALYZERS): AnalysisRun {
+export function analyzePackage(rawParts: PackageParts, analyzers: readonly Analyzer[] = ANALYZERS): AnalysisRun {
+  // Strict packages spell every namespace differently. Mapping them once here is what
+  // lets the analyzers keep comparing namespaces by exact equality; see conformance.ts.
+  const parts = normaliseParts(rawParts);
   const findings: Finding[] = [];
   const ran: string[] = [];
   const skipped: string[] = [];
 
   for (const analyzer of analyzers) {
-    if (!analyzer.appliesTo(parts)) {
+    // The conformance analyzer is the one thing that has to see the file as written.
+    const view = analyzer.readsRawMarkup ? rawParts : parts;
+    if (!analyzer.appliesTo(view)) {
       skipped.push(analyzer.id);
       continue;
     }
@@ -332,7 +364,7 @@ export function analyzePackage(parts: PackageParts, analyzers: readonly Analyzer
     }
     ran.push(analyzer.id);
     try {
-      findings.push(...analyzer.analyze(parts));
+      findings.push(...analyzer.analyze(view));
     } catch {
       // Deliberately swallowed: a thrown analyzer is a bug in this engine, not a
       // finding about the user's file, and reporting it as one would be a lie.
@@ -458,13 +490,18 @@ export const siblingsFor = (
  * the markup is fine.
  */
 export function explainPart(
-  parts: PackageParts,
+  rawParts: PackageParts,
   partPath: string,
   rawXml: string,
   registry: readonly Analyzer[] = ANALYZERS
 ): { evidence: ComputedEvidence; contributors: string[] } | null {
   const analyzers = explainersFor(partPath, registry);
   if (analyzers.length === 0) return null;
+
+  // The selected element's markup is normalised too - it came from the same file, and
+  // a Strict-namespaced rawXml would not match anything the analyzers look for.
+  const parts = normaliseParts(rawParts);
+  rawXml = toTransitionalXml(rawXml);
 
   const lines: string[] = [];
   const unresolved: string[] = [];

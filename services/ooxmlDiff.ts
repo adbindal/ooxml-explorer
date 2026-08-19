@@ -34,6 +34,7 @@
 import { W_NAMESPACE } from './wordStyleResolver';
 import { loadWordContext, analyzeParagraphFormatting } from './wordFormattingAnalysis';
 import type { PackageParts } from './packageIntegrity';
+import { normaliseParts } from './conformance';
 
 /** Attributes that record editing sessions and never affect rendering. */
 const RSID_ATTRIBUTES = ['rsid', 'rsidR', 'rsidRPr', 'rsidP', 'rsidTr', 'rsidDel', 'rsidSect', 'rsidRDefault'];
@@ -368,6 +369,11 @@ const diffFormatting = (
  * which is reported rather than silently skipped.
  */
 export const diffPackages = (before: PackageParts, after: PackageParts): DiffResult => {
+  // Both sides go through the same normalisation the analyzers use, so a Strict file
+  // compared against a Transitional save of the same document is not reported as
+  // different in every single element.
+  before = normaliseParts(before);
+  after = normaliseParts(after);
   const records: ChangeRecord[] = [];
   const normalized: NormalizationReport[] = [];
   const unresolved: string[] = [];
