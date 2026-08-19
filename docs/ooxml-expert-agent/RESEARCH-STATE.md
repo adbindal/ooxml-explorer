@@ -8,10 +8,10 @@
 | | |
 |---|---|
 | **Branch** | `feat/schema-derived-rag-corpus` — **all work is here; `main` is untouched** |
-| **Tests** | 1037 passing; typecheck, lint and production build clean |
+| **Tests** | 1129 passing; typecheck, lint and production build clean |
 | **Architecture** | **Complete.** Analyzer registry, one `Finding` type, question routing, capability ledger, gap log, versioned JSON report |
-| **Analyzers** | package integrity, conformance, bookmarks, comments, fields, **tables**, **media**, OLE, pivot tables, **formulas**, charts, Word cascade, Excel formats, PowerPoint inheritance — **14** |
-| **In flight** | tracked changes and hyperlinks (subagents). Formulas landed — §8y |
+| **Analyzers** | package integrity, conformance, bookmarks, comments, fields, **tables**, **media**, OLE, pivot tables, formulas, **content controls**, **hyperlinks**, charts, Word cascade, Excel formats, PowerPoint inheritance — **16** |
+| **In flight** | tracked changes (subagent). Formulas, content controls and hyperlinks landed — §8y, §8z |
 
 ## How to resume in five minutes
 
@@ -846,6 +846,20 @@ The brief for both agents said *"commit as soon as you have something green rath
 Verified against the SDK schema: `x:f/@t` is `Normal|Array|DataTable|Shared` and **optional** (absent = normal); `@si` is UInt32; `x:c/@t` is `Boolean|Number|Error|SharedString|String|InlineString|Date`; `x:calcPr` declares `@calcId`, `@calcMode`, `@fullCalcOnLoad`, `@calcCompleted`, `@calcOnSave`, `@forceFullCalc`.
 
 Eight mutants; two escaped and both were instructive. One line turned out to be **provably redundant** (a "skip masters" guard the `si` lookup already covers) and was removed rather than left looking like protection. The other exposed an untested guard: the error check keys on `x:c/@t="e"` as well as the value text, and nothing tested a **string** whose text happens to be `#N/A` — which `IFERROR(x,"#N/A")` produces legitimately. Without the guard that working formula reports as broken.
+
+## 8z. Content controls and hyperlinks (2026-08-19)
+
+**`services/wordContentControls.ts`** + 28 tests. The mechanism behind every template-driven document pipeline, and it fails in a way nobody can see: **a control's content is stored in the file**, so if the binding breaks the content stays. A document whose bindings point at a custom XML part that is gone opens showing the values from the last time it worked. For document generation that is the difference between *"the template populated"* and *"the template printed last month's numbers again"*.
+
+`w:showingPlcHdr` is the second signal — the control is displaying prompt text, not data. Correct in a template; in a supposedly generated document it means the field was never filled.
+
+Store item ids are matched **without braces and case-insensitively**, because generators are inconsistent about both and a binding differing only in case is not broken. ⚠️ **The XPath is deliberately not evaluated** — that needs a namespace-aware engine plus the binding's `prefixMappings`, and getting it subtly wrong would produce confident false reports about working templates. The module checks the *part* exists and says the expression is unchecked.
+
+**`services/hyperlinks.ts`** + 64 tests, built by a subagent. Format-agnostic, and it **corrected the brief again**: 🔴 **`CT_HyperlinkOnClick` does not exist.** The type is `a:CT_Hyperlink` (SDK class `HyperlinkType`), shared by `a:hlinkClick`, `a:hlinkMouseOver` and `a:hlinkHover`, with **no required attributes** — so an action-only link with no relationship is legal. Also found a second `w:hyperlink` schema type (`CT_HyperlinkRuby`) carrying an identical attribute set, and confirmed `x:hyperlink/@ref` is **required** while everything on the Word and DrawingML forms is optional.
+
+External URLs are **never fetched** and produce no finding at all — they go to `unresolved`, and the three-state accessor returns `null`. The `ppaction://` verb vocabulary is explicitly **not verified**: `@action` is an untyped string with no schema enumeration, so the table was cross-checked against python-pptx and LibreOffice rather than against ECMA-376, and unknown verbs are reported verbatim and never judged.
+
+**Its mutation report is the best example yet of the pattern in [[ooxml-explorer-mutation-testing]]:** 22 mutants, three survived, and **two were tests passing for the wrong reason** — a column-arithmetic test whose fixture would have passed under any base, and an external-link test whose verdict was decided by an earlier branch rather than the rule it aimed at. The third survivor was a **bad mutant**, not a gap, and the agent said so rather than inventing a test for it.
 
 ## 9. Next actions
 

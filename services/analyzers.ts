@@ -36,6 +36,7 @@ import { tableGridFindings, computeTableEvidenceForMarkup } from './wordTableGri
 import { mediaFindings, computeMediaEvidenceForMarkup, MEDIA_HOST_PART } from './pptMedia';
 import { formulaFindings, computeFormulaEvidenceForMarkup, FORMULA_HOST_PART } from './excelFormulas';
 import { contentControlFindings, computeContentControlEvidenceForMarkup, SDT_HOST_PART } from './wordContentControls';
+import { hyperlinkFindings, computeHyperlinkEvidenceForMarkup, HYPERLINK_HOST_PART } from './hyperlinks';
 import { readOleObjects } from './oleObjects';
 import { readPivotTables, computePivotEvidenceForMarkup } from './excelPivotTables';
 import { normaliseParts, detectConformance, conformanceFindings, toTransitionalXml } from './conformance';
@@ -230,6 +231,31 @@ export const ANALYZERS: readonly Analyzer[] = [
     explain: {
       matches: path => WORD_BODY.test(path),
       compute: computeFieldEvidenceForMarkup
+    }
+  },
+  {
+    id: 'hyperlink',
+    title: 'Hyperlinks and their destinations',
+    formats: ['docx', 'xlsx', 'pptx'],
+    determines: [
+      'whether an internal link’s anchor names a bookmark that exists',
+      'whether a link references a relationship the part actually declares',
+      'whether a hyperlink relationship is declared that nothing points at'
+    ],
+    cannotDetermine: [
+      'whether an external URL resolves — no network request is ever made, so an external target is reported as unverifiable rather than as working or broken',
+      'which destination wins when a Word hyperlink carries both r:id and w:anchor; that is reported as ambiguous and resolved in neither direction',
+      'the full ppaction:// verb vocabulary, which the schema does not enumerate — unknown verbs are reported verbatim and never judged'
+    ],
+    appliesTo: parts => Object.keys(parts).some(p => HYPERLINK_HOST_PART.test(p)),
+    analyze: parts =>
+      Object.keys(parts)
+        .filter(p => HYPERLINK_HOST_PART.test(p))
+        .flatMap(path => hyperlinkFindings(parts, path)),
+    explain: {
+      matches: path => HYPERLINK_HOST_PART.test(path),
+      siblingPattern: /^(?:word|xl|ppt)\/(?:.*\/)?_rels\/[^/]+\.rels$|^xl\/workbook\.xml$|^ppt\/slides\/[^/]+\.xml$/,
+      compute: computeHyperlinkEvidenceForMarkup
     }
   },
   {
