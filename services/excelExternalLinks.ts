@@ -402,12 +402,16 @@ const readBook = (
     const rows = childrenNamed(sheetData, 'row');
     const sheetId = sheetData.getAttribute('sheetId');
     // Zero-based into sheetNames — LibreOffice's reading, not the schema's; see header.
-    const position = sheetId === null ? Number.NaN : Number(sheetId);
+    //
+    // Matched against `\d+` rather than passed to `Number`, which is far too generous
+    // here: `Number('')` is 0 and `Number(' ')` is 0, so `sheetId=""` would silently
+    // attribute a sheet's worth of cached values to the FIRST sheet in the list and
+    // report nothing. The schema types @sheetId as a required UInt32; anything that is
+    // not a run of digits does not name a position, and saying so is the honest answer.
+    const position = /^\d+$/.test(sheetId ?? '') ? Number(sheetId) : Number.NaN;
     return {
       sheetId,
-      sheetName: Number.isInteger(position) && position >= 0 && position < sheetNames.length
-        ? sheetNames[position]
-        : null,
+      sheetName: position < sheetNames.length ? sheetNames[position] : null,
       refreshError: isOn(sheetData.getAttribute('refreshError')),
       rowCount: rows.length,
       cellCount: rows.reduce((total, row) => total + childrenNamed(row, 'cell').length, 0)
@@ -693,7 +697,15 @@ export function computeExternalLinkEvidenceForMarkup(
   parts: PackageParts
 ): { lines: string[]; unresolved: string[] } | null {
   const set = readExternalLinks(parts);
-  if (set.references.length === 0 && set.unreferencedParts.length === 0) return null;
+  // Dangling indexes are computed before the "is there anything to say" test, not after:
+  // a formula written as [1] in a workbook that lists NO external references is the most
+  // alarming arrangement this module can find — the file names a source it does not
+  // describe at all — and testing only `references`/`unreferencedParts` returned null on
+  // exactly that package, so the panel said nothing about it.
+  const indexProblems = formulaIndexFindings(parts, set);
+  if (set.references.length === 0 && set.unreferencedParts.length === 0 && indexProblems.length === 0) {
+    return null;
+  }
 
   const lines: string[] = [];
   const unresolved: string[] = [];
@@ -738,7 +750,7 @@ export function computeExternalLinkEvidenceForMarkup(
   }
 
   lines.push(...renderFindings(set.problems));
-  lines.push(...renderFindings(formulaIndexFindings(parts, set)));
+  lines.push(...renderFindings(indexProblems));
 
   return { lines, unresolved };
 }
