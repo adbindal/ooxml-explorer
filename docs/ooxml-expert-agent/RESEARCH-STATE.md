@@ -8,10 +8,10 @@
 | | |
 |---|---|
 | **Branch** | `feat/schema-derived-rag-corpus` — **all work is here; `main` is untouched** |
-| **Tests** | 1129 passing; typecheck, lint and production build clean |
+| **Tests** | 1199 passing; typecheck, lint and production build clean |
 | **Architecture** | **Complete.** Analyzer registry, one `Finding` type, question routing, capability ledger, gap log, versioned JSON report |
-| **Analyzers** | package integrity, conformance, bookmarks, comments, fields, **tables**, **media**, OLE, pivot tables, formulas, **content controls**, **hyperlinks**, charts, Word cascade, Excel formats, PowerPoint inheritance — **16** |
-| **In flight** | tracked changes (subagent). Formulas, content controls and hyperlinks landed — §8y, §8z |
+| **Analyzers** | package integrity, conformance, bookmarks, comments, fields, **tables**, **media**, OLE, pivot tables, formulas, content controls, hyperlinks, **revisions**, charts, Word cascade, Excel formats, PowerPoint inheritance — **17** |
+| **In flight** | Excel external links + PowerPoint animations (subagents, **nothing committed yet — see §8ab for the briefs so they can be rebuilt**) |
 
 ## How to resume in five minutes
 
@@ -860,6 +860,32 @@ Store item ids are matched **without braces and case-insensitively**, because ge
 External URLs are **never fetched** and produce no finding at all — they go to `unresolved`, and the three-state accessor returns `null`. The `ppaction://` verb vocabulary is explicitly **not verified**: `@action` is an untyped string with no schema enumeration, so the table was cross-checked against python-pptx and LibreOffice rather than against ECMA-376, and unknown verbs are reported verbatim and never judged.
 
 **Its mutation report is the best example yet of the pattern in [[ooxml-explorer-mutation-testing]]:** 22 mutants, three survived, and **two were tests passing for the wrong reason** — a column-arithmetic test whose fixture would have passed under any base, and an external-link test whose verdict was decided by an earlier branch rather than the rule it aimed at. The third survivor was a **bad mutant**, not a gap, and the agent said so rather than inventing a test for it.
+
+## 8aa. Charts made to report, and tracked changes (2026-08-19/20)
+
+**Charts now contribute findings.** A registry audit found something worth remembering as a pattern: **four analyzers were `explain`-only**, and for three of them that is correct (they describe *resolution*, not faults). But **charts — second-largest divergence cluster in the format at 172 variations — contributed nothing to validation or comparison**, despite `readChart` already computing rich `problems` and `translationNotes`. They were plain strings that only ever reached the explain path.
+
+Added `chartFindings`, plus the check the model never made: `c:externalData/@r:id` names the embedded workbook a chart opens when you double-click it. **Lose that part and the chart still draws perfectly from its cache and can never be edited or refreshed again** — the OLE preview problem wearing a different hat. A chart whose series reference ranges while carrying no workbook at all gets its own finding: the formulas name cells that exist nowhere in the package.
+
+Two codes here are deliberately **coarse** (`chart/structural-problem`, `chart/translation-risk`), each carrying many generated messages. That is the ESLint precedent — many messages under one rule id — and it is recorded so nobody later reads it as sloppiness.
+
+⚠️ **A test caught a real bug in that change**: `s.values?.formula` yields `undefined` when a series has no values element, and **`undefined !== null` is true**, so the naive spelling reported every chart with a *missing* data source as reference-based.
+
+**`services/wordRevisions.ts`** + 62 tests, built by a subagent. A document with unaccepted changes has **two different texts**, and anything extracting text picks one without saying which. `compareRevisionOutcomes` returns accepted, rejected, and `naive` — what a tag-blind extractor produces, which with both an insertion and a deletion present **matches neither reading**.
+
+🔴 **The brief was wrong again, and the schema said so: `@w:date` is NOT required** on `CT_TrackChange` or any `*Change` type. It *is* required on `CT_MoveBookmark`. The module reports these as two findings at two severities rather than flattening them. Also corrected: **`w:tblGridChange` declares only `@w:id`** — no author, no date — so without an exemption every valid table-grid edit reports a fault. And move *starts* are `CT_MoveBookmark` with required `@w:name` while move *ends* are `CT_MarkupRange` with **no name at all**, so starts pair to ends by id and the two halves pair to each other by name.
+
+**Its mutation round found a real defect, not just a test gap:** chasing a surviving mutant through what looked like dead code surfaced that text nested inside `w:pPr/w:rPr` (out of schema) was being scored as document content, so **a malformed paragraph mark could inject words into the *accepted* reading**. 25 mutants, three survivors, all three tests decided by an accident of the fixture rather than by the rule they targeted.
+
+## 8ab. In flight when the session ended — rebuild briefs
+
+Two subagents were running with **nothing committed**. Both are self-contained; if they did not land, rebuild from these.
+
+**`services/excelExternalLinks.ts`** — the other half of the formula analyzer. A workbook linking to another workbook **caches the values it last read**; open it where the source is unreachable and every linked cell shows numbers from an unknown date. Chain: `xl/workbook.xml` `<externalReferences><externalReference r:id>` → `xl/externalLinks/externalLink<N>.xml` `<externalBook r:id>` with `<sheetDataSet>` cached values → `TargetMode="External"` to the real workbook. **The `[1]` in a formula is a 1-based index into the `externalReferences` list** — verify that. Report the external target as *unverifiable*, never broken; never fetch. Check: reference with a missing relationship or absent part; an `externalBook` whose own `r:id` does not resolve (so even the path is unknown); a formula index with no matching reference; externalLink parts nothing references.
+
+**`services/pptAnimation.ts`** — an animation targets a shape **by id**, and deleting the shape makes it **silently never fire**. `p:sld/p:timing/p:tnLst` holds time nodes (`p:par`, `p:seq`, `p:anim`, `p:animEffect`, `p:animMotion`, `p:set`); a node targets through `p:cTn/p:tgtEl/p:spTgt/@spid`, which must match a `p:cNvPr/@id` in the slide's shape tree. Check: `spid` naming a missing shape (the headline); `p:bldP`/`p:bldLst` `@spid` likewise; `p:cond/@evt` on a missing target; `p:txEl`/`p:pRg` selecting paragraph indices the shape does not have; duplicate `p:cNvPr/@id` making any id targeting ambiguous. Report counts — *"3 of 11 animations will never run"* is the sentence someone needs.
+
+Both briefs said: base on `feat/schema-derived-rag-corpus`, touch only their two files, do not edit `analyzers.ts` (registration is done here), verify names against the SDK schema, and **commit after the first green test run**.
 
 ## 9. Next actions
 
