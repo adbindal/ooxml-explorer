@@ -34,6 +34,7 @@ import { readComments, COMMENT_PART_PATHS } from './wordComments';
 import { readFields, crossCheckFieldTargets, computeFieldEvidenceForMarkup } from './wordFields';
 import { tableGridFindings, computeTableEvidenceForMarkup } from './wordTableGrid';
 import { mediaFindings, computeMediaEvidenceForMarkup, MEDIA_HOST_PART } from './pptMedia';
+import { formulaFindings, computeFormulaEvidenceForMarkup, FORMULA_HOST_PART } from './excelFormulas';
 import { readOleObjects } from './oleObjects';
 import { readPivotTables, computePivotEvidenceForMarkup } from './excelPivotTables';
 import { normaliseParts, detectConformance, conformanceFindings, toTransitionalXml } from './conformance';
@@ -296,6 +297,28 @@ export const ANALYZERS: readonly Analyzer[] = [
       // whether it is actually there - which is the whole point.
       siblingPattern: /^(?:word|xl|ppt)\/(?:.*\/)?(?:_rels\/[^/]+\.rels|embeddings\/[^/]+|media\/[^/]+)$/,
       compute: computeOleEvidenceForMarkup
+    }
+  },
+  {
+    id: 'formula',
+    title: 'Formulas and their cached values',
+    formats: ['xlsx'],
+    determines: [
+      'whether a shared-formula follower still has the master that holds its formula text',
+      'what the workbook says about its own numbers — full recalculation on load, manual mode, an unfinished calculation',
+      'which cells store an error, reach outside the package, or depend on when they were calculated'
+    ],
+    cannotDetermine: [
+      'whether a cached value equals what its formula would now produce — that needs a calculation engine, which this is not',
+      'the contents of a referenced external workbook, which lives outside this package',
+      'which of the 218 documented [MS-OI29500] variations for this clause a given workbook relies on'
+    ],
+    appliesTo: parts => Object.keys(parts).some(p => FORMULA_HOST_PART.test(p)),
+    analyze: parts => formulaFindings(parts),
+    explain: {
+      matches: path => FORMULA_HOST_PART.test(path),
+      siblings: ['xl/workbook.xml'],
+      compute: computeFormulaEvidenceForMarkup
     }
   },
   {
