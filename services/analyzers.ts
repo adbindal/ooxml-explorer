@@ -32,6 +32,8 @@ import { checkPackageIntegrity } from './packageIntegrity';
 import { readBookmarks } from './wordBookmarks';
 import { readComments, COMMENT_PART_PATHS } from './wordComments';
 import { readFields, crossCheckFieldTargets, computeFieldEvidenceForMarkup } from './wordFields';
+import { tableGridFindings, computeTableEvidenceForMarkup } from './wordTableGrid';
+import { mediaFindings, computeMediaEvidenceForMarkup, MEDIA_HOST_PART } from './pptMedia';
 import { readOleObjects } from './oleObjects';
 import { readPivotTables, computePivotEvidenceForMarkup } from './excelPivotTables';
 import { normaliseParts, detectConformance, conformanceFindings, toTransitionalXml } from './conformance';
@@ -226,6 +228,52 @@ export const ANALYZERS: readonly Analyzer[] = [
     explain: {
       matches: path => WORD_BODY.test(path),
       compute: computeFieldEvidenceForMarkup
+    }
+  },
+  {
+    id: 'table',
+    title: 'Table grid and merge geometry',
+    formats: ['docx'],
+    determines: [
+      'whether each row’s gridSpan values sum to the declared column grid',
+      'whether every vMerge continuation has a restart above it in the same column'
+    ],
+    cannotDetermine: [
+      'how Word will actually repair a table whose geometry does not add up — it does repair them, and the result is not specified',
+      'rendered column widths, which depend on layout rules this does not evaluate'
+    ],
+    appliesTo: parts => matching(parts, WORD_BODY).length > 0,
+    analyze: parts =>
+      matching(parts, WORD_BODY).flatMap(path => {
+        const doc = parse(parts[path]);
+        return doc ? tableGridFindings(doc, path) : [];
+      }),
+    explain: {
+      matches: path => WORD_BODY.test(path),
+      compute: computeTableEvidenceForMarkup
+    }
+  },
+  {
+    id: 'media',
+    title: 'Audio and video',
+    formats: ['pptx'],
+    determines: [
+      'whether a slide’s media is embedded in the package or linked to a file outside it',
+      'whether the media data is present behind the poster frame that renders in its place'
+    ],
+    cannotDetermine: [
+      'whether a linked media file resolves — its target is outside the package by definition',
+      'whether the media stream is playable; the bytes are located but never decoded'
+    ],
+    appliesTo: parts => Object.keys(parts).some(p => MEDIA_HOST_PART.test(p)),
+    analyze: parts =>
+      Object.keys(parts)
+        .filter(p => MEDIA_HOST_PART.test(p))
+        .flatMap(path => mediaFindings(parts, path)),
+    explain: {
+      matches: path => MEDIA_HOST_PART.test(path),
+      siblingPattern: /^ppt\/(?:_rels\/[^/]+\.rels|slides\/_rels\/[^/]+\.rels|media\/[^/]+)$/,
+      compute: computeMediaEvidenceForMarkup
     }
   },
   {

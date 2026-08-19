@@ -739,6 +739,40 @@ describe('computeTableEvidenceForMarkup — panel wiring', () => {
     expect(evidence!.lines.some(l => l.startsWith('Table 1 '))).toBe(false);
   });
 
+  it('tells apart two tables that differ only in how their cells span the grid', () => {
+    // Both are 2 columns by 1 row, so a fingerprint built from those counts alone
+    // conflates them and the panel confidently describes the wrong table. The spans are
+    // the only thing separating them.
+    const twoCells = tbl(gridOf(2), tr(tc(), tc()));
+    const oneWideCell = tbl(gridOf(2), tr(tc(span(2))));
+    const evidence = computeTableEvidenceForMarkup(
+      part(twoCells + oneWideCell),
+      `<w:tbl ${W}>${gridOf(2)}${tr(tc(span(2)))}</w:tbl>`
+    );
+
+    expect(evidence!.unresolved.some(u => u.includes('same shape'))).toBe(false);
+    expect(evidence!.lines.filter(l => /^Table \d declares/.test(l))).toEqual([
+      expect.stringContaining('Table 2 declares 2 grid column(s)')
+    ]);
+  });
+
+  it('tells apart two tables that differ only in which end of the grid they skip', () => {
+    // Same column count, same row count, same cell spans — the tables differ only in
+    // whether the row is indented from the left or short at the right. Dropping the
+    // trPr edges from the fingerprint conflates them.
+    const indented = tbl(gridOf(3), `<w:tr><w:trPr><w:gridBefore w:val="1"/></w:trPr>${tc()}${tc()}</w:tr>`);
+    const shortRight = tbl(gridOf(3), `<w:tr><w:trPr><w:gridAfter w:val="1"/></w:trPr>${tc()}${tc()}</w:tr>`);
+    const evidence = computeTableEvidenceForMarkup(
+      part(indented + shortRight),
+      `<w:tbl ${W}>${gridOf(3)}<w:tr><w:trPr><w:gridAfter w:val="1"/></w:trPr>${tc()}${tc()}</w:tr></w:tbl>`
+    );
+
+    expect(evidence!.unresolved.some(u => u.includes('same shape'))).toBe(false);
+    expect(evidence!.lines.filter(l => /^Table \d declares/.test(l))).toEqual([
+      expect.stringContaining('Table 2 declares 3 grid column(s)')
+    ]);
+  });
+
   it('admits it cannot tell two identically-shaped tables apart', () => {
     const shape = tbl(gridOf(2), tr(tc(), tc()));
     const evidence = computeTableEvidenceForMarkup(
