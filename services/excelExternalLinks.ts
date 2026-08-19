@@ -89,7 +89,8 @@
  * legal index meaning *this workbook*, not an out-of-range one. `compiler.cxx` skips it
  * explicitly ("`[0]!Global_Range_Name` is a special case in OOXML syntax, where the '0' is
  * referencing to self"). Reporting `[0]` as dangling would be a false positive on every
- * workbook that uses a global defined name in that form, so it is excluded.
+ * workbook that uses a global defined name in that form, and it is never reported — see
+ * `formulaIndexFindings` for why that needs no code of its own.
  *
  * The two LibreOffice sources describe the same index slightly differently — one as an
  * ordinal into the `externalReference` list, the other as the digit in the part's file
@@ -634,9 +635,13 @@ const collectIndexUses = (parts: PackageParts): IndexUse[] => {
 /**
  * `[N]` indexes that name no external reference.
  *
- * `[0]` is skipped: it means *this workbook*, verified against LibreOffice's compiler (see
- * the header). Treating it as out of range would be a false positive on a construct Excel
- * writes itself.
+ * `[0]` means *this workbook*, not an out-of-range link — verified against LibreOffice's
+ * compiler (see the header) — and reporting it would be a false positive on a construct
+ * Excel writes itself. There is deliberately **no `index === 0` guard** below: an index
+ * comes from `\d+` so it is never negative, `references.length` is never negative, and
+ * `0 <= length` therefore always holds. An explicit guard would read as protection and
+ * provably never fire, which is worse than none — mutation testing removed it and every
+ * test still passed, which is how it was found.
  */
 const formulaIndexFindings = (parts: PackageParts, set: ExternalLinkSet): Finding[] => {
   // Without the workbook there is no list, so there is no such thing as an index that
@@ -646,7 +651,7 @@ const formulaIndexFindings = (parts: PackageParts, set: ExternalLinkSet): Findin
   const findings: Finding[] = [];
   const seen = new Set<string>();
   for (const use of collectIndexUses(parts)) {
-    if (use.index === 0 || use.index <= set.references.length) continue;
+    if (use.index <= set.references.length) continue;
     const key = `${use.part}|${use.where}|${use.index}`;
     if (seen.has(key)) continue;
     seen.add(key);

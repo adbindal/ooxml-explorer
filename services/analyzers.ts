@@ -38,6 +38,9 @@ import { mediaFindings, computeMediaEvidenceForMarkup, MEDIA_HOST_PART } from '.
 import { formulaFindings, computeFormulaEvidenceForMarkup, FORMULA_HOST_PART } from './excelFormulas';
 import { contentControlFindings, computeContentControlEvidenceForMarkup, SDT_HOST_PART } from './wordContentControls';
 import { styleReferenceFindings, computeStyleReferenceEvidenceForMarkup, hasStyleReferences } from './styleReferences';
+import { noteFindings, computeNoteEvidenceForMarkup, hasNotes } from './wordNotes';
+import { animationFindings, computeAnimationEvidenceForMarkup, ANIMATION_HOST_PART } from './pptAnimation';
+import { externalLinkFindings, computeExternalLinkEvidenceForMarkup, EXTERNAL_LINK_HOST_PART } from './excelExternalLinks';
 import { hyperlinkFindings, computeHyperlinkEvidenceForMarkup, HYPERLINK_HOST_PART } from './hyperlinks';
 import { readOleObjects } from './oleObjects';
 import { readPivotTables, computePivotEvidenceForMarkup } from './excelPivotTables';
@@ -424,6 +427,71 @@ export const ANALYZERS: readonly Analyzer[] = [
       siblingPattern:
         /^xl\/(?:workbook\.xml|_rels\/workbook\.xml\.rels|worksheets\/_rels\/[^/]+\.rels|pivotTables\/(?:_rels\/)?[^/]+|pivotCache\/(?:_rels\/)?[^/]+)$/,
       compute: computePivotEvidenceForMarkup
+    }
+  },
+  {
+    id: 'note',
+    title: 'Footnotes and endnotes',
+    formats: ['docx'],
+    determines: [
+      'whether every note reference has a note behind it, and every note is referenced',
+      'whether the separator notes that draw the rule above the notes are present'
+    ],
+    cannotDetermine: [
+      'references from a body part not supplied with the request, which would make a note look orphaned when it is not'
+    ],
+    appliesTo: hasNotes,
+    analyze: parts => noteFindings(parts),
+    explain: {
+      matches: path => /^word\/(?:document\d*|header[^/]*|footer[^/]*|footnotes\d*|endnotes\d*)\.xml$/.test(path),
+      siblings: ['word/footnotes.xml', 'word/endnotes.xml'],
+      compute: computeNoteEvidenceForMarkup
+    }
+  },
+  {
+    id: 'animation',
+    title: 'Slide animations and timing',
+    formats: ['pptx'],
+    determines: [
+      'whether an animation targets a shape that still exists — a dead animation never fires and never warns',
+      'how many of a slide’s animations will never run'
+    ],
+    cannotDetermine: [
+      'whether an animation that resolves is the RIGHT animation; only that its target exists',
+      'targets using the Office 2007 string form of @spid, which is left unjudged',
+      'p:subSp and p:charRg targets, and paragraph ranges on frames that are not p:sp'
+    ],
+    appliesTo: parts => Object.keys(parts).some(p => ANIMATION_HOST_PART.test(p)),
+    analyze: parts =>
+      Object.keys(parts)
+        .filter(p => ANIMATION_HOST_PART.test(p))
+        .flatMap(path => {
+          const doc = parse(parts[path]);
+          return doc ? animationFindings(doc, path) : [];
+        }),
+    explain: {
+      matches: path => ANIMATION_HOST_PART.test(path),
+      compute: computeAnimationEvidenceForMarkup
+    }
+  },
+  {
+    id: 'externalLink',
+    title: 'Links to other workbooks',
+    formats: ['xlsx'],
+    determines: [
+      'whether each external reference resolves through the workbook relationships to a link part that exists',
+      'whether a formula’s [N] index names a reference that is declared'
+    ],
+    cannotDetermine: [
+      'whether the linked workbook itself exists or is current — it is outside this package and is never fetched',
+      'whether the cached values still match the source, which is the whole reason they are cached'
+    ],
+    appliesTo: parts => Object.keys(parts).some(p => EXTERNAL_LINK_HOST_PART.test(p)),
+    analyze: parts => externalLinkFindings(parts),
+    explain: {
+      matches: path => EXTERNAL_LINK_HOST_PART.test(path) || /^xl\/worksheets\/[^/]+\.xml$/.test(path),
+      siblingPattern: /^xl\/(?:workbook\.xml|_rels\/workbook\.xml\.rels|external(?:Links|References)\/(?:_rels\/)?[^/]+)$/,
+      compute: computeExternalLinkEvidenceForMarkup
     }
   },
   {
