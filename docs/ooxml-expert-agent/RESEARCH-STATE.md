@@ -8,10 +8,10 @@
 | | |
 |---|---|
 | **Branch** | `feat/schema-derived-rag-corpus` — **all work is here; `main` is untouched** |
-| **Tests** | 1005 passing; typecheck, lint and production build clean |
+| **Tests** | 1037 passing; typecheck, lint and production build clean |
 | **Architecture** | **Complete.** Analyzer registry, one `Finding` type, question routing, capability ledger, gap log, versioned JSON report |
-| **Analyzers** | package integrity, conformance, bookmarks, comments, fields, **tables**, **media**, OLE, pivot tables, charts, Word cascade, Excel formats, PowerPoint inheritance — **13** |
-| **In flight** | nothing. Fields, table grid and PowerPoint media all landed — §8w, §8x |
+| **Analyzers** | package integrity, conformance, bookmarks, comments, fields, **tables**, **media**, OLE, pivot tables, **formulas**, charts, Word cascade, Excel formats, PowerPoint inheritance — **14** |
+| **In flight** | tracked changes and hyperlinks (subagents). Formulas landed — §8y |
 
 ## How to resume in five minutes
 
@@ -820,6 +820,32 @@ The brief for both agents said *"commit as soon as you have something green rath
 **Recovery is only possible because worktrees survive the agent.** Before removing any agent worktree, always check `git -C <worktree> status --short` for uncommitted files as well as `git log` for commits — the second agent's work was invisible to a log check alone.
 
 **Strengthen future briefs:** tell the agent to commit after the *first* green test run, not after the module is finished, and to keep committing. An agent that treats its commit as a final deliverable is one quota reset away from losing everything.
+
+## 8y. Formulas — the biggest divergence cluster in the format (2026-08-19)
+
+`services/excelFormulas.ts` + 32 tests, registered as the `formula` analyzer. **218 normative variations against Part 1 §18.17 — three times the next-largest SpreadsheetML clause**, and the top of the §8u backlog.
+
+**Same failure class as Word fields, at spreadsheet scale.** A cell stores the program *and* the answer:
+
+```
+<c r="B2" t="n"><f>SUM(A1:A10)</f><v>55</v></c>
+        the program ──┘              └── the answer, from the last recalculation
+```
+
+**Every reader without a calculation engine shows `<v>`** — converters, extractors, dashboards, `openpyxl` by default, and this tool. So a workbook can display numbers its own formulas would no longer produce, and nothing looks wrong.
+
+**Excel signals its own doubt, and those signals are the most useful thing here:**
+- `calcPr/@fullCalcOnLoad="1"` — Excel will recalculate on open, so the stored values are **stale by Excel's own declaration**. Anything reading them without calculating is reading numbers Excel has already disowned.
+- `calcPr/@calcMode="manual"` — values drift from formulas *by design*, and Excel will not correct them until someone presses F9.
+- `calcPr/@calcCompleted="0"` — the last pass did not finish, so values may not be self-consistent.
+
+**The shared-formula trap, which silently loses a formula entirely.** Excel compresses a filled-down column by writing the formula once: the master carries `ref` + `si` + the text, and every follower carries **`si` and nothing else** — its formula exists only as an offset from the master. Delete or fail to write the master (what happens whenever a tool rewrites rows without understanding `si`) and every follower becomes a cell with a cached number and no way to recompute it. Excel repairs it quietly on open; other readers see an empty formula element.
+
+⚠️ **Nothing here evaluates a formula, and the module says so.** It reports what is stored and what is missing; it never claims a cached value is numerically wrong. *"This may be stale"* is supportable; *"this is 55 but should be 60"* would need an engine this does not have. That limit is in `cannotDetermine` and in the panel's `unresolved`.
+
+Verified against the SDK schema: `x:f/@t` is `Normal|Array|DataTable|Shared` and **optional** (absent = normal); `@si` is UInt32; `x:c/@t` is `Boolean|Number|Error|SharedString|String|InlineString|Date`; `x:calcPr` declares `@calcId`, `@calcMode`, `@fullCalcOnLoad`, `@calcCompleted`, `@calcOnSave`, `@forceFullCalc`.
+
+Eight mutants; two escaped and both were instructive. One line turned out to be **provably redundant** (a "skip masters" guard the `si` lookup already covers) and was removed rather than left looking like protection. The other exposed an untested guard: the error check keys on `x:c/@t="e"` as well as the value text, and nothing tested a **string** whose text happens to be `#N/A` — which `IFERROR(x,"#N/A")` produces legitimately. Without the guard that working formula reports as broken.
 
 ## 9. Next actions
 
