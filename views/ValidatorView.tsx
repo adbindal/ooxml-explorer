@@ -10,6 +10,7 @@ import { loadZipFile, readPackageParts } from '../services/zipService';
 import { analyzePackage, capabilityLedger } from '../services/analyzers';
 import { compareFindings } from '../services/findings';
 import { readRetrievalMetrics, summariseRetrieval, resetRetrievalMetrics } from '../services/retrievalMetrics';
+import { summariseCoverageGaps, resetCoverageGaps } from '../services/coverageGaps';
 import {
     resolveAlternateContent,
     MODERN_CONSUMER_NAMESPACES,
@@ -105,10 +106,16 @@ const ValidatorView: React.FC<ValidatorViewProps> = ({ themeClasses }) => {
      */
     const handleShowRetrievalMetrics = () => {
         const summary = summariseRetrieval(readRetrievalMetrics());
+        // The coverage backlog belongs next to the retrieval counts: both answer "what
+        // should we build next?" from measurement rather than from guesswork, and
+        // neither records anything about the user.
+        const gaps = summariseCoverageGaps();
         setLogs(prev => [
             ...prev,
             { msg: '📊 Retrieval paths:', type: 'info', timestamp: Date.now() },
-            ...summary.lines.map(line => ({ msg: line, type: 'info' as const, timestamp: Date.now() }))
+            ...summary.lines.map(line => ({ msg: line, type: 'info' as const, timestamp: Date.now() })),
+            { msg: '🕳️ Coverage gaps — markup that was opened with no analyzer behind it:', type: 'info', timestamp: Date.now() },
+            ...gaps.lines.map(line => ({ msg: line, type: 'info' as const, timestamp: Date.now() }))
         ]);
     };
 
@@ -328,7 +335,7 @@ const ValidatorView: React.FC<ValidatorViewProps> = ({ themeClasses }) => {
                                     <PieChart size={14} /> Retrieval Stats
                                 </button>
                                 <button
-                                    onClick={() => { resetRetrievalMetrics(); handleShowRetrievalMetrics(); }}
+                                    onClick={() => { resetRetrievalMetrics(); resetCoverageGaps(); handleShowRetrievalMetrics(); }}
                                     title="Reset the retrieval counters."
                                     className="py-2 rounded font-medium bg-zinc-700 hover:bg-zinc-600 text-white text-xs"
                                 >
