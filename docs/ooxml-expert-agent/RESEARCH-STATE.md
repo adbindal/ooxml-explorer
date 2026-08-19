@@ -1,15 +1,38 @@
 # OOXML Expert Agent — Research State & Resume Point
 
-**Status:** Stages 0–2 complete (Word, Excel, PowerPoint); structured semantic diff shipped; **both Word conflicts settled AND fixed — see §8i** (see §8b).
-**Last updated:** 2026-08-17
-**Purpose:** durable record so this work can resume after a session ends. If you are picking this up cold, read this file top to bottom before doing anything else.
+> **READ THIS FIRST. Everything below is written so this work can resume cold, after a
+> session ends or a quota runs out. Nothing important lives only in a conversation.**
+
+## Where things stand (2026-08-19)
+
+| | |
+|---|---|
+| **Branch** | `feat/schema-derived-rag-corpus` — **all work is here; `main` is untouched** |
+| **Tests** | 851 passing; typecheck, lint and production build clean |
+| **Architecture** | **Complete.** Analyzer registry, one `Finding` type, question routing, capability ledger, gap log, versioned JSON report |
+| **Analyzers** | package integrity, conformance, bookmarks, comments, OLE, pivot tables, charts, Word cascade, Excel formats, PowerPoint inheritance |
+| **In flight** | PowerPoint media and Word table grid (subagents); **fields analyzer next** |
+
+## How to resume in five minutes
+
+1. **§9 Next actions** — the ranked to-do list. Start there.
+2. **§8u** — *the criterion for what deserves an analyzer*, plus a measured backlog ranked by [MS-OI29500] deviation counts. This is the thinking to reuse, not just the conclusions.
+3. **§8r–§8v** — the architecture as built, and why each decision went the way it did.
+4. **§8** — the honesty ledger: what is contested, unverified, or was retracted. **Read before citing anything.**
+
+## Standing rules, so they are not re-litigated
+
+- **Deterministic first.** TypeScript resolvers decide what is true; the model only narrates a pre-verified evidence bundle. It never plans, routes, or adjudicates correctness.
+- **The badge is computed, never asserted.** Ruled out with reasons recorded: vector DBs, re-ranking, embeddings on the main path, fine-tuning. Re-propose only with a new argument.
+- **"Self-improving" means a gap log and a regression ratchet** — not a model writing its own rules or grading its own output. The loop closes through a person. See §8s.
+- **Mutation-test every module.** A green suite on first run is not evidence; this has found a real gap in nearly every module here, most often a test passing for the wrong reason.
+- **Say what was not verified.** Five citations have already been retracted on this project.
 
 Published write-ups (private artifacts):
 - Part 1 — The 29-Tag Problem: https://claude.ai/code/artifact/e1b1738f-2969-42c6-9437-190b0a29465f
 - Part 2 — What the Schema Can't Tell You: https://claude.ai/code/artifact/d3fb80ba-ea48-411a-b04a-848c52418147
-- **Part 3 — Staff Engineer in a Box (the build plan): https://claude.ai/code/artifact/a76cb080-e4fd-4be5-b524-9ca490a94470**
-
-**To resume:** read §8b for what shipped, then §9 for next actions. The SpreadsheetML and PresentationML/DrawingML research was never completed (§10) — those are the gaps to re-fill. The build plan's architecture does not depend on them; only Stage 2's per-format detail does.
+- Part 3 — Staff Engineer in a Box (the build plan): https://claude.ai/code/artifact/a76cb080-e4fd-4be5-b524-9ca490a94470
+- The Analyzer Spine (design review): https://claude.ai/code/artifact/0133a5bf-a174-44dc-bc55-9f742ed48df8
 
 ---
 
@@ -687,22 +710,6 @@ The engine's output could previously only be read as a log, which no other progr
 
 **Deliberately absent: the explain path.** It describes how markup *resolves* rather than what is wrong with it, and forcing that into findings would mean inventing a fault for every fact. When an agent needs it, it wants a different shape; inventing that shape before there is a caller would be guessing.
 
-## 8v. ISO Strict, properly — normalised at one choke point (2026-08-19)
-
-`services/conformance.ts` + 17 tests, `93b3be2`. §8q fixed one module; this fixes the class.
-
-**Every analyzer compared namespaces by exact equality against a Transitional constant**, so a Strict package produced no findings at all — not an error, just silence. `oleObjects` had been caught doing this while *looking* Strict-tolerant; the other thirteen modules had the same blind spot and had simply never claimed otherwise.
-
-**Fixed at one choke point rather than sixty call sites.** ~60 namespace comparisons across 14 modules funnel through 6 constants. Teaching each of them both spellings would be 60 chances to get one wrong plus a rule every future analyzer author must remember. Mapping the URIs once, before any analyzer sees the markup, keeps the analyzers exact and makes Strict support a property of the pipeline. Rewriting is text-level, not tree-level: a DOM's `namespaceURI` is read-only, and rewriting the base URI fixes relationship `Type` attributes for free since a type is that URI plus a trailing segment.
-
-⚠️ **It is not a converter.** Namespace mapping makes Strict markup *readable* by Transitional-shaped code; it does not reconcile the classes. **Strict forbids VML**, so an embedded object there carries a DrawingML preview rather than the `v:imagedata` one the OLE check looks for — the `conformance` analyzer reports Strict as a **note** (it is valid, usually deliberate) and states that limit, because a clean report would otherwise imply coverage we do not have.
-
-`Analyzer` gained **`readsRawMarkup`** for this one analyzer — found by a test: normalising first left it permanently convinced every package was Transitional.
-
-🔴 **Provenance, and a bug caught by checking it.** Strict URIs come from `pjfanning/ooxml-strict-converter`; **every Transitional target was verified independently against the SDK's `namespaces.json`**. That check found an error in *their* mapping file — it maps wordprocessingml to `.../wordprocessingml/main`, missing the `/2006`. Copying it wholesale would have left every Strict Word document unreadable. A test pins the correct value.
-
-**Honest note on ordering:** longest-key-first replacement is *insurance*, not a live fix — no pair in the current table needs it, because `chart` and `chartDrawing` both gain the same `/2006`. Pinned as an invariant with the reasoning recorded, and a test comment claiming otherwise was corrected.
-
 ## 8u. Which features deserve an analyzer — the criterion, and a measured backlog (2026-08-19)
 
 Asked directly: do shapes, tables, lists, audio/video each need their own analyzer? **No — and the answer is not "it depends".** There is a test.
@@ -755,6 +762,22 @@ Counted from the public TOC (§8p). **Deviation count says where Office and the 
 - **Word shapes** — ⚠️ biggest blind spot by deviation count (199 across §20.1 + §21.1) but **mostly visible**, so it ranks lower than the count suggests. The invisible parts are narrow: text inside `wps:txbx` that extraction misses, and dangling `a:blip/@r:embed`.
 
 **Next by this ranking: fields (§17.16).** 72 deviations, and it fails invisibly in the strongest way — a `REF` field caches its last-computed result, so a cross-reference to a deleted bookmark keeps displaying the old text indefinitely. It also interlocks with the bookmark analyzer already built.
+
+## 8v. ISO Strict, properly — normalised at one choke point (2026-08-19)
+
+`services/conformance.ts` + 17 tests, `93b3be2`. §8q fixed one module; this fixes the class.
+
+**Every analyzer compared namespaces by exact equality against a Transitional constant**, so a Strict package produced no findings at all — not an error, just silence. `oleObjects` had been caught doing this while *looking* Strict-tolerant; the other thirteen modules had the same blind spot and had simply never claimed otherwise.
+
+**Fixed at one choke point rather than sixty call sites.** ~60 namespace comparisons across 14 modules funnel through 6 constants. Teaching each of them both spellings would be 60 chances to get one wrong plus a rule every future analyzer author must remember. Mapping the URIs once, before any analyzer sees the markup, keeps the analyzers exact and makes Strict support a property of the pipeline. Rewriting is text-level, not tree-level: a DOM's `namespaceURI` is read-only, and rewriting the base URI fixes relationship `Type` attributes for free since a type is that URI plus a trailing segment.
+
+⚠️ **It is not a converter.** Namespace mapping makes Strict markup *readable* by Transitional-shaped code; it does not reconcile the classes. **Strict forbids VML**, so an embedded object there carries a DrawingML preview rather than the `v:imagedata` one the OLE check looks for — the `conformance` analyzer reports Strict as a **note** (it is valid, usually deliberate) and states that limit, because a clean report would otherwise imply coverage we do not have.
+
+`Analyzer` gained **`readsRawMarkup`** for this one analyzer — found by a test: normalising first left it permanently convinced every package was Transitional.
+
+🔴 **Provenance, and a bug caught by checking it.** Strict URIs come from `pjfanning/ooxml-strict-converter`; **every Transitional target was verified independently against the SDK's `namespaces.json`**. That check found an error in *their* mapping file — it maps wordprocessingml to `.../wordprocessingml/main`, missing the `/2006`. Copying it wholesale would have left every Strict Word document unreadable. A test pins the correct value.
+
+**Honest note on ordering:** longest-key-first replacement is *insurance*, not a live fix — no pair in the current table needs it, because `chart` and `chartDrawing` both gain the same `/2006`. Pinned as an invariant with the reasoning recorded, and a test comment claiming otherwise was corrected.
 
 ## 9. Next actions
 
