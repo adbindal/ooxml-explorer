@@ -8,10 +8,10 @@
 | | |
 |---|---|
 | **Branch** | `feat/schema-derived-rag-corpus` — **all work is here; `main` is untouched** |
-| **Tests** | 1221 passing; typecheck, lint and production build clean |
+| **Tests** | 1362 passing; typecheck, lint and production build clean |
 | **Architecture** | **Complete.** Analyzer registry, one `Finding` type, question routing, capability ledger, gap log, versioned JSON report |
-| **Analyzers** | package integrity, conformance, bookmarks, comments, fields, **tables**, **media**, OLE, pivot tables, formulas, content controls, hyperlinks, **revisions**, charts, **style references**, Word cascade, Excel formats, PowerPoint inheritance — **18** |
-| **In flight** | none. `excelExternalLinks.ts` + `pptAnimation.ts` are **salvaged but UNTESTED and UNREGISTERED** — see §8ab |
+| **Analyzers** | package integrity, conformance, bookmarks, comments, fields, **tables**, **media**, OLE, pivot tables, formulas, content controls, hyperlinks, **revisions**, charts, style references, **footnotes**, **animations**, **external links**, Word cascade, Excel formats, PowerPoint inheritance — **21** |
+| **In flight** | none. Everything is tested and registered. |
 
 ## How to resume in five minutes
 
@@ -877,9 +877,11 @@ Two codes here are deliberately **coarse** (`chart/structural-problem`, `chart/t
 
 **Its mutation round found a real defect, not just a test gap:** chasing a surviving mutant through what looked like dead code surfaced that text nested inside `w:pPr/w:rPr` (out of schema) was being scored as document content, so **a malformed paragraph mark could inject words into the *accepted* reading**. 25 mutants, three survivors, all three tests decided by an accident of the fixture rather than by the rule they targeted.
 
-## 8ab. Salvaged but unfinished — `excelExternalLinks.ts` and `pptAnimation.ts`
+## 8ab. ✅ RESOLVED — the salvage worked (kept as a record of the recovery)
 
-🔴 **START HERE ON RESUME.** Both subagents were killed by the quota reset **after writing their modules but before writing a single test**. The modules were recovered from their worktrees (39 KB and 32 KB) and committed, because losing them would mean re-deriving all the schema research. They **typecheck and lint clean**.
+Both modules are now tested, fixed and registered; see §8ad. What follows is the state as it was, kept because the recovery procedure is worth reusing.
+
+**Historical:** Both subagents were killed by the quota reset **after writing their modules but before writing a single test**. The modules were recovered from their worktrees (39 KB and 32 KB) and committed, because losing them would mean re-deriving all the schema research. They **typecheck and lint clean**.
 
 **They are NOT registered in `services/analyzers.ts`, and must not be until they are tested.** An untested analyzer that reports findings under a Verified tier is exactly the failure this project exists to prevent.
 
@@ -918,6 +920,29 @@ None of it looks like breakage. It looks like **plainer formatting**, which read
 One finding per missing style, not per use — forty paragraphs referencing one broken style is one broken style.
 
 Seven mutants; one escaped and it was the classic: the "last valid index" test used a value far from the boundary, so a `<` vs `<=` bound was invisible. Fixed with the index exactly one past the end.
+
+## 8ad. Footnotes, animations, external links — and my recommendation was wrong (2026-08-20)
+
+**`services/wordNotes.ts`** + 16 tests. A reference mark with nothing behind it: the superscript still renders, the reader sees a footnote marker, and there is no note at the bottom of the page. Extraction returns the mark and drops the content.
+
+⚠️ **The trap that would fire on 100% of real documents.** `footnotes.xml` *always* contains `separator` and `continuationSeparator` notes that **nothing in the body references** — they are referenced from `sectPr`, and Word writes them into every document that has ever had a footnote. A naive *"every note must be referenced"* check reports two false positives on every real file. Only `w:type="normal"` (or absent, the default) is a content note. Same family as `numId="0"` and Excel's built-in number formats: **the highest-value work in these analyzers is often knowing what NOT to report.**
+
+**`pptAnimation.ts` and `excelExternalLinks.ts` — the salvaged modules, now finished.** Both agents found **real defects in the code they inherited**, and both defects were the same species:
+
+- `p:pRg` with no `@st` was read as paragraph 0, because **`Number(null)` is 0** — producing confident findings about a range the markup never stated.
+- A cached sheet with an empty `@sheetId` was attributed to the *first* sheet of the source workbook, because **`Number('')` is 0**.
+
+🔴 **The animation agent found §8ab's own brief was wrong**: `p:cTn` has six children and `p:tgtEl` is not among them. Behaviours target through **`p:cBhvr/p:tgtEl`**, and there is no `p:condLst` — conditions live in `p:stCondLst`/`p:endCondLst`/etc. A module written from that brief would have found nothing on every real deck. **That is four briefs of mine corrected by agents now.**
+
+### 🔴 Correcting a recommendation I made and got wrong
+
+I suggested letting the **gap log** decide which analyzer to build next. **That was wrong, and I verified why:** the gap log fires only when a part is opened that **no analyzer matches**. `word/footnotes.xml` is matched by eight analyzers, so opening it never records a gap — the log would have stayed silent forever about a missing footnote check.
+
+**The gap log measures PART coverage, not CHECK coverage.** It is the right tool for discovering whole part types nobody anticipated (`customXml`, `docProps`, ink, embedded fonts). It cannot discover a missing check inside a part already covered.
+
+**So: build the remaining ones deliberately, using the §8u criterion.** The stopping rule is that criterion, not the log — stop when the marginal analyzer's failure mode is *visible* (DrawingML geometry, math, VML), because a wrong shape looks wrong and the user reports it without help.
+
+**Remaining by that criterion:** Excel defined names (`#REF!` propagation), Excel tables/ListObjects, document settings (§17.15, 70 deviations), data validation and conditional formatting.
 
 ## 9. Next actions
 
