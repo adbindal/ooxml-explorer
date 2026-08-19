@@ -146,6 +146,26 @@ describe('the chain from workbook.xml outwards', () => {
     }
   });
 
+  it('reads r:id by namespace, not by the prefix a writer happened to choose', () => {
+    // `r` is only a convention. A writer that binds the relationships namespace to any
+    // other prefix produces an equally valid file, and reading the attribute by its
+    // qualified name would see nothing in it.
+    const parts = healthy({
+      'xl/workbook.xml':
+        `<?xml version="1.0"?><workbook ${S} xmlns:rel="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
+        `<externalReferences><externalReference rel:id="rId5"/></externalReferences></workbook>`,
+      'xl/externalLinks/externalLink1.xml':
+        `<?xml version="1.0"?><externalLink ${S} xmlns:q="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
+        `<externalBook q:id="rId1">${CACHE}</externalBook></externalLink>`
+    });
+    const [reference] = readExternalLinks(parts).references;
+
+    expect(reference.relationshipId).toBe('rId5');
+    expect(reference.book?.relationshipId).toBe('rId1');
+    expect(reference.book?.targetIsExternal).toBe(true);
+    expect(externalLinkFindings(parts)).toEqual([]);
+  });
+
   it('only counts externalReference children of externalReferences', () => {
     const parts = healthy({
       'xl/workbook.xml': workbook(
@@ -253,6 +273,17 @@ describe('the externalBook and the source it names', () => {
     expect(reference.book?.cachedSheets).toHaveLength(1);
   });
 
+  it('treats an empty r:id on the externalBook as no id, not as an id that failed to resolve', () => {
+    // `r:id=""` names nothing, so the honest finding is "there is no id" rather than
+    // "the rels does not declare it" — the second sends someone looking for a
+    // relationship that was never meant to exist.
+    const parts = healthy({ 'xl/externalLinks/externalLink1.xml': book(CACHE, '') });
+    const [reference] = readExternalLinks(parts).references;
+
+    expect(reference.book?.relationshipId).toBe('');
+    expect(reference.problems.map(p => p.code)).toEqual(['externalLink/book-no-relationship-id']);
+  });
+
   it('reports an externalBook r:id the link part rels does not declare', () => {
     const parts = healthy({
       'xl/externalLinks/_rels/externalLink1.xml.rels': rels(rel('rIdOther', 'x.xlsx', true))
@@ -285,6 +316,24 @@ describe('the externalBook and the source it names', () => {
     expect(reference.book?.target).toBe('xl/other.xlsx');
     expect(reference.problems.map(p => p.code)).toEqual(['externalLink/source-not-external']);
     expect(reference.problems[0].severity).toBe('warning');
+  });
+
+  it('accepts TargetMode in any case, deliberately, rather than raising a false error', () => {
+    // OPC declares TargetMode as the enumeration Internal|External, so "external" is
+    // strictly out of spec. What Excel does with the odd casing was NOT verified. The
+    // lenient reading is chosen because the strict one turns a cosmetic deviation into
+    // a source-part-missing ERROR against a link that is plainly external, and this
+    // module's whole discipline is to under-claim rather than over-claim.
+    const parts = healthy({
+      'xl/externalLinks/_rels/externalLink1.xml.rels': rels(
+        `<Relationship Id="rId1" Type="${EXTERNAL_LINK_RELATIONSHIP_TYPE}Path" Target="S.xlsx" TargetMode="external"/>`
+      )
+    });
+    const [reference] = readExternalLinks(parts).references;
+
+    expect(reference.book?.targetIsExternal).toBe(true);
+    expect(reference.book?.sourceIsPresent).toBeNull();
+    expect(reference.problems).toEqual([]);
   });
 
   it('reports a non-external relationship whose package path is not there', () => {
@@ -568,7 +617,15 @@ describe('a formula naming a reference the workbook does not list', () => {
 
   it('never reports [0], which means this workbook rather than an out-of-range link', () => {
     expect(externalIndexesIn('[0]!Global_Range_Name')).toEqual([0]);
-    expect(codes(healthy({ 'xl/worksheets/sheet1.xml': sheet('[0]!Global_Range_Name') }))).toEqual([]);
+    // The list MUST be empty for this to prove anything. Against a workbook with one
+    // reference, 0 <= 1 already suppresses the finding, so the test would pass whether
+    // [0] were special-cased or not — mutation testing caught exactly that.
+    const parts: PackageParts = {
+      'xl/workbook.xml': workbook(''),
+      'xl/worksheets/sheet1.xml': sheet('[0]!Global_Range_Name')
+    };
+
+    expect(codes(parts)).toEqual([]);
   });
 
   it('offers a different fix when the workbook lists no references at all', () => {
