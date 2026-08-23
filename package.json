@@ -12,7 +12,9 @@
     "test": "vitest",
     "test:coverage": "vitest run --coverage",
     "deploy": "pnpm run build && wrangler deploy",
-    "ingest:schema": "tsx scripts/ingestSchema.ts"
+    "ingest:schema": "tsx scripts/ingestSchema.ts",
+    "test:real": "vitest run tests/realFiles.test.ts --reporter=verbose",
+    "fixtures:smoke": "node scripts/makeSmokeFixtures.mjs"
   },
   "dependencies": {
     "@google/genai": "^1.30.0",

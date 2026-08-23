@@ -8,7 +8,7 @@
 | | |
 |---|---|
 | **Branch** | `feat/schema-derived-rag-corpus` — **all work is here; `main` is untouched** |
-| **Tests** | 1362 passing; typecheck, lint and production build clean |
+| **Tests** | 1371 passing (+1 skipped: real-file checks, see §8af); typecheck, lint and production build clean |
 | **Architecture** | **Complete.** Analyzer registry, one `Finding` type, question routing, capability ledger, gap log, versioned JSON report |
 | **Analyzers** | package integrity, conformance, bookmarks, comments, fields, **tables**, **media**, OLE, pivot tables, formulas, content controls, hyperlinks, **revisions**, charts, style references, **footnotes**, **animations**, **external links**, Word cascade, Excel formats, PowerPoint inheritance — **21** |
 | **In flight** | none. Everything is tested and registered. |
@@ -975,10 +975,64 @@ skipped, and the source came back byte-identical.
 
 ⚠️ **Step 5 is deliberately gated and honest.** The user asked for "passing marks from
 real-world files"; **this project has no real-file corpus** — every test runs against
-hand-written fixtures, and acquiring one is blocked on the licensing question (task #11).
+hand-written fixtures. **A real-file harness now exists — see §8af.** (The old claim that this was blocked on licensing was wrong; §8af explains why.)
 The skill runs against `tests/fixtures/` if it exists and otherwise **says so and records
 the analyzer as fixture-verified only**. Building a step that silently passed would have
 manufactured exactly the false confidence the whole design exists to prevent.
+
+## 8af. Real-file checking — and #11 was never blocked (2026-08-23)
+
+`tests/realFiles.test.ts`, `scripts/makeSmokeFixtures.mjs`, `tests/fixtures/`. `6044267`.
+
+### 🔴 The blocker was imaginary, and it steered decisions for weeks
+
+**#11 was labelled "blocked on the licensing question" and it was wrong.** `LICENSING.md`
+is entirely about reproducing **[MS-OI29500]'s prose** — Microsoft's written specification
+text — and all four open lawyer questions are about copying *that text* into a RAG corpus.
+A test fixture is a **document file**. Different artifact, different question, no overlap.
+Nothing was ever waiting on a lawyer.
+
+That label propagated into the status summary, where it was reported as *"the largest
+remaining risk… blocked on one licensing question"*. **Worth remembering as a failure
+mode: a wrong label on a blocked task is more expensive than an open task, because nobody
+re-examines it.** It survived because "blocked on legal" reads as a reason to stop looking.
+
+### What the harness does, and the direction of its assertion
+
+Runs every applicable analyzer over each file in `tests/fixtures/` and asserts a
+**known-good file produces NOTHING**. That direction is the whole point: every other test
+here uses XML written by the same person who wrote the code reading it, so **a false
+positive on a genuine document is invisible to all of them**. An analyzer that catches
+every real fault *and* fires on half the corpus is worse than none — a report nobody trusts
+is a report nobody reads.
+
+Name a file `*.expect-findings.*` to invert the assertion, for a document deliberately
+broken to prove the engine catches it.
+
+### Confidentiality, and why CI stays honest
+
+The fixture **binaries are gitignored**, so pointing that directory at a confidential work
+document cannot leak it into version control. CI therefore has no fixtures and the suite
+**skips** — loudly, printing that real-file checks were *SKIPPED, not passed*. ⚠️ **A green
+suite does not imply real-file coverage.** That is stated in the test, the README and here,
+because it is exactly the kind of caveat that gets forgotten.
+
+### Both directions proven
+
+`npm run fixtures:smoke` writes two genuine OPC packages, so the harness is provable by
+anyone with a clone and no access to Office. A harness that only ever sees healthy files
+cannot distinguish *"no faults"* from *"not looking"*, which is why the broken one exists.
+
+- **`smoke-valid.docx`** — heading style, bookmark, complex `REF` field. **Ten analyzers
+  ran and reported nothing. No false positives.**
+- **`smoke-broken.expect-findings.docx`** — unclosed bookmark, undefined paragraph style.
+  Both caught, and correctly characterised: *"2 of these render correctly and are broken
+  anyway, so no visual check would catch them."*
+
+**These are not a substitute for real Office output** — they are written here, so they
+share the blind spots of the code that reads them. They prove the *harness*. The corpus
+still wants real documents, and the honest status is now **"no fixtures present"** rather
+than **"blocked"**: `npm run test:real` after dropping files in.
 
 ## 9. Next actions
 
@@ -991,7 +1045,7 @@ All four subsystems the user named are **DONE**: #26 bookmarks (§8m), #27 OLE (
 1. ~~Source or cut the "67 variations" figure~~ — **DONE**, see §8p. Verified at 67; the "second only to formulas" half was false and is corrected.
 2. ~~Carry `Finding[]` to the panel boundary~~ — **DONE for validate and compare**, see §8t. Those paths produce findings natively and now export as JSON. The *explain* path is still prose by design; revisit only when a caller actually needs it. `ComputedEvidence` still lives in `aiService` and is type-imported by `geminiService` to avoid a runtime cycle — a small seam worth tidying if that type ever grows.
 3. ~~Decide on Strict support repo-wide~~ — **DONE**, see §8v. Normalised at one choke point; the analyzers still compare exactly, and the `conformance` analyzer reports what the mapping does not cover.
-4. **#11** Pin a real `styles.xml` regression fixture — **blocked** on the licensing question (§8j / `LICENSING.md`).
+4. ~~**#11** Pin a real `styles.xml` regression fixture~~ — **DONE**, see §8af. It was never blocked.
 5. ~~**#21** Replace the substring NL fallback with BM25~~ — **DONE** (`00c3bd1`). Worth being precise about what this did and did not settle: the counters exist to decide **embeddings vs lexical**, and that stays open pending usage data. BM25 replaced *"take the first substring hit"*, which lost to lexical scoring under every hypothesis, so it raises the floor the measurement compares against rather than pre-empting it.
 6. **New analyzers**, driven by the gap log rather than guesswork. The obvious blind spots from §10: **DrawingML** (shape geometry, effects, theme style matrices), **formulas** (the biggest MS-OI29500 cluster in SpreadsheetML), and **fields** (`w:fldSimple`, `w:instrText` — TOC, cross-references and page numbers all run through them, and they interact directly with bookmarks).
 
@@ -1000,7 +1054,7 @@ All four subsystems the user named are **DONE**: #26 bookmarks (§8m), #27 OLE (
 **Wired to the panel** in `c0c4b0c`, which also fixed a latent design bug: `buildComputedEvidence` used `ANALYSIS_TARGETS.find`, so only the **first** matching entry ran. That was fine while each part had exactly one analysis and wrong the moment it did not — a `word/document.xml` carries formatting *and* bookmarks *and* possibly OLE objects, which are independent questions. It now runs every match, unions the sibling requests so a part is fetched once, and merges the results; one analysis throwing no longer suppresses the rest. **Anything added to `ANALYSIS_TARGETS` from here on composes rather than shadows.**
 
 **Still open:**
-- **#11** Pin a real `styles.xml` regression fixture — **blocked** on the licensing question in §8j / `LICENSING.md`.
+- ~~**#11** Pin a real `styles.xml` regression fixture~~ — **DONE**, see §8af.
 - **#21** Replace the substring NL fallback with BM25. Counters are live (§8h), so **measure before building**.
 
 ## 10. Known gaps at time of writing
