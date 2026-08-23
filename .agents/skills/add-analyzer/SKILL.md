@@ -9,11 +9,17 @@ Adds one analyzer to the OOXML engine. The procedure below is not ceremony — e
 exists because skipping it produced a specific, real defect in this codebase.
 
 **Read `docs/ooxml-expert-agent/RESEARCH-STATE.md` §8u first** (the selection criterion)
-and skim §8m–§8ad (what each existing analyzer found). Then follow this in order.
+and skim §8m–§8af (what each existing analyzer found, and what each got wrong). Then follow this in order.
 
 ---
 
 ## 0. Gather the input
+
+⚠️ **If you are told something is blocked, verify the blocker before accepting it.** Task
+#11 sat labelled "blocked on a licensing question" for weeks and was never blocked at all
+— the licensing research was about Microsoft's *specification prose*, and the task was
+about a *document file*. A wrong label on a blocked task is more expensive than an open
+one, because nobody re-examines it.
 
 Ask the user for whichever of these they have. **None is required to proceed** — say what
 is missing rather than blocking.
@@ -209,10 +215,14 @@ broken) if you need a baseline with no access to Office. **They prove the harnes
 analyzer** — they are written by this repo and share its blind spots.
 
 ```bash
-npm run test:real
+npm run fixtures:smoke && npm run test:real
 ```
 
-- **If files exist**: run the analyzer over each and read every finding. A finding on a
+**Run this even with no real documents.** The generated valid package exercises styles,
+a bookmark and a complex field, so a new analyzer that fires on it is a false positive you
+can find in seconds. It costs nothing and it is the cheapest bug you will ever catch.
+
+- **If real files exist**: run the analyzer over each and read every finding. A finding on a
   known-good file is a false positive and must be fixed before shipping — that is the
   whole point of this step.
 - **If none exist**: say so explicitly in the report and in the commit message. Record the
@@ -238,6 +248,35 @@ In `services/analyzers.ts`, add an entry with:
 - **`cannotDetermine` — what it explicitly cannot establish.** This feeds the capability
   ledger and is the honest half. **An analyzer that declares no limits is almost
   certainly lying**, and a test enforces that this array is non-empty.
+
+### 🔴 Then prove it is actually reachable
+
+Registering is not the same as being wired up. **Charts sat in the registry for weeks
+contributing zero findings** — `readChart` computed rich problems the whole time, but they
+were only ever reached through `explain`, so the second-largest divergence cluster in the
+format was invisible to validation and to every before/after comparison. Nothing failed;
+it just silently checked nothing.
+
+Confirm it appears in a real run before you believe the registration:
+
+```bash
+npm run fixtures:smoke && npm run test:real
+```
+
+That prints `N analyzer(s) ran, M skipped` per file. Add a temporary `console.log` of
+`run.ran` in the test if you need the ids, or assert it directly in
+`tests/analyzers.test.ts`:
+
+```ts
+expect(analyzePackage(partsThatShouldTriggerIt).ran).toContain('yourAnalyzer');
+```
+
+**If your id is not in `ran`, it is not wired up**, whatever the registry looks like — and
+the most likely cause is `appliesTo` returning false for the parts you expected.
+
+An `explain`-only analyzer is a legitimate choice — three of them describe *resolution*
+rather than faults. But make it a decision you can defend, not an omission: if the module
+computes anything a consumer would call a problem, it needs `analyze` too.
 
 ---
 
