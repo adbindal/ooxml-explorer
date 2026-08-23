@@ -1,0 +1,61 @@
+name: OOXML Engine — wrong or missing finding
+description: The engine flagged a file that is fine, missed something real, or said it unclearly.
+title: "[engine] "
+labels: ["ooxml-engine"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ### ⚠️ Do not paste document content
+
+        No text, cell values, or markup from a real document — this tool runs on-device by
+        default so confidential files never leave your machine, and an issue tracker is not
+        that machine.
+
+        **Instead:** describe the *markup pattern*, or attach a small file you have made
+        yourself that shows the same thing. A hand-made file is just as useful to us and
+        carries none of your data.
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What kind of problem
+      options:
+        - False positive — flagged a file that is fine
+        - Missed fault — said nothing about a real problem
+        - Unclear message — right finding, unhelpful wording
+        - Not covered — no analyzer looks at this
+    validations:
+      required: true
+  - type: input
+    id: code
+    attributes:
+      label: Finding code
+      description: The `analyzer/kind` code, if there was one. Shown in the report and the validator log.
+      placeholder: bookmark/unmatched-start
+  - type: input
+    id: part
+    attributes:
+      label: Which part
+      description: Use the generic form — `word/header#.xml`, not the numbered one.
+      placeholder: word/document.xml
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what you expected
+      description: |
+        For a **false positive**: why is the file actually fine? If Office opens it without a
+        repair prompt, say so — that is the standard we hold the engine to.
+
+        For a **miss**: what is wrong, and would anyone notice by looking? If it renders
+        correctly and is broken anyway, say that — those are the ones worth catching.
+    validations:
+      required: true
+  - type: textarea
+    id: engine
+    attributes:
+      label: Engine state (optional, and the most useful thing you can give us)
+      description: |
+        Run **Export Report (JSON)** in the Validator and paste it here, or paste the
+        `N analyzer(s) ran` line. It tells us which checks ran and which stayed silent,
+        which is usually the whole answer. It contains no document content.
+      render: json
