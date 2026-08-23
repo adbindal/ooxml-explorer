@@ -200,12 +200,16 @@ If a mutant is genuinely equivalent, **say so in the report instead of inventing
 
 ## 5. Check against real files — gated, and honest about it
 
-⚠️ **This project has no real-file corpus.** Every one of its tests runs against
-hand-written fixtures. Acquiring one is blocked on the licensing question in
-`docs/ooxml-expert-agent/LICENSING.md` (task #11).
+There is a harness for this: **`npm run test:real`** runs every analyzer over every file
+in `tests/fixtures/` and fails if a known-good file produces a finding. The binaries are
+gitignored, so that directory is safe to point at confidential work documents.
+
+`npm run fixtures:smoke` writes two generated OPC packages (one valid, one deliberately
+broken) if you need a baseline with no access to Office. **They prove the harness, not the
+analyzer** — they are written by this repo and share its blind spots.
 
 ```bash
-ls tests/fixtures/*.docx tests/fixtures/*.xlsx tests/fixtures/*.pptx 2>/dev/null
+npm run test:real
 ```
 
 - **If files exist**: run the analyzer over each and read every finding. A finding on a
@@ -214,6 +218,11 @@ ls tests/fixtures/*.docx tests/fixtures/*.xlsx tests/fixtures/*.pptx 2>/dev/null
 - **If none exist**: say so explicitly in the report and in the commit message. Record the
   analyzer as **fixture-verified only**. Do not describe it as validated against real
   files; that is the difference between *correct* and *trustworthy*.
+
+**A false positive here outranks a missing check.** An analyzer that fires on a document
+Office is happy with makes the whole report untrustworthy, and one bad finding discredits
+twenty good ones. If a real file trips your analyzer, fix the analyzer before shipping —
+do not add an exception to the fixture.
 
 ---
 
