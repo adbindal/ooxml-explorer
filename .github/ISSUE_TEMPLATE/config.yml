@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Not sure if it is a bug?
+    url: https://github.com/adbindal/ooxml-explorer/blob/main/docs/ooxml-expert-agent/RESEARCH-STATE.md
+    about: "Check what each analyzer says it CANNOT determine — the limits are documented per analyzer, and a known limit is not a bug."
