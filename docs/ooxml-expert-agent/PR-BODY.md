@@ -4,7 +4,7 @@ Turns Explorer's AI from a persona prompt over a reference corpus into a **deter
 analysis engine** that reads the open document and computes its answers. The model
 narrates a result it did not decide.
 
-**98 commits.** `main` has not moved, so this is a clean fast-forward.
+**100 commits.** `main` has not moved, so this is a clean fast-forward.
 
 ---
 
@@ -15,9 +15,13 @@ ECMA-376 compliance… citing exact issues."* We asked a language model to be a 
 and to produce its own citations — the one thing it will confidently invent. Nothing in
 the UI distinguished a real citation from a fabricated one.
 
-The corpus behind it has **1,899 records and 29 with human-written meaning** — the rest is
-SDK-derived structure. So for ~98% of questions there was nothing to ground an answer in,
-and the model filled the gap fluently.
+The corpus behind it on `main` is **29 hand-written records** — roughly 29 tags out of the
+hundreds ECMA-376 defines. This PR generates **1,899** from the Open XML SDK schema, which
+is 65× the coverage and **still only 29 with any human-written meaning**: the SDK supplies
+structure, not semantics.
+
+That is the point. Even after a 65× increase, most questions had nothing to ground an
+answer in, and the model filled the gap fluently.
 
 More corpus, re-ranking, embeddings and fine-tuning were each considered and are each
 argued in `docs/ooxml-expert-agent/RESEARCH-STATE.md`. The short version: the question was
@@ -58,7 +62,7 @@ carry the design:
 |---|---|
 | `services/findings.ts` | The type everything else emits. ~150 lines. |
 | `services/analyzers.ts` | The registry, routing, and capability ledger. |
-| `services/wordBookmarks.ts` | A representative analyzer, and the smallest. |
+| `services/wordNotes.ts` | A whole analyzer in 256 lines, including the trap that would fire on every real document. |
 | `docs/ooxml-expert-agent/RESEARCH-STATE.md` §8u | Why these 21 and not others. |
 
 The remaining analyzers are the same shape repeated. **Skimming two and trusting the
@@ -72,7 +76,7 @@ silently breaks, and a rules table making severity explicit.
 | `public/rag-data.json` | 29,181 | **generated** by `scripts/ingestSchema.ts` — skim, don't read |
 | `services/` | 17,273 | the engine |
 | `tests/` | 13,683 | ~0.8 test lines per source line |
-| `docs/` | 1,180 | design record and licensing research |
+| `docs/` | 1,312 | design record and licensing research |
 
 ---
 
@@ -85,10 +89,14 @@ npx vitest run      ✓  1,384 passing, 1 skipped
 npm run build       ✓
 ```
 
-Every module was **mutation-tested** — the implementation deliberately broken several ways
-to check the tests actually catch it. That found a real gap in nearly every module, and
+Every analyzer was **mutation-tested** — the implementation deliberately broken several
+ways to check the tests actually catch it. That found a real gap in nearly every one, and
 the recurring cause was a test passing for the wrong reason rather than missing coverage.
 `.agents/skills/add-analyzer/mutate.py` is the harness.
+
+The practice was adopted partway through, so the earliest modules — the Word cascade,
+Excel cell formats, PowerPoint inheritance, package integrity and the semantic diff —
+have tests but were never mutated. They are the least-proven code in the diff.
 
 The one skipped test is the real-file suite, which skips when `tests/fixtures/` is empty
 and **says so loudly** rather than passing silently.
