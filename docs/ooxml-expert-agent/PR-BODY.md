@@ -46,10 +46,6 @@ explicitly *cannot* establish.
 minimum across sources. A clean validation run reports *"no problems found by the checks
 that ran"* — never *"this file is correct."*
 
-**DLP enforcement consolidated.** Provider selection was duplicated across call sites and
-fell back to cloud when the local model was unavailable, so a protected document could
-leave the machine silently. It is now one function that fails closed.
-
 ---
 
 ## Suggested review order
@@ -124,8 +120,13 @@ Two smaller ones, both recorded rather than hidden:
 
 ## Risk
 
-`main` is untouched and this is additive — the existing panel behaviour is preserved
-where it was not the thing being replaced. The riskiest change for existing users is the
-**DLP consolidation**: cloud access now fails closed where it previously fell back. That
-is the intended behaviour, but it will surface as an error for anyone who had been
-relying, unknowingly, on the fallback.
+`main` is untouched and this is additive — existing panel behaviour is preserved except
+where it was the thing being replaced.
+
+The behavioural change users will notice is the **evidence tier**: answers that
+previously appeared with no qualification now carry a badge, and some will read as
+`Unverified`. That is the same answer as before, honestly labelled — but it will look
+like a regression to anyone who read confidence into the absence of a caveat.
+
+DLP already fails closed on `main` (`decbd66`); this PR does not touch
+`services/aiProvider.ts`.
