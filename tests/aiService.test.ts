@@ -14,20 +14,29 @@ const { mockKnowledgeBase } = vi.hoisted(() => {
     mockKnowledgeBase: [
       { tag: 'tcW', namespace: 'w', domain: 'docx', definition: 'Table Cell Width. Specifies the width of the table cell.', attributes: [], parents: [] },
       { tag: 'cantSplit', namespace: 'w', domain: 'docx', definition: 'Table Row Cannot Split. Specifies that the row must not be split across pages.', attributes: [], parents: [] },
-      { tag: 'sheetData', namespace: 'r', domain: 'xlsx', definition: 'Sheet Data. The grid container for all rows and cells in the worksheet.', attributes: [], parents: [] },
+      { tag: 'sheetData', namespace: 'x', domain: 'xlsx', definition: 'Sheet Data. The grid container for all rows and cells in the worksheet.', attributes: [], parents: [] },
       { tag: 'sld', namespace: 'p', domain: 'pptx', definition: 'Slide. The root element representing a single slide within the presentation.', attributes: [], parents: [] },
       { tag: 'Relationship', namespace: 'r', domain: 'shared', definition: 'Relationship Definition. Specifies a link between a source and target.', attributes: [], parents: [] }
     ]
   };
 });
 
-vi.mock('../services/storageService', () => {
+vi.mock('../services/storageService', async () => {
+  // Only the IndexedDB-touching functions are stubbed. selectBestMatch is pure and
+  // is reused as-is, so this mock exercises the real namespace-resolution rule
+  // instead of a copy that could drift away from it.
+  const actual = (await vi.importActual(
+    '../services/storageService'
+  )) as typeof import('../services/storageService');
   return {
-    querySchemaFromStorage: vi.fn(async (tag: string, domain: string) => {
-      const matches = mockKnowledgeBase.filter((m: any) => m.tag === tag);
-      const bestMatch = matches.find((m: any) => m.domain === domain || m.domain === 'shared');
-      return bestMatch || null;
-    }),
+    selectBestMatch: actual.selectBestMatch,
+    querySchemaFromStorage: vi.fn(async (tag: string, domain: string, namespace?: string) =>
+      actual.selectBestMatch(
+        mockKnowledgeBase.filter((m: any) => m.tag === tag),
+        domain as any,
+        namespace
+      )
+    ),
     searchSchemasInStorage: vi.fn(async (keyword: string, domain: string) => {
       const cleanKeyword = keyword.toLowerCase().trim();
       return mockKnowledgeBase.filter((m: any) => {

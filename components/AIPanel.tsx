@@ -13,8 +13,125 @@ import {
   AIDiffAnalysis
 } from '../services/geminiService';
 import { explainElement, ElementExplanation } from '../services/aiService';
+import type { ComputedEvidence } from '../services/aiService';
+import { diffPackages, explainDiff } from '../services/ooxmlDiff';
+import { diffFindings, explainPart, siblingsFor } from '../services/analyzers';
+import { recordCoverageGap } from '../services/coverageGaps';
+import { renderFindings } from '../services/findings';
 import { ThemeClasses } from '../types';
 import MarkdownContent from './MarkdownContent';
+
+/**
+ * Assembles the parts the Word cascade needs and computes evidence for one element.
+ *
+ * The panel holds the open file's text and can fetch siblings, so this pulls
+ * `styles.xml` and `numbering.xml` alongside `document.xml`. Any of them may be
+ * absent; the analysis reports what it could not use rather than failing.
+ *
+ * Returns null when there is nothing to compute, so the caller degrades to the
+ * ordinary retrieval-backed explanation.
+ */
+
+/**
+ * Turns the two sides of a diff into a computed evidence bundle.
+ *
+ * A `DiffFileContext` carries one part's before and after text; several of them make
+ * up the two packages. `diffPackages` wants both as `PackageParts`, so this pivots the
+ * per-file pairs into a before-package and an after-package and diffs them together —
+ * a change that moves content between parts is only visible when they are compared as
+ * packages rather than file by file.
+ *
+ * Returns null when nothing could be derived, so the caller degrades to the previous
+ * raw-text behaviour rather than showing an empty computed block.
+ */
+const computeDiffEvidence = (files: DiffFileContext[]): ComputedEvidence | null => {
+  const before: Record<string, string> = {};
+  const after: Record<string, string> = {};
+  for (const file of files) {
+    if (typeof file.original === 'string') before[file.fileName] = file.original;
+    if (typeof file.modified === 'string') after[file.fileName] = file.modified;
+  }
+  if (Object.keys(before).length === 0 && Object.keys(after).length === 0) return null;
+
+  try {
+    const result = diffPackages(before, after);
+    const lines = explainDiff(result);
+
+    // What the change did to the HEALTH of the package, which the structural diff
+    // cannot say. A dropped OLE embedding is one removed part and looks like any other
+    // removed part; here it becomes an introduced finding that says the document still
+    // renders correctly and is broken anyway.
+    const delta = diffFindings(before, after);
+    if (delta.introduced.length > 0) {
+      lines.push(
+        `This change INTRODUCES ${delta.introduced.length} problem(s) that the earlier file did not have:`,
+        ...renderFindings(delta.introduced).map(line => `  ${line}`)
+      );
+    }
+    if (delta.resolved.length > 0) {
+      lines.push(
+        `It also FIXES ${delta.resolved.length} problem(s) present in the earlier file:`,
+        ...renderFindings(delta.resolved).map(line => `  ${line}`)
+      );
+    }
+    if (delta.unchanged.length > 0) {
+      // Named so nobody attributes a pre-existing fault to this change.
+      lines.push(
+        `${delta.unchanged.length} problem(s) are present in both files and are not caused by this change.`
+      );
+    }
+
+    if (lines.length === 0) return null;
+    return { lines, unresolved: result.unresolved };
+  } catch {
+    // A malformed part must not take the whole panel down; fall back to raw text.
+    return null;
+  }
+};
+
+/**
+ * Assembles the evidence for one selected element by asking the analyzer registry.
+ *
+ * Previously this walked a hand-maintained table inside this component, which meant the
+ * set of things the engine could explain was defined in the UI layer and invisible to
+ * everything else. It now comes from `services/analyzers.ts`, so registering an
+ * analyzer is enough to make it answer questions here.
+ *
+ * When nothing matches, the part is recorded as a coverage gap. That is the honest
+ * answer - no check applies - and it turns "we do not handle this" into a ranked
+ * backlog instead of a silence.
+ */
+const buildComputedEvidence = async (
+  context: AIPanelProps['context'],
+  rawXml: string
+): Promise<ComputedEvidence | null> => {
+  const openPath = context.fileName;
+  if (!openPath || !context.content) return null;
+
+  const parts: Record<string, string> = { [openPath]: context.content };
+
+  const wanted = siblingsFor(openPath, context.relatedFiles ?? []);
+  if (wanted.length > 0 && context.onLoadContext) {
+    try {
+      const loaded = await context.onLoadContext(wanted);
+      for (const file of loaded as { fileName: string; content: string }[]) {
+        if (file?.fileName && typeof file.content === 'string') {
+          parts[file.fileName] = file.content;
+        }
+      }
+    } catch {
+      // A failed sibling fetch is not fatal - the analyses report the part as
+      // unavailable and the tier is capped below Verified accordingly.
+    }
+  }
+
+  const result = explainPart(parts, openPath, rawXml);
+  if (!result) {
+    recordCoverageGap(openPath, context.selectedTag?.tagName);
+    return null;
+  }
+  return result.evidence;
+};
 
 interface AIPanelProps {
   onClose: () => void;
@@ -161,7 +278,16 @@ const AIPanel: React.FC<AIPanelProps> = ({ onClose, context, themeClasses }) => 
             finalContext = [...finalContext, ...extraContext];
         }
 
-        const result = await analyzeDiff(finalContext, mode);
+        // Run the real semantic diff over both sides before asking the model anything.
+        // Two saves of one document differ in thousands of bytes that mean nothing -
+        // rewritten revision ids, text redistributed across runs, formatting moved
+        // between a style and direct properties. Handing the model only the raw text
+        // invites it to narrate that noise as change. `diffPackages` decides what is
+        // actually different, and `equivalent` answers the question people open a diff
+        // to ask: would Word treat these the same?
+        const computed = computeDiffEvidence(finalContext);
+
+        const result = await analyzeDiff(finalContext, mode, computed);
         setDiffResponse(result);
     } catch (e: unknown) {
         const err = e as Error;
@@ -192,11 +318,20 @@ const AIPanel: React.FC<AIPanelProps> = ({ onClose, context, themeClasses }) => 
           ? 'pptx' 
           : 'docx';
           
+      // Try to compute the formatting cascade for this element. When it succeeds the
+      // answer rests on a derivation from the document rather than on retrieval, which
+      // is what earns the Verified tier. It is Word-only for now, and returns null
+      // whenever the element cannot be located unambiguously - in which case we fall
+      // back to the ordinary explanation rather than showing a Verified answer built
+      // on a guess.
+      const computed = await buildComputedEvidence(context, context.selectedTag.rawXml);
+
       const result = await explainElement(
         context.selectedTag.tagName,
         context.selectedTag.rawXml,
         fileType,
-        context.selectedTag.parentPath
+        context.selectedTag.parentPath,
+        computed
       );
       setSelectedTagResponse(result);
     } catch (e: unknown) {
@@ -691,15 +826,38 @@ const AIPanel: React.FC<AIPanelProps> = ({ onClose, context, themeClasses }) => 
                                 <Bot size={13} />
                                 <span>XML Element Explanation</span>
                             </div>
-                            {selectedTagResponse.grounded ? (
-                                <span className="px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider border bg-green-500/10 border-green-500/20 text-green-500 shrink-0" title="Backed by an official ECMA-376 citation from the RAG database.">
-                                    ✅ Grounded
-                                </span>
-                            ) : (
-                                <span className="px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider border bg-[#EAB308]/10 border-[#EAB308]/20 text-[#EAB308] shrink-0" title="No official citation was found for this tag - this explanation comes from the model's general knowledge and has not been independently verified.">
-                                    ⚠️ Unverified
-                                </span>
-                            )}
+                            {/* The tier is computed in the orchestrator from evidence
+                                provenance - never reported by the model. See
+                                selectEvidenceTier in services/aiService.ts. */}
+                            {(() => {
+                                const tier = selectedTagResponse.tier
+                                    ?? (selectedTagResponse.grounded ? 'grounded' : 'unverified');
+                                const badge = {
+                                    verified: {
+                                        label: '🔍 Verified',
+                                        className: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500',
+                                        title: 'Computed directly from this document by resolving the formatting cascade. Not retrieved, not recalled.'
+                                    },
+                                    grounded: {
+                                        label: '✅ Grounded',
+                                        className: 'bg-green-500/10 border-green-500/20 text-green-500',
+                                        title: 'Backed by an official ECMA-376 citation from the schema database, or by a computation that could not establish everything.'
+                                    },
+                                    unverified: {
+                                        label: '⚠️ Unverified',
+                                        className: 'bg-[#EAB308]/10 border-[#EAB308]/20 text-[#EAB308]',
+                                        title: "No citation was found and nothing could be computed - this explanation comes from the model's general knowledge and has not been independently verified."
+                                    }
+                                }[tier];
+                                return (
+                                    <span
+                                        className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider border shrink-0 ${badge.className}`}
+                                        title={badge.title}
+                                    >
+                                        {badge.label}
+                                    </span>
+                                );
+                            })()}
                         </div>
                         <div className="p-3 rounded-lg bg-blue-500/5 border border-blue-500/10 font-mono text-[10px] break-all text-[#4A89DC]">
                             {context.selectedTag?.rawXml}

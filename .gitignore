@@ -36,3 +36,16 @@ playwright-/.cache
 .env*
 !.env.example
 
+
+# Agent worktrees are full checkouts living inside the repo; never track them.
+.claude/worktrees/
+
+# Real-file test fixtures: the documents themselves are never committed, so that
+# pointing this directory at confidential work files cannot leak them. See
+# tests/fixtures/README.md.
+tests/fixtures/*.docx
+tests/fixtures/*.xlsx
+tests/fixtures/*.pptx
+tests/fixtures/*.docm
+tests/fixtures/*.xlsm
+tests/fixtures/*.pptm

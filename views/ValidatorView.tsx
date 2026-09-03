@@ -2,10 +2,21 @@ import React, { useState, useRef, useEffect } from 'react';
 import { 
   ArrowLeft, Play, Loader2, Maximize2, GitCompare, ExternalLink, 
   CheckSquare, Square, Zap, AlertTriangle, Power, Activity,
-  PieChart
+  PieChart, ShieldCheck, FileJson
 } from 'lucide-react';
 import { ThemeClasses } from '../types';
 import { runSystemChecks, LogEntry, CoverageModule } from '../services/testService';
+import { loadZipFile, readPackageParts } from '../services/zipService';
+import { analyzePackage, capabilityLedger } from '../services/analyzers';
+import { compareFindings } from '../services/findings';
+import { readRetrievalMetrics, summariseRetrieval, resetRetrievalMetrics } from '../services/retrievalMetrics';
+import { summariseCoverageGaps, resetCoverageGaps } from '../services/coverageGaps';
+import { reportPackage, reportComparison, serialiseReport, summariseReport } from '../services/report';
+import {
+    resolveAlternateContent,
+    MODERN_CONSUMER_NAMESPACES,
+    LEGACY_CONSUMER_NAMESPACES
+} from '../services/markupCompatibility';
 import { getApiKey, testConnection } from '../services/geminiService';
 
 import { useAppStore } from '../store/appStore';
@@ -24,6 +35,8 @@ const ValidatorView: React.FC<ValidatorViewProps> = ({ themeClasses }) => {
     const [shouldCrash, setShouldCrash] = useState(false);
     const [debugEnabled, setDebugEnabled] = useState(getDebugMode());
     const [coverageReport, setCoverageReport] = useState<CoverageModule[]>([]);
+    const [integrityStatus, setIntegrityStatus] = useState<'idle' | 'running' | 'done'>('idle');
+    const [exporting, setExporting] = useState(false);
     
     const consoleEndRef = useRef<HTMLDivElement>(null);
     
@@ -80,8 +93,176 @@ const ValidatorView: React.FC<ValidatorViewProps> = ({ themeClasses }) => {
         }]);
     };
 
+    /**
+     * Runs the deterministic OPC integrity checks against the selected file.
+     *
+     * Distinct from the AI features on purpose: nothing here is generated or
+     * retrieved. Every line it prints is computed from the package, so a clean run is
+     * a fact about the file rather than a model's opinion of it.
+     */
+    /**
+     * Prints how often each retrieval path has answered a lookup.
+     *
+     * Answers the question that decides whether semantic search is worth building at
+     * all. Counts only - no query text is ever stored.
+     */
+    const handleShowRetrievalMetrics = () => {
+        const summary = summariseRetrieval(readRetrievalMetrics());
+        // The coverage backlog belongs next to the retrieval counts: both answer "what
+        // should we build next?" from measurement rather than from guesswork, and
+        // neither records anything about the user.
+        const gaps = summariseCoverageGaps();
+        setLogs(prev => [
+            ...prev,
+            { msg: '📊 Retrieval paths:', type: 'info', timestamp: Date.now() },
+            ...summary.lines.map(line => ({ msg: line, type: 'info' as const, timestamp: Date.now() })),
+            { msg: '🕳️ Coverage gaps — markup that was opened with no analyzer behind it:', type: 'info', timestamp: Date.now() },
+            ...gaps.lines.map(line => ({ msg: line, type: 'info' as const, timestamp: Date.now() }))
+        ]);
+    };
+
+    /**
+     * Writes the structured report to a file.
+     *
+     * The point of the engine is that its output can be consumed by something other
+     * than a person reading a log. When both files are selected this produces the
+     * comparison report instead - what the change broke and what it fixed - which is
+     * the shape a regression investigation actually wants.
+     */
+    const handleExportReport = async () => {
+        const addLog = (msg: string, type: 'info' | 'success' | 'warning' | 'error') =>
+            setLogs(prev => [...prev, { msg, type, timestamp: Date.now() }]);
+
+        if (!files.a) return;
+        setExporting(true);
+        try {
+            const readParts = async (file: File) => readPackageParts((await loadZipFile(file)).zip);
+            const partsA = await readParts(files.a);
+
+            // Branched rather than narrowed after the fact: the two reports are
+            // different shapes, and the summary line for each reads from fields the
+            // other does not have.
+            let json: string;
+            let summary: string;
+            if (files.b) {
+                const report = reportComparison(partsA, await readParts(files.b));
+                json = serialiseReport(report);
+                summary =
+                    `📄 Comparison report written — ${report.introduced.length} introduced, ` +
+                    `${report.resolved.length} resolved, ${report.unchanged.length} pre-existing.`;
+            } else {
+                const report = reportPackage(partsA);
+                json = serialiseReport(report);
+                summary = `📄 Report written. ${summariseReport(report)}`;
+            }
+
+            const url = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `${files.a.name.replace(/\.[^.]+$/, '')}-report.json`;
+            link.click();
+            URL.revokeObjectURL(url);
+
+            addLog(summary, 'success');
+        } catch (e) {
+            addLog(`❌ Could not build the report: ${(e as Error).message}`, 'error');
+        } finally {
+            setExporting(false);
+        }
+    };
+
+    const handleCheckIntegrity = async () => {
+        const addLog = (msg: string, type: 'info' | 'success' | 'warning' | 'error') =>
+            setLogs(prev => [...prev, { msg, type, timestamp: Date.now() }]);
+
+        if (!files.a) return;
+        setIntegrityStatus('running');
+        addLog(`🔍 Checking package integrity of ${files.a.name}...`, 'info');
+
+        try {
+            const { zip } = await loadZipFile(files.a);
+            const parts = await readPackageParts(zip);
+            // Every analyzer that applies, not just package integrity. This surface
+            // previously ran one of them, so "is this file correct?" checked content
+            // types and relationships and nothing else.
+            const run = analyzePackage(parts);
+            const findings = run.findings;
+            const ledger = capabilityLedger(run);
+
+            addLog(`Inspected ${Object.keys(parts).length} parts with ${ledger.ran.length} analyzer(s): ${ledger.ran.map(a => a.title).join(', ')}.`, 'info');
+            if (ledger.skipped.length > 0) {
+                addLog(`Not applicable to this package: ${ledger.skipped.map(a => a.title).join(', ')}.`, 'info');
+            }
+
+            // Markup compatibility is reported separately from integrity on purpose.
+            // The integrity checks deliberately run against the *unresolved* markup,
+            // because a broken relationship inside an mc:Fallback branch is still a
+            // broken file for whichever consumer takes that branch.
+            const alternateContent = Object.entries(parts)
+                .filter(([path, content]) => path.endsWith('.xml') && content.includes('AlternateContent'))
+                .map(([path, content]) => {
+                    const doc = new DOMParser().parseFromString(content, 'application/xml');
+                    const modern = resolveAlternateContent(
+                        doc, MODERN_CONSUMER_NAMESPACES
+                    ).selections;
+                    const legacy = resolveAlternateContent(
+                        new DOMParser().parseFromString(content, 'application/xml'),
+                        LEGACY_CONSUMER_NAMESPACES
+                    ).selections;
+                    return { path, modern, legacy };
+                })
+                .filter(entry => entry.modern.length > 0);
+
+            if (alternateContent.length > 0) {
+                const total = alternateContent.reduce((n, e) => n + e.modern.length, 0);
+                addLog(`ℹ️ ${total} block(s) of alternate content across ${alternateContent.length} part(s) — content written more than once for different Office versions.`, 'info');
+                for (const entry of alternateContent) {
+                    const divergent = entry.modern.filter((sel, i) => sel.chose !== entry.legacy[i]?.chose).length;
+                    addLog(
+                        `  ${entry.path}: ${entry.modern.length} block(s)` +
+                        (divergent > 0 ? ` — ${divergent} render differently in a pre-2010 Office build.` : ''),
+                        'info'
+                    );
+                }
+            }
+
+            if (findings.length === 0) {
+                // Deliberately narrow wording. A clean run means the checks that ran
+                // found nothing - not that the file is correct. The ledger below says
+                // which checks those were and what they cannot see.
+                addLog('✅ No problems found by the checks that ran.', 'success');
+            } else {
+                const errors = findings.filter(f => f.severity === 'error').length;
+                const warnings = findings.length - errors;
+                addLog(`Found ${errors} error(s) and ${warnings} warning(s).`, errors > 0 ? 'error' : 'warning');
+                // Most integrity faults are silent - the package opens and renders and is
+                // broken anyway - so say which ones, rather than leaving the reader to
+                // assume anything visible would already have been noticed.
+                for (const finding of [...findings].sort(compareFindings)) {
+                    const silent = finding.silent ? ' (renders correctly and is broken anyway)' : '';
+                    addLog(
+                        `[${finding.code}] ${finding.part} — ${finding.message}${silent} ${finding.remediation}`,
+                        // The log has no 'note' level; notes are informational, so they map to 'info'.
+                        finding.severity === 'note' ? 'info' : finding.severity
+                    );
+                }
+            }
+
+            // The honest half: what the checks that ran still cannot see. Computed from
+            // the registry, never asserted by a model.
+            if (ledger.limits.length > 0) {
+                addLog('These checks cannot establish:', 'info');
+                for (const limit of ledger.limits) addLog(`  • ${limit}`, 'info');
+            }
+            setIntegrityStatus('done');
+        } catch (e) {
+            addLog(`❌ Could not read the package: ${(e as Error).message}`, 'error');
+            setIntegrityStatus('done');
+        }
+    };
+
     const handleInteractiveTest = async (id: string) => {
-        const addLog = (msg: string, type: 'info' | 'success' | 'warning' | 'error') => 
+        const addLog = (msg: string, type: 'info' | 'success' | 'warning' | 'error') =>
             setLogs(prev => [...prev, { msg, type, timestamp: Date.now() }]);
 
         try {
@@ -185,6 +366,47 @@ const ValidatorView: React.FC<ValidatorViewProps> = ({ themeClasses }) => {
                             >
                                 {status === 'running' ? <Loader2 className="animate-spin" size={16} /> : <Play size={16} />} Run Unit Tests
                             </button>
+
+                            {/* Deterministic package checks - no model, no network. */}
+                            <button
+                                onClick={handleCheckIntegrity}
+                                disabled={!files.a || integrityStatus === 'running'}
+                                title="Verify content types and relationship integrity. Computed, not inferred."
+                                className={`w-full py-2 rounded font-medium flex items-center justify-center gap-2 transition-all ${!files.a ? 'bg-zinc-700 text-zinc-500 cursor-not-allowed' : 'bg-emerald-700 hover:bg-emerald-600 text-white'}`}
+                            >
+                                {integrityStatus === 'running' ? <Loader2 className="animate-spin" size={16} /> : <ShieldCheck size={16} />} Check Package Integrity
+                            </button>
+
+                            {/* The engine's output as data rather than as a log. */}
+                            <button
+                                onClick={handleExportReport}
+                                disabled={!files.a || exporting}
+                                title={files.b
+                                    ? 'Download the comparison report: what this change broke, what it fixed, and what it left alone.'
+                                    : 'Download the structured findings as JSON, for another tool or agent to consume.'}
+                                className={`w-full py-2 rounded font-medium flex items-center justify-center gap-2 transition-all ${!files.a ? 'bg-zinc-700 text-zinc-500 cursor-not-allowed' : 'bg-indigo-700 hover:bg-indigo-600 text-white'}`}
+                            >
+                                {exporting ? <Loader2 className="animate-spin" size={16} /> : <FileJson size={16} />}
+                                {files.b ? 'Export Comparison Report' : 'Export Report (JSON)'}
+                            </button>
+
+                            {/* Counts only; never query text. */}
+                            <div className="grid grid-cols-3 gap-2">
+                                <button
+                                    onClick={handleShowRetrievalMetrics}
+                                    title="How often each retrieval path answered a lookup. Decides whether semantic search is worth building."
+                                    className="col-span-2 py-2 rounded font-medium flex items-center justify-center gap-2 bg-slate-600 hover:bg-slate-500 text-white text-xs"
+                                >
+                                    <PieChart size={14} /> Retrieval Stats
+                                </button>
+                                <button
+                                    onClick={() => { resetRetrievalMetrics(); resetCoverageGaps(); handleShowRetrievalMetrics(); }}
+                                    title="Reset the retrieval counters."
+                                    className="py-2 rounded font-medium bg-zinc-700 hover:bg-zinc-600 text-white text-xs"
+                                >
+                                    Reset
+                                </button>
+                            </div>
                             
                             {/* Coverage Report Widget */}
                             {coverageReport.length > 0 && (

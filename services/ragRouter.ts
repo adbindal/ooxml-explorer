@@ -1,5 +1,26 @@
-import { ReferenceDoc } from './staticKnowledgeBase';
-import { querySchemaFromStorage, searchSchemasInStorage } from './storageService';
+import { KNOWLEDGE_BASE, ReferenceDoc } from './staticKnowledgeBase';
+import { querySchemaFromStorage, searchSchemasInStorage, selectBestMatch } from './storageService';
+import { recordRetrieval } from './retrievalMetrics';
+import { buildIndex, bestMatch } from './bm25';
+
+/**
+ * Looks a tag up in the bundled fallback knowledge base.
+ *
+ * IndexedDB is the primary store, but it is empty until `/rag-data.json` has been
+ * fetched and can be unavailable outright (private browsing modes, storage pressure,
+ * a failed fetch). Without this, the common tags would come back ungrounded in exactly
+ * the offline situations the app is meant to handle - and under DLP mode, where no
+ * network call is permitted, that is the situation.
+ *
+ * Uses the same selection rule as the IndexedDB path so an offline user and an online
+ * user cannot get different answers for the same element.
+ */
+const queryStaticKnowledgeBase = (
+  tag: string,
+  domain: 'docx' | 'xlsx' | 'pptx',
+  namespace?: string
+): ReferenceDoc | null =>
+  selectBestMatch(KNOWLEDGE_BASE.filter(doc => doc.tag === tag), domain, namespace);
 
 /**
  * Uses the local Gemini Nano model (if available) to extract 1-2 search keywords
@@ -54,6 +75,7 @@ export const getRagContext = async (
     const localOverride = localStorage.getItem(overrideKey);
     if (localOverride) {
       console.log(`[RAG Router] Applying local self-healing override for <${cleanTagName}>`);
+      recordRetrieval('overrideHit');
       return {
         grounded: true,
         context: `
@@ -67,16 +89,55 @@ export const getRagContext = async (
     }
   }
 
-  // 2. Try direct lookup in IndexedDB
-  let match: ReferenceDoc | null = await querySchemaFromStorage(cleanTagName, context.fileType);
+  // 2. Try direct lookup in IndexedDB, then the bundled fallback.
+  //
+  // Storage access is wrapped because IndexedDB can be unavailable rather than merely
+  // empty; letting that reject would fail the whole explanation instead of degrading
+  // to the offline knowledge base.
+  // The namespace prefix is part of the identity, not decoration: 103 tags in the
+  // corpus exist under more than one namespace, so <a:bottom> in a .docx must not
+  // resolve to <w:bottom>.
+  let match: ReferenceDoc | null = null;
+  try {
+    match = await querySchemaFromStorage(cleanTagName, context.fileType, context.namespace);
+  } catch (e) {
+    console.warn('[RAG Router] IndexedDB lookup failed; using bundled knowledge base:', e);
+  }
+  if (match) {
+    recordRetrieval('exactHit');
+  } else {
+    match = queryStaticKnowledgeBase(cleanTagName, context.fileType, context.namespace);
+    if (match) recordRetrieval('offlineHit');
+  }
 
   // 3. Fallback: If not found and looks like a natural language query, run LLM keyword search
   if (!match && (cleanTagName.includes(' ') || cleanTagName.length > 15)) {
     console.log(`[RAG Router] Tag <${cleanTagName}> not found. Running LLM-assisted keyword search...`);
+    recordRetrieval('naturalLanguageAttempts');
     const keywords = await extractKeywordsWithLocalAI(cleanTagName);
-    const searchResults = await searchSchemasInStorage(keywords, context.fileType);
-    if (searchResults.length > 0) {
-      match = searchResults[0]; // Pick the best keyword match
+    try {
+      // Candidates come from a substring sweep, which is cheap and recall-oriented, and
+      // are then RANKED by BM25. Previously the router took searchResults[0] - the
+      // first substring hit in whatever order the cursor yielded it - so a query for
+      // "table" returned whichever of the hundred table records IndexedDB reached
+      // first. Ranking is what turns that sweep into an answer.
+      //
+      // Both the original question and the extracted keywords are scored: keyword
+      // extraction can drop the one distinctive term, and the raw question still
+      // carries it.
+      const candidates = await searchSchemasInStorage(keywords, context.fileType);
+      if (candidates.length > 0) {
+        const ranked = bestMatch(buildIndex(candidates), `${cleanTagName} ${keywords}`);
+        if (ranked) {
+          match = ranked;
+          recordRetrieval('naturalLanguageHits');
+        }
+        // A candidate set that ranks below the floor is deliberately NOT used. It would
+        // otherwise be cited under a Grounded badge on the strength of one incidental
+        // shared word, which is the failure this tier exists to prevent.
+      }
+    } catch (e) {
+      console.warn('[RAG Router] IndexedDB keyword search failed:', e);
     }
   }
 
@@ -84,22 +145,44 @@ export const getRagContext = async (
     // The curated RAG database only covers a small subset of ECMA-376. This is the
     // common case, not an edge case - be explicit that there is nothing to cite here,
     // so the prompt (see aiService.ts) can instruct the model not to invent one.
+    recordRetrieval('miss');
     return {
       grounded: false,
       context: `No official ECMA-376 definitions found locally in the RAG database for tag <${context.namespace}:${cleanTagName}>. No citation or SDK class name is available for this tag.`
     };
   }
 
-  // 4. Return enriched grounding context with official citations and SDK mappings
+  // 4. Return enriched grounding context with official citations and SDK mappings.
+  //
+  // Most of the database is generated from the Open XML SDK's schema metadata, which
+  // gives verified structure (attributes, parents, class name) but no prose. Those
+  // records are genuinely grounded about structure and genuinely silent about meaning,
+  // and the prompt has to say so - interpolating an absent definition would print
+  // "undefined" under a "Grounded" badge, and paraphrasing one would invent authority
+  // the schema never conferred.
+  const sdkNamespace =
+    match.domain === 'docx' ? 'Wordprocessing'
+    : match.domain === 'xlsx' ? 'Spreadsheet'
+    : match.domain === 'pptx' ? 'Presentation'
+    : 'Drawing';
+
+  const definitionLine = match.definition
+    ? `- Definition: ${match.definition}`
+    : `- Definition: NOT AVAILABLE. The schema database covers this element's structure but carries no description for it. Explain the element from your own knowledge and say plainly that the explanation is not from the specification.`;
+
+  const citationLine = match.citation
+    ? `- Official Citation: ${match.citation}`
+    : `- Official Citation: none on file. Do not cite a specification section for this element.`;
+
   return {
     grounded: true,
     context: `
 [ECMA-376 Specification Context]
 - Tag Name: <${match.namespace}:${match.tag}>
 - Schema Domain: ${match.domain.toUpperCase()}
-- Definition: ${match.definition}
-- Official Citation: ${match.citation || 'ECMA-376 Standard'}
-- Microsoft Open XML SDK Class: DocumentFormat.OpenXml.${match.domain === 'docx' ? 'Wordprocessing' : match.domain === 'xlsx' ? 'Spreadsheet' : 'Presentation'}.${match.sdkClass || match.tag}
+${definitionLine}
+${citationLine}
+- Microsoft Open XML SDK Class: DocumentFormat.OpenXml.${sdkNamespace}.${match.sdkClass || match.tag}
 - Supported Attributes: ${match.attributes.join(', ') || 'None'}
 - Valid Parent Elements: ${match.parents.join(', ') || 'None'}
 `
