@@ -109,6 +109,22 @@ export const initStorageService = async (): Promise<void> => {
  * element from the wrong namespace would present a confidently wrong answer under a
  * "Grounded" badge, which is worse than admitting the tag isn't covered.
  */
+/**
+ * Does this record match a keyword? Pure, so it can be tested without IndexedDB.
+ *
+ * ⚠️ `definition` is OPTIONAL and usually absent — 1,870 of the 1,899 records are
+ * generated from the SDK schema, which supplies structure and no prose. An earlier
+ * version read `doc.definition.toLowerCase()` directly, which held only while the corpus
+ * was the 29 hand-written entries. Once generated records arrived, the first one threw
+ * and took the entire natural-language search down with it — in the browser, uncaught.
+ *
+ * The bug survived because the only coverage of this search was mocks that reimplemented
+ * the predicate rather than calling it. Extracted here so a test can reach the real one.
+ */
+export const matchesKeyword = (doc: ReferenceDoc, cleanKeyword: string): boolean =>
+  doc.tag.toLowerCase().includes(cleanKeyword) ||
+  (doc.definition ?? '').toLowerCase().includes(cleanKeyword);
+
 export const selectBestMatch = (
   candidates: ReferenceDoc[],
   domain: 'docx' | 'xlsx' | 'pptx' | 'shared',
@@ -186,9 +202,7 @@ export const searchSchemasInStorage = async (
         const inDomain = doc.domain === domain || doc.domain === 'shared';
         
         if (inDomain) {
-          const matchesTag = doc.tag.toLowerCase().includes(cleanKeyword);
-          const matchesDef = doc.definition.toLowerCase().includes(cleanKeyword);
-          if (matchesTag || matchesDef) {
+          if (matchesKeyword(doc, cleanKeyword)) {
             results.push(doc);
           }
         }

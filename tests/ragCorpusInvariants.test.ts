@@ -3,6 +3,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { z } from 'zod';
 import { KNOWLEDGE_BASE } from '../services/staticKnowledgeBase';
+import { matchesKeyword } from '../services/storageService';
 
 /**
  * Invariants over the generated RAG corpus (public/rag-data.json).
@@ -108,6 +109,43 @@ describe('provenance honesty', () => {
   it('schema-derived records carry no definition', () => {
     const fabricated = docs.filter(d => d.provenance === 'schema' && d.definition);
     expect(fabricated.map(d => d.tag)).toEqual([]);
+  });
+
+  /**
+   * The consumer half of the invariant above.
+   *
+   * "Schema records carry no definition" is a fact about the data, and the test above
+   * pins it. It is only safe if every consumer *reads* it that way — and one did not:
+   * `searchSchemasInStorage` called `doc.definition.toLowerCase()` unguarded. That was
+   * correct for as long as the corpus was the 29 curated records, all of which have
+   * prose. The moment schema records landed, the first one the cursor reached threw,
+   * uncaught, and took the whole natural-language search path down in the browser.
+   *
+   * The escape was that the only coverage of that search was mocks which reimplemented
+   * the predicate instead of calling it, so every test agreed with itself and none
+   * touched the real code. This asserts against the real predicate.
+   */
+  it('the search predicate tolerates a record with no definition', () => {
+    const noProse: ReferenceDoc = {
+      tag: 'w:tblPrEx', namespace: 'w', domain: 'docx', attributes: [], parents: []
+    };
+    expect(noProse.definition).toBeUndefined();
+
+    expect(() => matchesKeyword(noProse, 'tbl')).not.toThrow();
+    expect(matchesKeyword(noProse, 'tbl')).toBe(true);
+    expect(matchesKeyword(noProse, 'nothing-like-this')).toBe(false);
+  });
+
+  it('the search predicate runs over every record in the real corpus', () => {
+    // The integration form: whatever the generator emitted, the predicate survives it.
+    // A shape test on ReferenceDoc would not have caught the original bug, because the
+    // records were valid — it was the consumer that was wrong.
+    expect(() => {
+      for (const doc of docs) matchesKeyword(doc, 'style');
+    }).not.toThrow();
+
+    const withoutProse = docs.filter(d => !d.definition).length;
+    expect(withoutProse, 'most records have no prose; that is the point').toBeGreaterThan(1000);
   });
 
   it('schema-derived records carry no citation', () => {
