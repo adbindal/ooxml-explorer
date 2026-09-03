@@ -85,7 +85,7 @@ silently breaks, and a rules table making severity explicit.
 ```
 npx tsc --noEmit    ✓
 npx eslint .        ✓
-npx vitest run      ✓  1,384 passing, 1 skipped
+npx vitest run      ✓  1,386 passing, 1 skipped
 npm run build       ✓
 ```
 
