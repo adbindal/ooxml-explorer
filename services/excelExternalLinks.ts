@@ -679,19 +679,6 @@ export function externalLinkFindings(parts: PackageParts): Finding[] {
 }
 
 /**
- * Whether the source workbook is present, stated plainly.
- *
- * `null` means unknowable from the package alone, and for a healthy external link that is
- * the *expected* answer — the source is another file somewhere else, and answering would
- * mean leaving the package, which this code does not do. Deliberately not `false`: "we
- * cannot check" and "it is missing" are different answers and only one of them is a
- * defect. Same discipline as `oleDataIsPresent`.
- */
-export function externalSourceIsPresent(reference: ExternalReference): boolean | null {
-  return reference.book?.sourceIsPresent ?? null;
-}
-
-/**
  * Evidence lines for the AI panel.
  *
  * Leads with the cache framing, because every other statement depends on the reader

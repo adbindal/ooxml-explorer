@@ -38,20 +38,6 @@ export const PLOT_TYPES = [
   'barChart', 'bar3DChart', 'ofPieChart', 'surfaceChart', 'surface3DChart', 'bubbleChart'
 ] as const;
 
-/**
- * Elements that carry appearance only.
- *
- * Named as a set because "can I drop this?" is the question a converter asks about
- * every element it does not recognise, and getting it wrong in either direction is
- * expensive: keeping paint bloats the target, dropping structure corrupts it.
- */
-export const PRESENTATIONAL_ELEMENTS: ReadonlySet<string> = new Set([
-  'spPr', 'txPr', 'dLbls', 'marker', 'smooth', 'gapWidth', 'overlap', 'varyColors',
-  'roundedCorners', 'autoTitleDeleted', 'shape', 'bubble3D', 'explosion',
-  'firstSliceAng', 'holeSize', 'legend', 'view3D', 'floor', 'sideWall', 'backWall',
-  'majorGridlines', 'minorGridlines', 'tickLblPos', 'tickMarkSkip', 'lblAlgn', 'lblOffset'
-]);
-
 const named = (parent: Element | Document | null, localName: string): Element | null =>
   parent ? parent.getElementsByTagNameNS(C_NAMESPACE, localName).item(0) : null;
 

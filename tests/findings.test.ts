@@ -1,11 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
+  analyzerOf,
   finding,
   compareFindings,
-  analyzerOf,
-  findingsFrom,
-  silentFindings,
-  errorsOnly,
   renderFinding,
   renderFindings,
   type Finding
@@ -74,20 +71,6 @@ describe('ordering', () => {
     ]);
 
     expect(lines[0]).toContain('Most important');
-  });
-});
-
-describe('grouping and filtering', () => {
-  it('reads the analyzer out of the namespaced code', () => {
-    expect(analyzerOf('ole/data-part-missing')).toBe('ole');
-    expect(findingsFrom([f({ code: 'ole/x' }), f({ code: 'bookmark/y' })], 'ole')).toHaveLength(1);
-  });
-
-  it('separates silent from visible, and errors from the rest', () => {
-    const all = [f({ silent: true }), f({ silent: false, severity: 'note' })];
-
-    expect(silentFindings(all)).toHaveLength(1);
-    expect(errorsOnly(all)).toHaveLength(1);
   });
 });
 

@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import {
   readChart,
   explainChart,
-  PRESENTATIONAL_ELEMENTS,
   C_NAMESPACE,
   chartFindings
 } from '../services/chartSemantics';
@@ -218,22 +217,6 @@ describe('combination charts', () => {
 
   it('warns that the target must support a shared axis, or drop a plot', () => {
     expect(readChart(combo)!.translationNotes.join(' ')).toContain('combination chart');
-  });
-});
-
-describe('structure versus paint', () => {
-  it('classifies appearance-only elements so a converter can drop them safely', () => {
-    for (const name of ['spPr', 'txPr', 'dLbls', 'marker', 'gapWidth', 'legend', 'majorGridlines']) {
-      expect(PRESENTATIONAL_ELEMENTS.has(name)).toBe(true);
-    }
-  });
-
-  it('does NOT classify structural elements as paint', () => {
-    // Dropping spPr loses styling; dropping order silently reorders the chart. Both
-    // are "just properties" in the markup.
-    for (const name of ['ser', 'idx', 'order', 'cat', 'val', 'axId', 'crossAx', 'grouping', 'scaling']) {
-      expect(PRESENTATIONAL_ELEMENTS.has(name)).toBe(false);
-    }
   });
 });
 
