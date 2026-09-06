@@ -3,15 +3,16 @@
 > **READ THIS FIRST. Everything below is written so this work can resume cold, after a
 > session ends or a quota runs out. Nothing important lives only in a conversation.**
 
-## Where things stand (2026-08-19)
+## Where things stand (2026-09-06)
 
 | | |
 |---|---|
 | **Branch** | `feat/schema-derived-rag-corpus` — **all work is here; `main` is untouched** |
-| **Tests** | 1371 passing (+1 skipped: real-file checks, see §8af); typecheck, lint and production build clean |
+| **Tests** | 1385 passing (+1 skipped: real-file checks, see §8af); typecheck, lint and production build clean |
 | **Architecture** | **Complete.** Analyzer registry, one `Finding` type, question routing, capability ledger, gap log, versioned JSON report |
 | **Analyzers** | package integrity, conformance, bookmarks, comments, fields, **tables**, **media**, OLE, pivot tables, formulas, content controls, hyperlinks, **revisions**, charts, style references, **footnotes**, **animations**, **external links**, Word cascade, Excel formats, PowerPoint inheritance — **21** |
 | **In flight** | none. Everything is tested and registered. |
+| **Review** | PR #3 open against `main`, CI green. GitHub disables *Rebase and merge* because the branch carries four merge commits from parallel work — there is no conflict; squash or merge commit both apply cleanly. |
 
 ## How to resume in five minutes
 
@@ -48,7 +49,11 @@ Hard constraint carried from shipped code: the **honesty property**. The app sho
 
 ---
 
-## 1. Current shipped state (verified by reading code on `main`)
+## 1. `main` as it stood before this branch (verified by reading code, 2026-08-17)
+
+> Kept as the baseline the work was measured against, **not** as a description of the
+> code today. Once this branch merges, the corpus row and the NL-fallback row below are
+> both superseded: 29 records became 1,899 (§3) and "takes first hit" became BM25 (§8h).
 
 | Fact | Detail |
 |---|---|
@@ -67,17 +72,13 @@ Hard constraint carried from shipped code: the **honesty property**. The app sho
 
 ---
 
-## 2. `origin/feature/rag-ingestion` (stale branch @ 57fb89d) — salvage inventory
+## 2. `origin/feature/rag-ingestion` — not used, and why
 
-Diverged before all the hardening on `main`. **Do not merge or rebase.** Extract assets with `git show` onto a fresh branch.
-
-| Asset | Verdict |
-|---|---|
-| `apps/agents/schemas/*.xsd` (wml 784 elems, sml 628, pml 315, dml-main 475) | **Take.** ~2,200 element declarations total |
-| `mastra/xsdParser.ts` | Right idea, **rewrite** — it's regex over text lines, not a parser |
-| `schemas/sdkClassMap.json` | **Superseded** — see §3, use SDK `/data` instead |
-| `temp/wordprocessing.g.cs` (3.9 MB) | **Delete.** `generate_sdk_map.ts` fetches live from GitHub; nothing reads this file |
-| Mastra/LibSQL LLM-judge workflow | Deliberately cut. Self-correction retry is *contraindicated* (see §5) |
+That branch held raw ECMA XSDs and a regex-based parser, and §2 of this document used to
+be an inventory of what to salvage from it. **None of it was taken.** `scripts/ingestSchema.ts`
+generates the corpus from the Open XML SDK's own machine-readable schema data instead,
+which carries the SDK class name, the real namespace prefix and version gating that the
+raw XSDs do not — see §3. The branch can be deleted; nothing here depends on it.
 
 ---
 
@@ -281,13 +282,16 @@ Supporting evidence (verified):
 - `responseConstraint` accepts a JSON Schema but **consumes context window**.
 - **Chrome auto-removes the model when free disk drops below 10 GB.** Local AI is a *state*, not a one-time capability check.
 
-### 🔴 OPEN BUG — `services/geminiService.ts`
-```
-line 250  analyzeFile:  f.content.slice(0, 8000)      ← per file, inside forEach, NO total cap
-line 351  analyzeDiff:  f.original.slice(0, 8000)
-line 352  analyzeDiff:  f.modified.slice(0, 8000)
-```
-Both sit **above** the provider branch — same string reaches `promptLocalModelForJson` (lines 298, 405). At ~3 chars/token for XML: 1-file explain ≈ 2,700 tok; 2-file explain ≈ 5,300; 1-file diff ≈ 5,300; 2-file diff ≈ **10,700** — against a 6k–9k window **shared with output**. `grep` for `contextWindow|measureContextUsage` across repo = **0 hits**. DLP mode forces local-only, so privacy users hit this hardest.
+### ✅ FIXED — unbounded prompt content in `services/geminiService.ts`
+
+Was: `analyzeFile` and `analyzeDiff` sliced each file to 8000 chars with **no total cap**,
+above the provider branch, so the same oversized string reached the local model. At
+~3 chars/token for XML a two-file diff came to ~10,700 tokens against a 6k–9k window
+*shared with output*, and DLP mode — which forces local-only — was hit hardest.
+
+Now: `services/promptBudget.ts` computes a total budget from the session's reported
+`contextWindow` and divides it across the files. The section's original evidence, that
+grepping for `contextWindow` returned zero hits, no longer holds.
 
 ---
 
@@ -543,7 +547,7 @@ Verbatim terms → clearly permitted → genuinely ambiguous → precedent → r
 
 **Three converter questions it answers:**
 1. **Where the data lives.** Values are a literal list or a reference to a range, and a reference carries a *cache*. The cache is what the producing app wrote at save time, not live data — but a chart in a `.docx`/`.pptx` often ships no workbook, so it is frequently the only data there is. `cacheIsOnlySource` says which case applies.
-2. **Structure vs paint.** `PRESENTATIONAL_ELEMENTS` names what is safe to drop. Dropping `spPr` loses styling; dropping `order` silently reorders the series — both are "just properties" in the markup.
+2. **Structure vs paint.** A `PRESENTATIONAL_ELEMENTS` set named what is safe to drop: dropping `spPr` loses styling, dropping `order` silently reorders the series, and both are "just properties" in the markup. ⚠️ **The constant was removed** in the dead-code pass — nothing in production ever read it, and its only test asserted its own membership. The distinction it encoded is still the right one; a converter that needs it should reintroduce it *with a caller*.
 3. **What will not survive.** Combination charts, log scaling, reversed axes, undrawn axes that still affect scaling, `sourceLinked` number formats — named up front.
 
 **Traps encoded:** `idx` (identity) vs `order` (display position) coincide in simple charts, which is why conflating them hides; points are **sparse with explicit indices**, so reading in document order shifts later values by one; `sourceLinked="1"` means the format comes from the source cells so `formatCode` alone misleads.
@@ -1047,20 +1051,20 @@ All four subsystems the user named are **DONE**: #26 bookmarks (§8m), #27 OLE (
 3. ~~Decide on Strict support repo-wide~~ — **DONE**, see §8v. Normalised at one choke point; the analyzers still compare exactly, and the `conformance` analyzer reports what the mapping does not cover.
 4. ~~**#11** Pin a real `styles.xml` regression fixture~~ — **DONE**, see §8af. It was never blocked.
 5. ~~**#21** Replace the substring NL fallback with BM25~~ — **DONE** (`00c3bd1`). Worth being precise about what this did and did not settle: the counters exist to decide **embeddings vs lexical**, and that stays open pending usage data. BM25 replaced *"take the first substring hit"*, which lost to lexical scoring under every hypothesis, so it raises the floor the measurement compares against rather than pre-empting it.
-6. **New analyzers**, driven by the gap log rather than guesswork. The obvious blind spots from §10: **DrawingML** (shape geometry, effects, theme style matrices), **formulas** (the biggest MS-OI29500 cluster in SpreadsheetML), and **fields** (`w:fldSimple`, `w:instrText` — TOC, cross-references and page numbers all run through them, and they interact directly with bookmarks).
+6. ~~**New analyzers** for formulas and fields~~ — **DONE**. Formulas shipped in §8y, fields in §8w; both are registered analyzers. **DrawingML remains the open one**: charts (§8k) and PowerPoint inheritance cover corners of it, but shape geometry, effects and the theme style matrices are still untouched. Drive the next one from the gap log rather than guesswork.
 
 **Method note.** Both modules shipped in §8m/§8n were **mutation-tested**: the implementation was deliberately broken several distinct ways and the tests re-run, to check they fail for the right reasons rather than agreeing with themselves. This found a real gap in the bookmark tests (no case had two range kinds in one document, the only arrangement where kind-matching is observable). Worth doing for every module here — a green suite on first run is not evidence.
 
 **Wired to the panel** in `c0c4b0c`, which also fixed a latent design bug: `buildComputedEvidence` used `ANALYSIS_TARGETS.find`, so only the **first** matching entry ran. That was fine while each part had exactly one analysis and wrong the moment it did not — a `word/document.xml` carries formatting *and* bookmarks *and* possibly OLE objects, which are independent questions. It now runs every match, unions the sibling requests so a part is fetched once, and merges the results; one analysis throwing no longer suppresses the rest. **Anything added to `ANALYSIS_TARGETS` from here on composes rather than shadows.**
 
-**Still open:**
-- ~~**#11** Pin a real `styles.xml` regression fixture~~ — **DONE**, see §8af.
-- **#21** Replace the substring NL fallback with BM25. Counters are live (§8h), so **measure before building**.
+**Still open:** DrawingML beyond charts, and the embeddings-vs-lexical question, which
+the §8h counters exist to answer and which no amount of argument settles without usage
+data. Everything else listed in this section has shipped.
 
 ## 10. Known gaps at time of writing
 
 - ~~SpreadsheetML semantics~~ — **DONE**, see §4.
 - ~~PresentationML semantics~~ — **DONE**, see §8g; resolver shipped.
 - **DrawingML** — the largest remaining blind spot. Shared across all three formats; ~475 element declarations; **264 variations for Part 1 §21 plus 180 for §20.** Charts (§8k) cover one corner of it; shape geometry, effects and the theme style matrices are untouched.
-- **Formulas** — the single biggest MS-OI29500 cluster in SpreadsheetML, never researched.
-- **Fields** (`w:fldSimple`, `w:instrText`) — TOC, cross-references and page numbers all run through them, and they interact directly with bookmarks (#26).
+- ~~**Formulas**~~ — **DONE**, see §8y.
+- ~~**Fields**~~ — **DONE**, see §8w.

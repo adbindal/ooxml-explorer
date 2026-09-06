@@ -4,7 +4,11 @@ Turns Explorer's AI from a persona prompt over a reference corpus into a **deter
 analysis engine** that reads the open document and computes its answers. The model
 narrates a result it did not decide.
 
-**100 commits.** `main` has not moved, so this is a clean fast-forward.
+**103 commits.** `main` has not moved, so this is a clean fast-forward.
+
+> GitHub disables *Rebase and merge* on this PR and reports it as a conflict. There is
+> no conflict — the branch contains four merge commits from parallel work, and GitHub's
+> rebase cannot replay those. **Squash and merge** and **Merge commit** are both clean.
 
 ---
 
@@ -65,6 +69,11 @@ carry the design:
 | `services/wordNotes.ts` | A whole analyzer in 256 lines, including the trap that would fire on every real document. |
 | `docs/ooxml-expert-agent/RESEARCH-STATE.md` §8u | Why these 21 and not others. |
 
+Nothing in `services/` is unreachable from the app entry point, and no export is left
+without a consumer. Where a helper had no production caller but a test needed it to
+observe live behaviour, it moved into the test file rather than staying exported for
+the suite's benefit.
+
 The remaining analyzers are the same shape repeated. **Skimming two and trusting the
 tests is a reasonable review strategy** — each has a module doc-comment explaining what
 silently breaks, and a rules table making severity explicit.
@@ -74,9 +83,9 @@ silently breaks, and a rules table making severity explicit.
 | Area | Lines | Note |
 |---|---:|---|
 | `public/rag-data.json` | 29,181 | **generated** by `scripts/ingestSchema.ts` — skim, don't read |
-| `services/` | 17,273 | the engine |
-| `tests/` | 13,683 | ~0.8 test lines per source line |
-| `docs/` | 1,312 | design record and licensing research |
+| `services/` | 17,257 | the engine |
+| `tests/` | 13,837 | ~0.8 test lines per source line |
+| `docs/` | 1,333 | design record and licensing research |
 
 ---
 
@@ -85,7 +94,7 @@ silently breaks, and a rules table making severity explicit.
 ```
 npx tsc --noEmit    ✓
 npx eslint .        ✓
-npx vitest run      ✓  1,386 passing, 1 skipped
+npx vitest run      ✓  1,385 passing, 1 skipped
 npm run build       ✓
 ```
 
