@@ -1,11 +1,21 @@
 import { describe, it, expect } from 'vitest';
 import {
   resolveAlternateContent,
-  readIgnorableNamespaces,
-  countAlternateContent,
   MODERN_CONSUMER_NAMESPACES,
-  LEGACY_CONSUMER_NAMESPACES
+  LEGACY_CONSUMER_NAMESPACES,
+  MCE_NAMESPACE
 } from '../services/markupCompatibility';
+
+/**
+ * Counts surviving `mc:AlternateContent` wrappers.
+ *
+ * Lives here rather than in the module because nothing in production needs it — it
+ * exists to assert that `resolveAlternateContent` removed the wrapper itself and not
+ * merely its contents, which is the mistake that leaves a document unopenable.
+ */
+const countAlternateContent = (doc: Document): number =>
+  doc.getElementsByTagNameNS(MCE_NAMESPACE, 'AlternateContent').length;
+
 
 const parse = (xml: string): Document =>
   new DOMParser().parseFromString(xml, 'application/xml');
@@ -182,17 +192,6 @@ describe('nesting and structure', () => {
   });
 });
 
-describe('mc:Ignorable', () => {
-  it('reports the ignorable namespaces a document declares', () => {
-    const ignorable = readIgnorableNamespaces(shapeWrittenTwice());
-    expect(ignorable.has('http://schemas.microsoft.com/office/word/2010/wordprocessingShape')).toBe(true);
-  });
-
-  it('returns an empty set when none are declared', () => {
-    const doc = parse('<?xml version="1.0"?><root/>');
-    expect(readIgnorableNamespaces(doc).size).toBe(0);
-  });
-});
 
 describe('consumer presets', () => {
   it('modern is a superset of legacy', () => {

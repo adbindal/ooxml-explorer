@@ -164,37 +164,3 @@ export const resolveAlternateContent = (
 
   return { document: doc, selections };
 };
-
-/**
- * Collects the namespace URIs declared ignorable anywhere in the document.
- *
- * `mc:Ignorable` names prefixes a consumer may silently drop if it does not recognise
- * them - it is why a modern file opens at all in an older reader instead of being
- * rejected. Reported rather than acted on: knowing a document declares `w14 w15 wp14`
- * ignorable tells you which Office generation wrote it, which is useful context for a
- * reader trying to understand the file.
- */
-export const readIgnorableNamespaces = (doc: Document): Set<string> => {
-  const ignorable = new Set<string>();
-  const walk = (element: Element) => {
-    const declared = element.getAttributeNS(MCE_NAMESPACE, 'Ignorable');
-    if (declared) {
-      for (const prefix of declared.split(/\s+/).filter(Boolean)) {
-        const uri = element.lookupNamespaceURI(prefix);
-        if (uri) ignorable.add(uri);
-      }
-    }
-    for (const child of Array.from(element.children)) walk(child);
-  };
-  if (doc.documentElement) walk(doc.documentElement);
-  return ignorable;
-};
-
-/**
- * Counts `mc:AlternateContent` elements without resolving them.
- *
- * Useful as a cheap "does this part need preprocessing?" probe before committing to
- * the full pass.
- */
-export const countAlternateContent = (doc: Document): number =>
-  doc.getElementsByTagNameNS(MCE_NAMESPACE, 'AlternateContent').length;

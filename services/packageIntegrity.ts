@@ -21,8 +21,6 @@
 
 import { finding, type Finding, type Severity } from './findings';
 
-export type IntegritySeverity = 'error' | 'warning';
-
 /**
  * Severity, silence and the fix for each rule.
  *

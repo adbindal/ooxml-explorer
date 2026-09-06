@@ -6,9 +6,21 @@ import {
   serialToDate,
   readDateSystem,
   BUILT_IN_NUMBER_FORMATS,
-  DATE_SYSTEM_OFFSET_DAYS,
   S_NAMESPACE
 } from '../services/excelStyleResolver';
+
+/**
+ * Days between the 1900 and 1904 epochs.
+ *
+ * Cross-checked two ways against ECMA-376 §18.17.4.1's own figures: the lower limits
+ * differ by 695055 − 693593, and the upper limits by 2958465 − 2957003. Both give 1462.
+ *
+ * Kept as a test constant rather than a module export: the conversion in
+ * `serialToDate` derives the offset from the epochs themselves, so production never
+ * needs the number — this is here to check that derivation independently.
+ */
+const DATE_SYSTEM_OFFSET_DAYS = 1462;
+
 
 const styles = (body: string) =>
   parseExcelStyles(`<?xml version="1.0"?><styleSheet xmlns="${S_NAMESPACE}">${body}</styleSheet>`);

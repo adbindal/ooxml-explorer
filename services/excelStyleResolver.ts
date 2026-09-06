@@ -297,14 +297,6 @@ export const resolveCellFormat = (
 
 // --- Dates -----------------------------------------------------------------
 
-/**
- * Days between the 1900 and 1904 epochs.
- *
- * Cross-checked two ways against ECMA-376 §18.17.4.1's own figures: the lower limits
- * differ by 695055 − 693593, and the upper limits by 2958465 − 2957003. Both give 1462.
- */
-export const DATE_SYSTEM_OFFSET_DAYS = 1462;
-
 export type DateSystem = '1900' | '1900-compat' | '1904';
 
 /**

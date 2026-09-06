@@ -3,7 +3,6 @@ import {
   readExternalLinks,
   externalLinkFindings,
   externalIndexesIn,
-  externalSourceIsPresent,
   computeExternalLinkEvidenceForMarkup,
   EXTERNAL_LINK_PART,
   EXTERNAL_LINK_HOST_PART,
@@ -353,7 +352,7 @@ describe('the three states of "is the source there"', () => {
     const [reference] = readExternalLinks(healthy()).references;
 
     expect(reference.book?.sourceIsPresent).toBeNull();
-    expect(externalSourceIsPresent(reference)).toBeNull();
+    expect(reference.book?.sourceIsPresent ?? null).toBeNull();
     // And nothing in the findings calls the unreachable source a defect.
     expect(codes(healthy())).toEqual([]);
   });
@@ -364,7 +363,7 @@ describe('the three states of "is the source there"', () => {
       'xl/other.xlsx': 'BINARY'
     });
 
-    expect(externalSourceIsPresent(readExternalLinks(parts).references[0])).toBe(true);
+    expect(readExternalLinks(parts).references[0].book?.sourceIsPresent ?? null).toBe(true);
   });
 
   it('answers false only when the relationship pointed inside the package and the part is gone', () => {
@@ -372,13 +371,13 @@ describe('the three states of "is the source there"', () => {
       'xl/externalLinks/_rels/externalLink1.xml.rels': rels(rel('rId1', '../other.xlsx'))
     });
 
-    expect(externalSourceIsPresent(readExternalLinks(parts).references[0])).toBe(false);
+    expect(readExternalLinks(parts).references[0].book?.sourceIsPresent ?? null).toBe(false);
   });
 
   it('answers null, not false, when there is no book to ask about', () => {
     const parts = healthy({ 'xl/externalLinks/externalLink1.xml': link('<ddeLink/>') });
 
-    expect(externalSourceIsPresent(readExternalLinks(parts).references[0])).toBeNull();
+    expect(readExternalLinks(parts).references[0].book?.sourceIsPresent ?? null).toBeNull();
   });
 });
 

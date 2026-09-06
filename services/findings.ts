@@ -80,24 +80,16 @@ export const compareFindings = (a: Finding, b: Finding): number => {
   return a.code.localeCompare(b.code);
 };
 
-/** The analyzer that produced a finding — the part of the code before the slash. */
-export const analyzerOf = (code: string): string => code.split('/')[0];
-
-/** Every finding for one analyzer. */
-export const findingsFrom = (findings: readonly Finding[], analyzer: string): Finding[] =>
-  findings.filter(f => analyzerOf(f.code) === analyzer);
 
 /**
- * The findings that render correctly and are broken anyway.
+ * The analyzer that produced a finding — the part of the code before the slash.
  *
- * This is the list to lead with when someone compares a before and after file: no
- * visual check will catch any of them.
+ * No production caller today: `issueReport` was the last one and has been removed. It
+ * stays because it is the single definition of the `analyzer/kind` code convention,
+ * which the analyzer suites assert against; inlining `split('/')` into each of them
+ * would spread that format across the test suite instead of pinning it in one place.
  */
-export const silentFindings = (findings: readonly Finding[]): Finding[] =>
-  findings.filter(f => f.silent);
-
-export const errorsOnly = (findings: readonly Finding[]): Finding[] =>
-  findings.filter(f => f.severity === 'error');
+export const analyzerOf = (code: string): string => code.split('/')[0];
 
 /**
  * The single place a finding becomes a sentence.
