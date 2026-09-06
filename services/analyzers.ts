@@ -50,7 +50,8 @@ import { computeCommentEvidenceForMarkup } from './wordComments';
 import { computeOleEvidenceForMarkup } from './oleObjects';
 import { computeEvidenceForMarkup } from './wordFormattingAnalysis';
 import { computeExcelEvidenceForMarkup } from './excelFormattingAnalysis';
-import { computePowerpointEvidenceForMarkup } from './powerpointFormattingAnalysis';
+import { computePowerpointEvidenceForMarkup, resolveSlideChain } from './powerpointFormattingAnalysis';
+import { powerpointInheritanceFindings } from './powerpointInheritance';
 import { computeChartEvidenceForMarkup, chartFindings, CHART_HOST_PART } from './chartSemantics';
 
 export type OoxmlFormat = 'docx' | 'xlsx' | 'pptx';
@@ -568,9 +569,12 @@ export const ANALYZERS: readonly Analyzer[] = [
     ],
     cannotDetermine: [
       'layout-to-master placeholder matching, which the specification does not define — Office’s behaviour here is undocumented',
-      'the rendered position of a shape inside a group beyond the transform arithmetic'
+      'the rendered position of a shape inside a group beyond the transform arithmetic',
+      'whether a theme style entry is the one the author intended — only whether it exists'
     ],
     appliesTo: parts => Object.keys(parts).some(p => p.startsWith('ppt/slideLayouts/')),
+    analyze: parts =>
+      powerpointInheritanceFindings(parts, slidePath => resolveSlideChain(parts, slidePath)?.theme ?? null),
     explain: {
       // Every hop is an implicit relationship, so the .rels parts are as load-bearing
       // as the content parts and have to be fetched alongside them.

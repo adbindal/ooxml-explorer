@@ -375,37 +375,6 @@ export const analyzeParagraphFormatting = (
 };
 
 /**
- * Convenience entry point: analyze the nth paragraph of `word/document.xml`.
- *
- * **Deliberately the main story only**, even though the context now holds headers,
- * footers and notes. An index is only meaningful over a sequence a caller can see, and
- * there is no such thing as "the 4th paragraph of the document" once five stories are
- * concatenated in an order the file itself does not define — the number would silently
- * mean something different as soon as a header were added. Callers that need a
- * paragraph in another part locate it by markup (`locateParagraphByMarkup`) or walk
- * `context.bodyParts` themselves and call `analyzeParagraphFormatting` directly, which
- * resolves any story's paragraph exactly the same way.
- *
- * Paragraph order is document order after markup-compatibility resolution, so the
- * index is stable against the same input.
- */
-export const analyzeParagraphAt = (
-  context: WordDocumentContext,
-  index: number
-): FormattingAnalysis | null => {
-  if (!context.document) return null;
-  const paragraphs = Array.from(
-    context.document.getElementsByTagNameNS(W_NAMESPACE, 'p')
-  );
-  const paragraph = paragraphs[index];
-  if (!paragraph) return null;
-  const firstRun = Array.from(paragraph.children).find(
-    el => el.namespaceURI === W_NAMESPACE && el.localName === 'r'
-  );
-  return analyzeParagraphFormatting(context, paragraph, firstRun);
-};
-
-/**
  * Normalizes markup for comparison.
  *
  * Two sources of noise have to go. The editor pretty-prints what it displays, so a
