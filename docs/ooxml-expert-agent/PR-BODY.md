@@ -4,33 +4,53 @@ Turns Explorer's AI from a persona prompt over a reference corpus into a **deter
 analysis engine** that reads the open document and computes its answers. The model
 narrates a result it did not decide.
 
-**103 commits.** `main` has not moved, so this is a clean fast-forward.
+**109 commits.** `main` has not moved, so this is a clean fast-forward.
 
-> GitHub disables *Rebase and merge* on this PR and reports it as a conflict. There is
-> no conflict — the branch contains four merge commits from parallel work, and GitHub's
-> rebase cannot replay those. **Squash and merge** and **Merge commit** are both clean.
+> **The "cannot be rebased" banner is a false alarm.** There is no conflict. `main` has not
+> moved — merge-base *is* `origin/main`'s tip — and a local rebase replays all 105 non-merge
+> commits cleanly. The branch carries **4 merge commits** from parallel work, and GitHub's
+> *Rebase and merge* replays commits one at a time and refuses when merges are present.
+> **Squash and merge** and **Merge commit** are both clean and enabled.
 
 ---
 
-## Why
+## The one idea to take away: this app now has two engines
 
-On `main` today, `geminiService.ts` asks the model to *"run a strict validation check for
-ECMA-376 compliance… citing exact issues."* We asked a language model to be a validator
-and to produce its own citations — the one thing it will confidently invent. Nothing in
-the UI distinguished a real citation from a fabricated one.
+They answer different questions, and neither can do the other's job.
 
-The corpus behind it on `main` is **29 hand-written records** — roughly 29 tags out of the
-hundreds ECMA-376 defines. This PR generates **1,899** from the Open XML SDK schema, which
-is 65× the coverage and **still only 29 with any human-written meaning**: the SDK supplies
-structure, not semantics.
+| | Answers | Reads | Same for every file? |
+|---|---|---|---|
+| **The dictionary** (`rag-data.json`) | *"What is this thing?"* — `w:b` is Bold, it carries `w:val`, it may only sit inside `w:rPr` | Microsoft's published schema | Yes |
+| **The compiler** (this PR) | *"Why does my file look wrong?"* — this heading is not bold because Heading1 borrows from Normal, which turns bold off | The open document | No — it is about *your* file |
 
-That is the point. Even after a 65× increase, most questions had nothing to ground an
-answer in, and the model filled the gap fluently.
+Like a car manual and a mechanic. The manual cannot tell you your brake pad is worn.
+Looking at your car does not teach you what a brake pad is.
 
-More corpus, re-ranking, embeddings and fine-tuning were each considered and are each
-argued in `docs/ooxml-expert-agent/RESEARCH-STATE.md`. The short version: the question was
-never *"what does `w:b` mean"*, it was *"why isn't **this** paragraph bold"*, and no
-amount of reference data answers a question about a specific file.
+**They do not talk to each other.** No analyzer imports the dictionary. Both hand their
+results to the AI panel separately, and the two meet in exactly one line
+(`selectEvidenceTier` in `services/aiService.ts`). A bigger dictionary would not make the
+compiler find one extra fault.
+
+That is the whole reason this PR exists. Growing the dictionary 65× — 29 records to
+1,899 — did not answer a single *"why is my file wrong"* question.
+
+---
+
+## Why not just improve retrieval?
+
+Each alternative was considered and rejected with a reason, recorded in
+`RESEARCH-STATE.md` §5. Re-propose only with a new argument.
+
+- **Fine-tuning** — a fine-tuned fact has **no source span**, so it cannot be cited or
+  checked. That structurally destroys the honesty property the badge depends on.
+- **Vector database** — a few thousand structured records whose primary access is an
+  exact key lookup. A vector index solves a problem this data does not have.
+- **Re-ranking** — presupposes multiple candidates; the exact lookup returns 0 or 1.
+- **Embeddings on the main path** — same reason, and they make a retrieved span harder to
+  cite, not easier.
+
+The question was never *"what does `w:b` mean"*. It was *"why isn't **this** paragraph
+bold"*, and no amount of reference data answers a question about a specific file.
 
 ---
 
@@ -50,9 +70,38 @@ CI or another agent.
 **capability ledger** — what ran, what was skipped, and what the checks that ran
 explicitly *cannot* establish.
 
-**An evidence tier** computed from provenance in code the model never touches, taking the
-minimum across sources. A clean validation run reports *"no problems found by the checks
-that ran"* — never *"this file is correct."*
+**An evidence tier** computed from provenance in code the model never touches. A clean
+validation run reports *"no problems found by the checks that ran"* — never *"this file
+is correct."*
+
+---
+
+## Three defects found while preparing this PR
+
+Each was caught by a different mechanism, which is worth noting because it says something
+about which checks actually earn their place.
+
+**1. A live crash in natural-language search** — caught by CI.
+`storageService.ts` called `doc.definition.toLowerCase()` unguarded. `definition` is
+optional, and deliberately absent on schema-derived records. That was safe while the
+corpus was 29 curated entries, all with prose. This branch takes it to 1,899 records of
+which **1,870 have no definition**, so the first one the cursor reached threw — uncaught,
+killing the whole search path. Any user typing a question would have hit it. It survived
+because the only coverage was **mocks that reimplemented the predicate** rather than
+calling it, so the tests agreed with themselves and never touched the real code.
+
+**2. `issueReport.ts` had zero importers** — caught by a reachability sweep.
+163 lines plus a 132-line test, built for in-app bug reporting, superseded by the GitHub
+issue templates, never removed. The same trap as `ooxmlDiff.ts`, which sat unwired for
+489 lines earlier in this branch.
+
+**3. Finding a citation made the badge worse** — caught by reading the tier rule.
+`selectEvidenceTier` took the minimum across sources, so a dictionary **miss** plus a
+complete computation scored `verified`, while a **hit** plus the same computation scored
+`grounded`. Knowing more reduced confidence. The minimum is the right rule for sources
+that can be *wrong*; these two cannot be, and they are about different subjects. The
+computation now governs. ⚠️ Safe **only** because both inputs are mechanically derived —
+a source that can be wrong must go back to a minimum.
 
 ---
 
@@ -71,8 +120,8 @@ carry the design:
 
 Nothing in `services/` is unreachable from the app entry point, and no export is left
 without a consumer. Where a helper had no production caller but a test needed it to
-observe live behaviour, it moved into the test file rather than staying exported for
-the suite's benefit.
+observe live behaviour, it moved into the test file rather than staying exported for the
+suite's benefit.
 
 The remaining analyzers are the same shape repeated. **Skimming two and trusting the
 tests is a reasonable review strategy** — each has a module doc-comment explaining what
@@ -83,8 +132,8 @@ silently breaks, and a rules table making severity explicit.
 | Area | Lines | Note |
 |---|---:|---|
 | `public/rag-data.json` | 29,181 | **generated** by `scripts/ingestSchema.ts` — skim, don't read |
-| `services/` | 17,257 | the engine |
-| `tests/` | 13,837 | ~0.8 test lines per source line |
+| `services/` | 17,279 | the engine |
+| `tests/` | 13,849 | ~0.8 test lines per source line |
 | `docs/` | 1,333 | design record and licensing research |
 
 ---
@@ -94,14 +143,15 @@ silently breaks, and a rules table making severity explicit.
 ```
 npx tsc --noEmit    ✓
 npx eslint .        ✓
-npx vitest run      ✓  1,385 passing, 1 skipped
+npx vitest run      ✓  1,386 passing, 1 skipped
 npm run build       ✓
+npx playwright test ✓  7 passed
 ```
 
 Every analyzer was **mutation-tested** — the implementation deliberately broken several
 ways to check the tests actually catch it. That found a real gap in nearly every one, and
-the recurring cause was a test passing for the wrong reason rather than missing coverage.
-`.agents/skills/add-analyzer/mutate.py` is the harness.
+the recurring cause was **a test passing for the wrong reason** rather than missing
+coverage. `.agents/skills/add-analyzer/mutate.py` is the harness.
 
 The practice was adopted partway through, so the earliest modules — the Word cascade,
 Excel cell formats, PowerPoint inheritance, package integrity and the semantic diff —
@@ -132,6 +182,54 @@ Two smaller ones, both recorded rather than hidden:
 - `services/pptAnimation.ts` and `services/excelExternalLinks.ts` were written by agents
   that were interrupted, then finished and tested afterwards. Both had real defects on
   recovery (`Number(null) === 0` in both cases) which are fixed and pinned by tests.
+
+---
+
+## A known limitation in the dictionary, for later
+
+The dictionary is **shallower than its own source**, and this looks like an oversight
+rather than a decision. `scripts/ingestSchema.ts` declares each attribute as:
+
+```ts
+interface SdkAttribute {
+  QName?: string;
+  Validators?: {...}[];   // declared, never read
+  Version?: string;       // declared, never read
+}
+```
+
+Only `QName` is extracted. So for `w:jc` — paragraph alignment — the dictionary records
+that it has an attribute `w:val`, but **not that `w:val` is one of
+`left | center | right | both`**. That is the most useful fact about the element.
+`Children` is read, but only to invert into `parents`, so we know what an element sits
+inside and never what may sit in it.
+
+The script's own header names those constraints as the reason for choosing this source.
+Extracting them is a change to one script plus a regenerate, keeps everything
+mechanically derived, and roughly doubles what a dictionary hit is worth. **Not in this
+PR.**
+
+---
+
+## Where the effort goes next
+
+1. **Extract `Validators`, `Version` and children** in the ingest script — highest value
+   per unit of work, and it preserves the honesty property.
+2. **More analyzers**, driven by the gap log rather than guesswork. This is the actual
+   differentiator: no other tool tells a person *why their file is wrong*. DrawingML is
+   the largest remaining blind spot (§10).
+3. **Retrieval over specification prose** — a **third engine**, not a bigger dictionary.
+   Only if the gap log shows *"how do I…"* questions are a real share of traffic, and
+   with the licensing question answered first (`docs/ooxml-expert-agent/LICENSING.md`).
+   Note that the hard part is not retrieval: standards prose is written for implementers,
+   and dropping clauses into the panel would make answers longer and worse. Turning a
+   clause into an actionable sentence is the work, and the `message` + `remediation`
+   split the analyzers already use is the shape to reuse.
+
+Deliberately **not** doing: importing the full specification. It is large enough to ship
+to every user, mostly restates structure already held in a more reliable derived form,
+raises a licensing question your own research does not settle, and — because prose is not
+addressable by key — would drag back the embeddings and re-ranking ruled out above.
 
 ---
 
