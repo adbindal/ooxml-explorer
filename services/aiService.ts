@@ -55,10 +55,31 @@ export interface ComputedEvidence {
 /**
  * Picks the tier from the evidence actually used.
  *
- * Takes the **minimum** across present sources rather than the maximum. One weak
- * source makes the whole answer weak, because a reader cannot tell which sentence
- * rested on which piece of evidence. Absent evidence is not a source - a RAG miss
- * does not drag a computed answer down, it simply contributes nothing.
+ * The computation decides the tier. A dictionary hit can only raise the floor when
+ * there is no computation at all; it can never lower one.
+ *
+ * This used to take the **minimum** across sources, on the reasoning that a reader
+ * cannot tell which sentence rested on which evidence, so the weakest source should
+ * govern. That is the right rule for sources that can be *wrong*, and the wrong rule
+ * for these two, because it produced this:
+ *
+ *   dictionary MISS + complete computation  ->  verified
+ *   dictionary HIT  + complete computation  ->  grounded
+ *
+ * Finding a supporting citation made the answer rank lower than not finding one.
+ * Knowing more cannot reduce confidence, so the minimum could not have been right.
+ *
+ * The two sources are not strong and weak, they are about different subjects. The
+ * computation is a claim about *this file*; a dictionary hit is a mechanically derived
+ * fact about the *format*, incapable of being fabricated. Corroboration from the second
+ * says nothing about the certainty of the first.
+ *
+ * The rule the tiers actually encode is how wrong the answer could be — `unverified` is
+ * the model's own recall, `grounded` is backed by a citation, `verified` is computed
+ * from the open file with no gaps. Neither source here can fabricate, so neither can
+ * drag the other down. **If a source is ever added that can be wrong, this must go back
+ * to a minimum for that source** — the ordering below is safe only because both current
+ * inputs are mechanically derived.
  */
 export const selectEvidenceTier = (
   ragGrounded: boolean,
@@ -66,13 +87,14 @@ export const selectEvidenceTier = (
 ): EvidenceTier => {
   const tiers: EvidenceTier[] = [];
   if (computed && computed.lines.length > 0) {
-    // A computation with gaps still beats recall, but it is not fully verified.
+    // A computation with gaps still beats recall, but it is not fully verified. This
+    // cap is the one thing a dictionary hit must never lift.
     tiers.push(computed.unresolved.length === 0 ? 'verified' : 'grounded');
   }
   if (ragGrounded) tiers.push('grounded');
   if (tiers.length === 0) return 'unverified';
   const rank: Record<EvidenceTier, number> = { verified: 2, grounded: 1, unverified: 0 };
-  return tiers.reduce((lowest, t) => (rank[t] < rank[lowest] ? t : lowest));
+  return tiers.reduce((best, t) => (rank[t] > rank[best] ? t : best));
 };
 
 export const ElementExplanationSchema = z.object({
