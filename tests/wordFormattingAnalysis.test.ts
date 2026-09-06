@@ -1,12 +1,37 @@
 import { describe, it, expect } from 'vitest';
 import {
   loadWordContext,
-  analyzeParagraphAt,
+  analyzeParagraphFormatting,
   locateParagraphByMarkup,
   computeEvidenceForMarkup
 } from '../services/wordFormattingAnalysis';
+import { W_NAMESPACE } from '../services/wordStyleResolver';
 import type { PackageParts } from '../services/packageIntegrity';
 import { selectEvidenceTier } from '../services/aiService';
+
+/**
+ * The paragraph at `index` in the main story.
+ *
+ * Was an export of the module until nothing in production called it: every real caller
+ * locates a paragraph by markup or walks `context.bodyParts`, because an index is only
+ * meaningful over a sequence the caller can already see — there is no "4th paragraph of
+ * the document" once headers, footers and notes are in play. The indexing lives here so
+ * these tests keep addressing the cascade concisely, without the module carrying an
+ * entry point that exists solely for their benefit.
+ */
+const analyzeParagraphAt = (
+  context: ReturnType<typeof loadWordContext>,
+  index: number
+) => {
+  if (!context.document) return null;
+  const paragraph = Array.from(context.document.getElementsByTagNameNS(W_NAMESPACE, 'p'))[index];
+  if (!paragraph) return null;
+  const firstRun = Array.from(paragraph.children).find(
+    el => el.namespaceURI === W_NAMESPACE && el.localName === 'r'
+  );
+  return analyzeParagraphFormatting(context, paragraph, firstRun);
+};
+
 
 /**
  * End-to-end tests for the composition layer.
