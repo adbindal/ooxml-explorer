@@ -35,6 +35,7 @@
  * default until there is data to beat it.
  */
 
+import { attributeSearchText } from './schemaFacts';
 import type { ReferenceDoc } from './staticKnowledgeBase';
 
 /** Term-frequency saturation. Higher means repeated terms keep adding weight. */
@@ -82,7 +83,17 @@ export const tokenise = (text: string): string[] => {
  * than a thumb on the scale, and inventing one now would be tuning against nothing.
  */
 const documentText = (doc: ReferenceDoc): string =>
-  [doc.tag, doc.tag, doc.definition ?? '', doc.attributes.join(' '), doc.sdkClass ?? ''].join(' ');
+  [
+    doc.tag,
+    doc.tag,
+    doc.definition ?? '',
+    // Attributes are specs, not names. `.join(' ')` on them compiles and yields
+    // "[object Object]", which silently empties this field of every term it should
+    // contribute. Indexing the labels and enumerated values as well is what lets a
+    // query like "alignment" reach w:jc, which a name-only index never could.
+    doc.attributes.map(attributeSearchText).join(' '),
+    doc.sdkClass ?? ''
+  ].join(' ');
 
 interface IndexedDoc {
   doc: ReferenceDoc;

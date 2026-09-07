@@ -8,8 +8,14 @@ const DB_NAME = 'ooxml_explorer_db';
  * name across namespaces - and 103 tags in the corpus do. `<a:bottom>` (a DrawingML
  * border) and `<w:bottom>` (a paragraph border) are different elements with different
  * attributes and parents, and v1 could only store one of them per domain.
+ *
+ * v3 changed the record shape rather than the keys: `attributes` went from a list of
+ * names to a list of specs carrying permitted values, and `children` was added. A
+ * returning user's v2 store would otherwise keep serving name-strings to code that now
+ * reads objects — which does not throw, it renders "[object Object]" into the prompt
+ * under a Grounded badge. Bumping the version discards the cache and refetches.
  */
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const STORE_NAME = 'rag_schemas';
 
 let dbInstance: IDBDatabase | null = null;
@@ -25,9 +31,9 @@ const getDB = (): Promise<IDBDatabase> => {
 
     request.onupgradeneeded = () => {
       const db = request.result;
-      // The key scheme changed in v2, so an existing store holds records under keys
-      // that can no longer be derived. Drop and repopulate rather than migrate -
-      // the data is a regenerable cache of /rag-data.json, not user content.
+      // The key scheme changed in v2 and the record shape in v3, so an existing store
+      // holds data this code cannot read correctly. Drop and repopulate rather than
+      // migrate - it is a regenerable cache of /rag-data.json, not user content.
       if (db.objectStoreNames.contains(STORE_NAME)) {
         db.deleteObjectStore(STORE_NAME);
       }

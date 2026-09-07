@@ -2,6 +2,7 @@ import { KNOWLEDGE_BASE, ReferenceDoc } from './staticKnowledgeBase';
 import { querySchemaFromStorage, searchSchemasInStorage, selectBestMatch } from './storageService';
 import { recordRetrieval } from './retrievalMetrics';
 import { buildIndex, bestMatch } from './bm25';
+import { renderAttributes } from './schemaFacts';
 
 /**
  * Looks a tag up in the bundled fallback knowledge base.
@@ -183,8 +184,9 @@ export const getRagContext = async (
 ${definitionLine}
 ${citationLine}
 - Microsoft Open XML SDK Class: DocumentFormat.OpenXml.${sdkNamespace}.${match.sdkClass || match.tag}
-- Supported Attributes: ${match.attributes.join(', ') || 'None'}
+- Supported Attributes: ${renderAttributes(match.attributes)}
 - Valid Parent Elements: ${match.parents.join(', ') || 'None'}
+- Valid Child Elements: ${match.children?.join(', ') || 'None'}
 `
   };
 };

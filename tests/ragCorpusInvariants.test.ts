@@ -4,6 +4,7 @@ import { join } from 'path';
 import { z } from 'zod';
 import { KNOWLEDGE_BASE } from '../services/staticKnowledgeBase';
 import { matchesKeyword } from '../services/storageService';
+import { COLOUR_SLOTS, COLOUR_MAP_KEYS } from '../services/powerpointResolver';
 
 /**
  * Invariants over the generated RAG corpus (public/rag-data.json).
@@ -18,13 +19,28 @@ const corpus = JSON.parse(
   readFileSync(join(__dirname, '..', 'public', 'rag-data.json'), 'utf8')
 ) as unknown[];
 
+const AttributeSpecSchema = z.object({
+  name: z.string().min(1),
+  type: z.string().min(1),
+  // An enumeration with an empty list would read as "nothing is permitted here", so the
+  // generator omits the field rather than emitting [].
+  values: z.array(z.string().min(1)).min(1).optional(),
+  required: z.literal(true).optional(),
+  label: z.string().min(1).optional(),
+  version: z.string().min(1).optional(),
+  maxLength: z.number().optional(),
+  min: z.number().optional(),
+  max: z.number().optional()
+});
+
 const ReferenceDocSchema = z.object({
   tag: z.string().min(1),
   namespace: z.string(),
   domain: z.enum(['docx', 'xlsx', 'pptx', 'shared']),
   definition: z.string().min(1).optional(),
-  attributes: z.array(z.string().min(1)),
+  attributes: z.array(AttributeSpecSchema),
   parents: z.array(z.string().min(1)),
+  children: z.array(z.string().min(1)),
   citation: z.string().min(1).optional(),
   sdkClass: z.string().min(1).optional(),
   reviewerNote: z.string().optional(),
@@ -103,6 +119,78 @@ describe('namespace correctness', () => {
   });
 });
 
+/**
+ * The elements a person actually opens the tool to ask about.
+ *
+ * Coverage counts are easy to feel good about — 1,899 records sounds like everything —
+ * and they say nothing about whether the corpus holds the element in front of the user.
+ * These lists are the core of each specification: the parts a document is built from,
+ * not a sample. If a regeneration drops one, the count barely moves and this fails.
+ *
+ * Namespaces matter as much as names. `p:notes` is the notes-slide ROOT element;
+ * `notesSlide` is the part filename and is not an element at all, which is the kind of
+ * mistake a list like this exists to prevent on both sides.
+ */
+const CORE_ELEMENTS: Record<string, [string, string[]][]> = {
+  'WordprocessingML': [['w', [
+    'document', 'body', 'p', 'r', 't', 'rPr', 'pPr', 'tbl', 'tr', 'tc', 'tblPr', 'tblGrid',
+    'gridCol', 'sectPr', 'styles', 'style', 'numbering', 'num', 'abstractNum', 'lvl',
+    'bookmarkStart', 'bookmarkEnd', 'hyperlink', 'fldChar', 'instrText', 'fldSimple',
+    'ins', 'del', 'footnote', 'endnote', 'drawing', 'jc', 'b', 'i', 'u', 'sz', 'color',
+    'rFonts', 'spacing', 'ind', 'pStyle', 'rStyle', 'numPr', 'numId', 'ilvl'
+  ]]],
+  'SpreadsheetML': [['x', [
+    'workbook', 'sheets', 'sheet', 'worksheet', 'sheetData', 'row', 'c', 'v', 'f', 'is',
+    'si', 'sst', 'cellXfs', 'xf', 'numFmt', 'numFmts', 'fonts', 'font', 'fills', 'fill',
+    'borders', 'border', 'cellStyleXfs', 'definedName', 'definedNames', 'mergeCell',
+    'mergeCells', 'conditionalFormatting', 'dataValidation', 'autoFilter', 'cols', 'col',
+    'dimension', 'pane', 'selection', 'hyperlink'
+  ]]],
+  'PresentationML': [['p', [
+    'presentation', 'sldMasterIdLst', 'sldIdLst', 'sld', 'cSld', 'spTree', 'sp', 'nvSpPr',
+    'spPr', 'txBody', 'ph', 'sldLayout', 'sldMaster', 'notes', 'notesMaster', 'clrMap',
+    'clrMapOvr', 'timing', 'tnLst', 'par', 'seq', 'cTn', 'graphicFrame', 'pic', 'grpSp',
+    'grpSpPr', 'sldSz'
+  ]]],
+  'DrawingML': [['a', [
+    'graphic', 'graphicData', 'blip', 'blipFill', 'solidFill', 'srgbClr', 'schemeClr',
+    'xfrm', 'off', 'ext', 'chOff', 'chExt', 'prstGeom', 'ln', 'effectLst', 'theme',
+    'themeElements', 'clrScheme', 'fontScheme', 'fmtScheme', 'fillStyleLst', 'lnStyleLst',
+    'bgFillStyleLst', 'bodyPr', 'lstStyle', 'latin', 'ea', 'cs'
+  ]]],
+  'DrawingML charts': [['c', [
+    'chart', 'chartSpace', 'plotArea', 'ser', 'cat', 'val', 'barChart', 'lineChart',
+    'pieChart', 'valAx', 'catAx', 'numRef', 'strRef', 'numCache', 'strCache', 'tx',
+    'title', 'legend'
+  ]]]
+};
+
+describe('the elements people actually ask about', () => {
+  const present = new Set(docs.map(d => `${d.namespace}:${d.tag}`));
+
+  for (const [spec, groups] of Object.entries(CORE_ELEMENTS)) {
+    it(`covers the core of ${spec}`, () => {
+      const missing = groups.flatMap(([ns, tags]) =>
+        tags.filter(tag => !present.has(`${ns}:${tag}`)).map(tag => `${ns}:${tag}`)
+      );
+      expect(missing, `${spec} elements absent from the corpus`).toEqual([]);
+    });
+  }
+
+  it('gives the most-asked-about elements real structure, not just a name', () => {
+    // Present-but-empty is the failure this catches: a record that exists and carries
+    // no attributes, no parents and no children grounds nothing.
+    const mustBeSubstantive = ['w:p', 'w:tbl', 'w:rPr', 'x:c', 'x:xf', 'p:sp', 'a:xfrm', 'c:ser'];
+    for (const key of mustBeSubstantive) {
+      const [ns, tag] = key.split(':');
+      const doc = docs.find(d => d.namespace === ns && d.tag === tag);
+      expect(doc, key).toBeDefined();
+      const facts = doc!.attributes.length + doc!.parents.length + doc!.children.length;
+      expect(facts, `${key} carries no structural facts`).toBeGreaterThan(0);
+    }
+  });
+});
+
 describe('provenance honesty', () => {
   // The dataset mixes human prose with machine-generated structure. The badge shown to
   // users depends on being able to tell them apart, so the distinction has to hold.
@@ -127,7 +215,7 @@ describe('provenance honesty', () => {
    */
   it('the search predicate tolerates a record with no definition', () => {
     const noProse: ReferenceDoc = {
-      tag: 'w:tblPrEx', namespace: 'w', domain: 'docx', attributes: [], parents: []
+      tag: 'w:tblPrEx', namespace: 'w', domain: 'docx', attributes: [], parents: [], children: []
     };
     expect(noProse.definition).toBeUndefined();
 
@@ -216,10 +304,15 @@ describe('structural fields', () => {
     expect(unqualified).toEqual([]);
   });
 
-  it('has no duplicate entries within a record\'s attributes or parents', () => {
+  it('has no duplicate entries within a record\'s attributes, parents or children', () => {
     for (const doc of docs) {
-      expect(new Set(doc.attributes).size, `${doc.tag} attributes`).toBe(doc.attributes.length);
+      // Attributes are objects now, so a Set of them is always the same size as the
+      // array — every object reference is distinct. Deduplicating on the NAME is what
+      // the check was always about; a Set of the objects would pass unconditionally.
+      const names = doc.attributes.map(a => a.name);
+      expect(new Set(names).size, `${doc.tag} attributes`).toBe(names.length);
       expect(new Set(doc.parents).size, `${doc.tag} parents`).toBe(doc.parents.length);
+      expect(new Set(doc.children).size, `${doc.tag} children`).toBe(doc.children.length);
     }
   });
 
@@ -228,7 +321,72 @@ describe('structural fields', () => {
     // base class. Reading only direct attributes would under-report most of the corpus.
     const cellIns = docs.find(d => d.tag === 'cellIns');
     expect(cellIns).toBeDefined();
-    expect(cellIns!.attributes).toEqual(expect.arrayContaining(['w:author', 'w:date', 'w:id']));
+    expect(cellIns!.attributes.map(a => a.name)).toEqual(expect.arrayContaining(['w:author', 'w:date', 'w:id']));
+  });
+
+  it('carries the permitted values for enumerated attributes', () => {
+    // The gap this whole change existed to close. Knowing w:jc has a w:val is close to
+    // useless; knowing w:val must be one of these is the answer to the actual question.
+    const jc = docs.find(d => d.domain === 'docx' && d.tag === 'jc');
+    const val = jc?.attributes.find(a => a.name === 'w:val');
+
+    expect(val?.type).toBe('enum');
+    expect(val?.values).toEqual(expect.arrayContaining(['left', 'center', 'right', 'both']));
+    expect(val?.label).toBe('Alignment Type');
+  });
+
+  it('resolves colliding enum names by namespace, not by bare name', () => {
+    // ColorSchemeIndexValues means dark1/light1 under Wordprocessing and dk1/lt1 under
+    // Drawing — same name, different values, thirteen such collisions in the corpus.
+    // Resolving on the bare name would advertise one namespace's values for the other's
+    // attribute: plausible, wrong, and impossible to notice from the output.
+    const clrMap = docs.find(d => d.domain === 'pptx' && d.tag === 'clrMap');
+    const bg1 = clrMap?.attributes.find(a => a.name.endsWith('bg1'));
+    expect(bg1?.values).toEqual(expect.arrayContaining(['dk1', 'lt1']));
+    expect(bg1?.values).not.toContain('dark1');
+
+    const schemeClr = docs.find(d => d.domain === 'shared' && d.tag === 'schemeClr');
+    const val = schemeClr?.attributes.find(a => a.name.endsWith('val'));
+    expect(val?.values).toEqual(expect.arrayContaining(['bg1', 'tx1']));
+  });
+
+  it('agrees with the PowerPoint resolver\'s hand-written colour constants', () => {
+    // An independent check on both: the resolver's lists were written from the
+    // specification by hand, and the corpus derives them mechanically from the SDK.
+    // If they ever disagree, one of them is wrong and this says so.
+    const clrMap = docs.find(d => d.domain === 'pptx' && d.tag === 'clrMap');
+    const slots = clrMap?.attributes.find(a => a.name.endsWith('bg1'))?.values ?? [];
+    expect([...slots].sort()).toEqual([...COLOUR_SLOTS].sort());
+
+    const schemeClr = docs.find(d => d.domain === 'shared' && d.tag === 'schemeClr');
+    const keys = schemeClr?.attributes.find(a => a.name.endsWith('val'))?.values ?? [];
+    for (const key of COLOUR_MAP_KEYS) expect(keys, `schemeClr accepts ${key}`).toContain(key);
+  });
+
+  it('never emits an enum with an empty value list', () => {
+    // An attribute typed `enum` with no values reads as "nothing is permitted here".
+    // The generator reports the underlying shape instead when facets are unavailable.
+    for (const doc of docs) {
+      for (const attr of doc.attributes) {
+        if (attr.type === 'enum') {
+          expect(attr.values?.length, `${doc.tag}/@${attr.name}`).toBeGreaterThan(0);
+        }
+      }
+    }
+  });
+
+  it('marks required attributes without trusting the validator\'s presence', () => {
+    // ⚠️ RequiredValidator can carry IsRequired: "False". Exactly one attribute in
+    // WordprocessingML does, so reading presence alone is right 182 times out of 183 —
+    // which is precisely why it would never be noticed.
+    const required = docs.flatMap(d => d.attributes).filter(a => a.required);
+    expect(required.length).toBeGreaterThan(500);
+    for (const attr of required) expect(attr.required).toBe(true);
+  });
+
+  it('records what an element may contain, not only what contains it', () => {
+    const body = docs.find(d => d.domain === 'docx' && d.tag === 'body');
+    expect(body?.children).toEqual(expect.arrayContaining(['w:p', 'w:tbl', 'w:sectPr']));
   });
 
   it('derives parents by inverting the schema child lists', () => {

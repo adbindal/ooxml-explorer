@@ -7,8 +7,9 @@ const doc = (tag: string, definition?: string, attributes: string[] = []): Refer
   namespace: 'w',
   domain: 'docx',
   definition,
-  attributes,
-  parents: []
+  attributes: attributes.map(name => ({ name, type: 'string' })),
+  parents: [],
+  children: []
 });
 
 const corpus: ReferenceDoc[] = [
