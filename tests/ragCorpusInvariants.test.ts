@@ -107,8 +107,12 @@ describe('namespace correctness', () => {
     // positioning wrapper - `wp:` anchors against a paginated document, `xdr:`
     // against the cell grid - so those prefixes legitimately live in those domains.
     // PowerPoint has no wrapper; absolute EMU in p:spTree replaces it.
+    //
+    // Word carries two more vocabularies of its own: `m:` is Office Math, which is
+    // WordprocessingML's equation markup rather than a separate format, and `b:` is the
+    // citation store that `w:bibliography` fields read from.
     const allowed: Record<string, string[]> = {
-      docx: ['w', 'wp'],
+      docx: ['w', 'wp', 'm', 'b'],
       xlsx: ['x', 'xdr'],
       pptx: ['p']
     };
@@ -327,7 +331,10 @@ describe('structural fields', () => {
   it('carries the permitted values for enumerated attributes', () => {
     // The gap this whole change existed to close. Knowing w:jc has a w:val is close to
     // useless; knowing w:val must be one of these is the answer to the actual question.
-    const jc = docs.find(d => d.domain === 'docx' && d.tag === 'jc');
+    // Namespace-aware on purpose. Adding Office Math introduced `m:jc`, and a
+    // domain-and-tag lookup silently started matching it instead — the exact
+    // namespace-blind failure the corpus keys against (see 'namespace correctness').
+    const jc = docs.find(d => d.domain === 'docx' && d.namespace === 'w' && d.tag === 'jc');
     const val = jc?.attributes.find(a => a.name === 'w:val');
 
     expect(val?.type).toBe('enum');
