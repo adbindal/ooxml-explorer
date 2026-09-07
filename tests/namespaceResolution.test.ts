@@ -13,7 +13,7 @@ import type { ReferenceDoc } from '../services/staticKnowledgeBase';
  */
 
 const doc = (tag: string, namespace: string, domain: ReferenceDoc['domain']): ReferenceDoc =>
-  ({ tag, namespace, domain, attributes: [], parents: [] });
+  ({ tag, namespace, domain, attributes: [], parents: [], children: [] });
 
 // The real collision: three different elements, one local name.
 const bottoms = [
