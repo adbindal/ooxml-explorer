@@ -49,6 +49,25 @@ const SOURCES: { file: string; domain: 'docx' | 'xlsx' | 'pptx' | 'shared' }[] =
   { file: 'schemas_openxmlformats_org_drawingml_2006_picture.json', domain: 'shared' },
   { file: 'schemas_openxmlformats_org_drawingml_2006_lockedCanvas.json', domain: 'shared' },
 
+  // VML. Legacy, and unavoidable: an OLE object's preview image is a `v:shape` with a
+  // `v:imagedata` inside a `w:pict`, and `services/oleObjects.ts` analyses exactly that.
+  // Without this the corpus knew `w:pict` and nothing inside it, so clicking the preview
+  // of a broken embedding — the thing that analyzer exists to catch — returned nothing.
+  { file: 'schemas-microsoft-com_vml.json', domain: 'shared' },
+
+  // Office Math (OMML). Every equation in every Word document is `m:oMath`, and none of
+  // it was covered.
+  { file: 'schemas_openxmlformats_org_officeDocument_2006_math.json', domain: 'docx' },
+
+  // docProps/app.xml and docProps/custom.xml, which the tree view shows for every file
+  // opened. Variant types are the value side of a custom property.
+  { file: 'schemas_openxmlformats_org_officeDocument_2006_extended-properties.json', domain: 'shared' },
+  { file: 'schemas_openxmlformats_org_officeDocument_2006_custom-properties.json', domain: 'shared' },
+  { file: 'schemas_openxmlformats_org_officeDocument_2006_docPropsVTypes.json', domain: 'shared' },
+
+  // Word's citation store, reached from `w:bibliography` fields.
+  { file: 'schemas_openxmlformats_org_officeDocument_2006_bibliography.json', domain: 'docx' },
+
   // The two format-specific positioning wrappers. DrawingML payloads are identical
   // across formats; only the way they are anchored differs - `wp:` positions against
   // a paginated document, `xdr:` against the cell grid. PowerPoint has no wrapper at
@@ -273,6 +292,11 @@ const numberOrUndefined = (raw: string | undefined): number | undefined => {
 /** Builds the full spec for one attribute. */
 const specFor = (attr: SdkAttribute, enums: EnumTable): AttributeSpec | null => {
   if (!attr.QName) return null;
+  // The SDK spells an unqualified attribute ":t", with an empty prefix before the colon.
+  // Most OOXML attributes are unqualified — 2,932 of 4,056 here — so keeping the colon
+  // would print ":allowOverlap" to the reader for the majority of the corpus, and make
+  // every lookup by attribute name miss.
+  const name = attr.QName.startsWith(':') ? attr.QName.slice(1) : attr.QName;
   const validators = attr.Validators ?? [];
 
   const ref = attr.Type ? enumRefOf(attr.Type) : null;
@@ -283,7 +307,7 @@ const specFor = (attr: SdkAttribute, enums: EnumTable): AttributeSpec | null => 
   const versionValidator = validators.find(v => v.Name === 'OfficeVersionValidator');
 
   return {
-    name: attr.QName,
+    name,
     // An enum whose facets are missing is reported by its underlying shape rather than
     // as an enum with no values, which would read as "nothing is permitted here".
     type: simplifyType(attr.Type, Boolean(values?.length)),

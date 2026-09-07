@@ -309,6 +309,7 @@ export const KNOWLEDGE_BASE: ReferenceDoc[] = [
       }
     ],
     "parents": [
+      "m:oMathPara",
       "w:bdo",
       "w:customXml",
       "w:del",
@@ -375,6 +376,7 @@ export const KNOWLEDGE_BASE: ReferenceDoc[] = [
       }
     ],
     "parents": [
+      "m:r",
       "w:r"
     ],
     "children": [],
@@ -611,23 +613,23 @@ export const KNOWLEDGE_BASE: ReferenceDoc[] = [
     "domain": "pptx",
     "attributes": [
       {
-        "name": ":autoCompressPictures",
+        "name": "autoCompressPictures",
         "type": "boolean",
         "label": "autoCompressPictures"
       },
       {
-        "name": ":bookmarkIdSeed",
+        "name": "bookmarkIdSeed",
         "type": "integer",
         "label": "bookmarkIdSeed",
         "min": 1
       },
       {
-        "name": ":compatMode",
+        "name": "compatMode",
         "type": "boolean",
         "label": "compatMode"
       },
       {
-        "name": ":conformance",
+        "name": "conformance",
         "type": "enum",
         "values": [
           "strict",
@@ -636,42 +638,42 @@ export const KNOWLEDGE_BASE: ReferenceDoc[] = [
         "label": "conformance"
       },
       {
-        "name": ":embedTrueTypeFonts",
+        "name": "embedTrueTypeFonts",
         "type": "boolean",
         "label": "embedTrueTypeFonts"
       },
       {
-        "name": ":firstSlideNum",
+        "name": "firstSlideNum",
         "type": "integer",
         "label": "firstSlideNum"
       },
       {
-        "name": ":removePersonalInfoOnSave",
+        "name": "removePersonalInfoOnSave",
         "type": "boolean",
         "label": "removePersonalInfoOnSave"
       },
       {
-        "name": ":rtl",
+        "name": "rtl",
         "type": "boolean",
         "label": "rtl"
       },
       {
-        "name": ":saveSubsetFonts",
+        "name": "saveSubsetFonts",
         "type": "boolean",
         "label": "saveSubsetFonts"
       },
       {
-        "name": ":serverZoom",
+        "name": "serverZoom",
         "type": "integer",
         "label": "serverZoom"
       },
       {
-        "name": ":showSpecialPlsOnTitleSld",
+        "name": "showSpecialPlsOnTitleSld",
         "type": "boolean",
         "label": "showSpecialPlsOnTitleSld"
       },
       {
-        "name": ":strictFirstAndLastChars",
+        "name": "strictFirstAndLastChars",
         "type": "boolean",
         "label": "strictFirstAndLastChars"
       }
@@ -706,30 +708,30 @@ export const KNOWLEDGE_BASE: ReferenceDoc[] = [
     "domain": "pptx",
     "attributes": [
       {
-        "name": ":collapse",
+        "name": "collapse",
         "type": "boolean",
         "label": "Collapsed"
-      },
-      {
-        "name": ":show",
-        "type": "boolean",
-        "label": "Show Slide in Slide Show"
-      },
-      {
-        "name": ":showMasterPhAnim",
-        "type": "boolean",
-        "label": "Show Master Placeholder Animations"
-      },
-      {
-        "name": ":showMasterSp",
-        "type": "boolean",
-        "label": "Show Master Shapes"
       },
       {
         "name": "r:id",
         "type": "string",
         "required": true,
         "label": "Relationship ID"
+      },
+      {
+        "name": "show",
+        "type": "boolean",
+        "label": "Show Slide in Slide Show"
+      },
+      {
+        "name": "showMasterPhAnim",
+        "type": "boolean",
+        "label": "Show Master Placeholder Animations"
+      },
+      {
+        "name": "showMasterSp",
+        "type": "boolean",
+        "label": "Show Master Shapes"
       }
     ],
     "parents": [
@@ -754,27 +756,27 @@ export const KNOWLEDGE_BASE: ReferenceDoc[] = [
     "domain": "pptx",
     "attributes": [
       {
-        "name": ":matchingName",
+        "name": "matchingName",
         "type": "string",
         "label": "matchingName"
       },
       {
-        "name": ":preserve",
+        "name": "preserve",
         "type": "boolean",
         "label": "preserve"
       },
       {
-        "name": ":showMasterPhAnim",
+        "name": "showMasterPhAnim",
         "type": "boolean",
         "label": "Show Master Placeholder Animations"
       },
       {
-        "name": ":showMasterSp",
+        "name": "showMasterSp",
         "type": "boolean",
         "label": "Show Master Shapes"
       },
       {
-        "name": ":type",
+        "name": "type",
         "type": "enum",
         "values": [
           "title",
@@ -817,7 +819,7 @@ export const KNOWLEDGE_BASE: ReferenceDoc[] = [
         "label": "type"
       },
       {
-        "name": ":userDrawn",
+        "name": "userDrawn",
         "type": "boolean",
         "label": "userDrawn"
       }
@@ -844,7 +846,7 @@ export const KNOWLEDGE_BASE: ReferenceDoc[] = [
     "domain": "pptx",
     "attributes": [
       {
-        "name": ":preserve",
+        "name": "preserve",
         "type": "boolean",
         "label": "preserve"
       }
@@ -873,7 +875,7 @@ export const KNOWLEDGE_BASE: ReferenceDoc[] = [
     "domain": "pptx",
     "attributes": [
       {
-        "name": ":useBgFill",
+        "name": "useBgFill",
         "type": "boolean",
         "label": "Use Background Fill"
       }
@@ -1019,48 +1021,48 @@ export const KNOWLEDGE_BASE: ReferenceDoc[] = [
     "domain": "xlsx",
     "attributes": [
       {
-        "name": ":a",
+        "name": "a",
         "type": "boolean",
         "label": "Array"
       },
       {
-        "name": ":cm",
+        "name": "cm",
         "type": "integer",
         "label": "Cell Metadata Index"
       },
       {
-        "name": ":i",
+        "name": "i",
         "type": "integer",
         "label": "Sheet Id"
       },
       {
-        "name": ":l",
+        "name": "l",
         "type": "boolean",
         "label": "New Dependency Level"
       },
       {
-        "name": ":ph",
+        "name": "ph",
         "type": "boolean",
         "label": "Show Phonetic"
       },
       {
-        "name": ":r",
+        "name": "r",
         "type": "string",
         "required": true,
         "label": "Cell Reference"
       },
       {
-        "name": ":s",
+        "name": "s",
         "type": "boolean",
         "label": "Child Chain"
       },
       {
-        "name": ":t",
+        "name": "t",
         "type": "boolean",
         "label": "New Thread"
       },
       {
-        "name": ":vm",
+        "name": "vm",
         "type": "integer",
         "label": "Value Metadata Index"
       }
@@ -1086,62 +1088,62 @@ export const KNOWLEDGE_BASE: ReferenceDoc[] = [
     "domain": "xlsx",
     "attributes": [
       {
-        "name": ":aca",
+        "name": "aca",
         "type": "boolean",
         "label": "Always Calculate Array"
       },
       {
-        "name": ":bx",
+        "name": "bx",
         "type": "boolean",
         "label": "Assigns Value to Name"
       },
       {
-        "name": ":ca",
+        "name": "ca",
         "type": "boolean",
         "label": "Calculate Cell"
       },
       {
-        "name": ":del1",
+        "name": "del1",
         "type": "boolean",
         "label": "Input 1 Deleted"
       },
       {
-        "name": ":del2",
+        "name": "del2",
         "type": "boolean",
         "label": "Input 2 Deleted"
       },
       {
-        "name": ":dt2D",
+        "name": "dt2D",
         "type": "boolean",
         "label": "Data Table 2-D"
       },
       {
-        "name": ":dtr",
+        "name": "dtr",
         "type": "boolean",
         "label": "Data Table Row"
       },
       {
-        "name": ":r1",
+        "name": "r1",
         "type": "string",
         "label": "Data Table Cell 1"
       },
       {
-        "name": ":r2",
+        "name": "r2",
         "type": "string",
         "label": "Input Cell 2"
       },
       {
-        "name": ":ref",
+        "name": "ref",
         "type": "string",
         "label": "Range of Cells"
       },
       {
-        "name": ":si",
+        "name": "si",
         "type": "integer",
         "label": "Shared Group Index"
       },
       {
-        "name": ":t",
+        "name": "t",
         "type": "enum",
         "values": [
           "normal",
@@ -1174,62 +1176,62 @@ export const KNOWLEDGE_BASE: ReferenceDoc[] = [
     "domain": "xlsx",
     "attributes": [
       {
-        "name": ":collapsed",
+        "name": "collapsed",
         "type": "boolean",
         "label": "Collapsed"
       },
       {
-        "name": ":customFormat",
+        "name": "customFormat",
         "type": "boolean",
         "label": "Custom Format"
       },
       {
-        "name": ":customHeight",
+        "name": "customHeight",
         "type": "boolean",
         "label": "Custom Height"
       },
       {
-        "name": ":hidden",
+        "name": "hidden",
         "type": "boolean",
         "label": "Hidden"
       },
       {
-        "name": ":ht",
+        "name": "ht",
         "type": "decimal",
         "label": "Row Height"
       },
       {
-        "name": ":outlineLevel",
+        "name": "outlineLevel",
         "type": "integer",
         "label": "Outline Level"
       },
       {
-        "name": ":ph",
+        "name": "ph",
         "type": "boolean",
         "label": "Show Phonetic"
       },
       {
-        "name": ":r",
+        "name": "r",
         "type": "integer",
         "label": "Row Index"
       },
       {
-        "name": ":s",
+        "name": "s",
         "type": "integer",
         "label": "Style Index"
       },
       {
-        "name": ":spans",
+        "name": "spans",
         "type": "list<string>",
         "label": "Spans"
       },
       {
-        "name": ":thickBot",
+        "name": "thickBot",
         "type": "boolean",
         "label": "Thick Bottom"
       },
       {
-        "name": ":thickTop",
+        "name": "thickTop",
         "type": "boolean",
         "label": "Thick Top Border"
       },
@@ -1259,12 +1261,12 @@ export const KNOWLEDGE_BASE: ReferenceDoc[] = [
     "domain": "xlsx",
     "attributes": [
       {
-        "name": ":refreshError",
+        "name": "refreshError",
         "type": "boolean",
         "label": "Last Refresh Resulted in Error"
       },
       {
-        "name": ":sheetId",
+        "name": "sheetId",
         "type": "integer",
         "required": true,
         "label": "Sheet Id"
@@ -1307,12 +1309,12 @@ export const KNOWLEDGE_BASE: ReferenceDoc[] = [
     "domain": "xlsx",
     "attributes": [
       {
-        "name": ":count",
+        "name": "count",
         "type": "integer",
         "label": "String Count"
       },
       {
-        "name": ":uniqueCount",
+        "name": "uniqueCount",
         "type": "integer",
         "label": "Unique String Count"
       }
