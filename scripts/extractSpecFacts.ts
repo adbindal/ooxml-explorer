@@ -78,9 +78,25 @@ const FILE_PREFIX: Record<string, string> = {
   'shared-documentPropertiesVariantTypes.xsd': 'vt'
 };
 
+/** A content-model entry: either an element, or a group to be expanded later. */
+type ChildRef =
+  /**
+   * `qualifiedBy` is the prefix written in an `xsd:element ref=`, which names the schema
+   * that DECLARES the element. Absent for a local `xsd:element name=`, whose element
+   * belongs to the file it appears in. Getting this wrong labels `m:oMath` as `w:oMath`
+   * and `o:ClientData` as `v:ClientData` — both of which then look like corpus gaps.
+   */
+  | { kind: 'element'; name: string; qualifiedBy?: string }
+  | { kind: 'group'; ref: string };
+
 interface ComplexType {
   attributes: Map<string, { type: string; required: boolean }>;
-  children: string[];
+  /**
+   * Unexpanded, because a group reference can cross files — `a:EG_ColorChoice` is
+   * defined in DrawingML and referenced from PresentationML — and cross-file resolution
+   * needs the whole set, which does not exist yet while a single file is being indexed.
+   */
+  childRefs: ChildRef[];
   base: string | null;
 }
 
@@ -91,6 +107,8 @@ interface SchemaFile {
   prefixes: Map<string, string>;
   simpleTypes: Map<string, string[]>;
   complexTypes: Map<string, ComplexType>;
+  /** Named `xsd:group` definitions, which content models reference by name. */
+  groups: Map<string, ChildRef[]>;
 }
 
 /** Direct element children of `node` with the given XSD local name. */
@@ -118,8 +136,41 @@ const parseSchema = (xml: string): SchemaFile => {
     targetNamespace: root.getAttribute('targetNamespace'),
     prefixes,
     simpleTypes: new Map(),
-    complexTypes: new Map()
+    complexTypes: new Map(),
+    groups: new Map()
   };
+};
+
+/**
+ * Collects a content model's entries without expanding groups.
+ *
+ * Never descends into a nested inline complexType — those elements belong to it, not to
+ * the model being read.
+ */
+const readChildRefs = (holder: Element): ChildRef[] => {
+  const refs: ChildRef[] = [];
+  const walk = (node: Element): void => {
+    for (const child of Array.from(node.children)) {
+      if (child.namespaceURI !== XS) continue;
+      if (child.localName === 'element') {
+        const own = child.getAttribute('name');
+        const ref = child.getAttribute('ref');
+        if (own) refs.push({ kind: 'element', name: own });
+        else if (ref) {
+          const [prefix, local] = ref.includes(':') ? ref.split(':', 2) : ['', ref];
+          refs.push({ kind: 'element', name: local, qualifiedBy: prefix });
+        }
+      } else if (child.localName === 'group') {
+        const ref = child.getAttribute('ref');
+        if (ref) refs.push({ kind: 'group', ref });
+        else walk(child); // an inline group definition
+      } else if (['sequence', 'choice', 'all'].includes(child.localName)) {
+        walk(child);
+      }
+    }
+  };
+  walk(holder);
+  return refs;
 };
 
 /** Fills in the simple and complex type tables for one file. */
@@ -154,27 +205,18 @@ const indexTypes = (file: SchemaFile): void => {
       });
     }
 
-    // Walk the content model, but never descend into a nested inline complexType — its
-    // elements belong to it, not to this one.
-    const children: string[] = [];
-    const walk = (node: Element): void => {
-      for (const child of Array.from(node.children)) {
-        if (child.namespaceURI !== XS) continue;
-        if (child.localName === 'element') {
-          const en = child.getAttribute('name') ?? child.getAttribute('ref')?.split(':').pop();
-          if (en) children.push(en);
-        } else if (['sequence', 'choice', 'all', 'group'].includes(child.localName)) {
-          walk(child);
-        }
-      }
-    };
-    walk(holder);
-
     file.complexTypes.set(name, {
       attributes,
-      children,
+      childRefs: readChildRefs(holder),
       base: extension?.getAttribute('base') ?? null
     });
+  }
+
+  // 137 content models across the schema set reach their children through a named
+  // group. Ignoring them under-reports the children of every one.
+  for (const group of childrenNamed(root, 'group')) {
+    const name = group.getAttribute('name');
+    if (name) file.groups.set(name, readChildRefs(group));
   }
 };
 
@@ -224,6 +266,70 @@ const attributesOf = (
   return out;
 };
 
+/**
+ * Every child element a content model permits, with group references expanded.
+ *
+ * Groups nest and can reference each other, so `seen` is a cycle guard rather than a
+ * depth limit — `a:EG_ColorChoice` is reached from dozens of models across four files.
+ *
+ * Returns a SET, deliberately. Order and cardinality are discarded here because the
+ * corpus cannot represent them: see `childSets` on SpecElement.
+ *
+ * Names come back qualified with the prefix of the schema that DEFINES them, because a
+ * group reference crosses files: `v:group` reaches `o:borderbottom` through a group in
+ * `vml-officeDrawing.xsd`. Children defined in a schema the corpus does not ingest are
+ * dropped rather than reported — the corpus cannot hold them, so listing them would
+ * manufacture a gap out of a scope decision.
+ */
+const childrenOf = (
+  refs: readonly ChildRef[],
+  home: string,
+  set: SchemaSet,
+  seen = new Set<string>()
+): Set<string> => {
+  const out = new Set<string>();
+  const prefix = FILE_PREFIX[home];
+  for (const ref of refs) {
+    if (ref.kind === 'element') {
+      if (ref.qualifiedBy !== undefined) {
+        // Declared elsewhere: the ref's prefix names the schema, so resolve through this
+        // file's xmlns map to whichever schema that is, and use ITS corpus prefix.
+        const uri = set.files.get(home)?.prefixes.get(ref.qualifiedBy);
+        const declaring = uri ? set.byNamespace.get(uri) : undefined;
+        const declaringPrefix = declaring ? FILE_PREFIX[declaring] : undefined;
+        if (declaringPrefix) out.add(`${declaringPrefix}:${ref.name}`);
+      } else if (prefix) {
+        out.add(`${prefix}:${ref.name}`);
+      }
+      continue;
+    }
+    const target = resolveRef(ref.ref, home, set);
+    if (!target) continue;
+    const id = `${target.file}#${target.name}`;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const group = set.files.get(target.file)?.groups.get(target.name);
+    if (group) for (const name of childrenOf(group, target.file, set, seen)) out.add(name);
+  }
+  return out;
+};
+
+/** A complexType's children, including those reached through its base chain. */
+const modelOf = (
+  typeName: string,
+  home: string,
+  set: SchemaSet,
+  depth = 0
+): Set<string> => {
+  const complexType = set.files.get(home)?.complexTypes.get(typeName);
+  if (!complexType || depth > 12) return new Set();
+
+  const out = childrenOf(complexType.childRefs, home, set);
+  const base = resolveRef(complexType.base, home, set);
+  if (base) for (const name of modelOf(base.name, base.file, set, depth + 1)) out.add(name);
+  return out;
+};
+
 export interface SpecAttribute {
   /**
    * Every distinct value set the specification permits for this element name.
@@ -239,7 +345,19 @@ export interface SpecAttribute {
   valueSets?: string[][];
   required?: true;
 }
-export type SpecFacts = Record<string, Record<string, SpecAttribute>>;
+/**
+ * What the specification says about one element name.
+ *
+ * `childSets` is a list for the same reason `valueSets` is: 97 element names are declared
+ * with genuinely different content models depending on where they appear, so there is no
+ * single answer to "what may this contain".
+ */
+export interface SpecElement {
+  attributes: Record<string, SpecAttribute>;
+  childSets?: string[][];
+}
+
+export type SpecFacts = Record<string, SpecElement>;
 
 /** Builds the facts table from a set of parsed schema files. */
 export const buildSpecFacts = (set: SchemaSet): SpecFacts => {
@@ -261,7 +379,7 @@ export const buildSpecFacts = (set: SchemaSet): SpecFacts => {
       if (!type) continue;
 
       const key = `${prefix}:${name}`;
-      const entry = (facts[key] ??= {});
+      const entry = (facts[key] ??= { attributes: {} });
 
       for (const [attrName, info] of attributesOf(type.name, type.file, set)) {
         const simple = resolveRef(info.type, info.home, set);
@@ -269,26 +387,35 @@ export const buildSpecFacts = (set: SchemaSet): SpecFacts => {
           ? set.files.get(simple.file)?.simpleTypes.get(simple.name)
           : undefined;
 
-        const existing = entry[attrName] ?? {};
+        const existing = entry.attributes[attrName] ?? {};
         const sets = existing.valueSets ?? [];
         if (values) {
           const candidate = [...values].sort();
-          const seen = sets.some(s => s.join('\u0000') === candidate.join('\u0000'));
-          if (!seen) sets.push(candidate);
+          if (!sets.some(s => s.join('\u0000') === candidate.join('\u0000'))) sets.push(candidate);
         }
-        entry[attrName] = {
+        entry.attributes[attrName] = {
           ...(sets.length > 0 ? { valueSets: sets } : {}),
           // An element declared under several complex types is required if any of them
           // requires it — the corpus merges the same way.
           ...(info.required || existing.required ? { required: true as const } : {})
         };
       }
+
+      const children = [...modelOf(type.name, type.file, set)].sort();
+      if (children.length > 0) {
+        const childSets = entry.childSets ?? [];
+        if (!childSets.some(s => s.join('\u0000') === children.join('\u0000'))) {
+          childSets.push(children);
+        }
+        entry.childSets = childSets;
+      }
     }
   }
 
-  // Elements with no attributes at all carry no facts worth checking.
+  // An element with neither attributes nor children carries nothing to check.
   for (const key of Object.keys(facts)) {
-    if (Object.keys(facts[key]).length === 0) delete facts[key];
+    const entry = facts[key];
+    if (Object.keys(entry.attributes).length === 0 && !entry.childSets) delete facts[key];
   }
   return facts;
 };
@@ -319,11 +446,13 @@ const main = async (): Promise<void> => {
 
   const facts = buildSpecFacts(set);
   const elements = Object.keys(facts).length;
-  const attributes = Object.values(facts).reduce((n, a) => n + Object.keys(a).length, 0);
+  const attributes = Object.values(facts).reduce((n, e) => n + Object.keys(e.attributes).length, 0);
   const enumerated = Object.values(facts)
-    .reduce((n, a) => n + Object.values(a).filter(x => x.valueSets).length, 0);
+    .reduce((n, e) => n + Object.values(e.attributes).filter(a => a.valueSets).length, 0);
   const polymorphic = Object.values(facts)
-    .reduce((n, a) => n + Object.values(a).filter(x => (x.valueSets?.length ?? 0) > 1).length, 0);
+    .reduce((n, e) => n + Object.values(e.attributes).filter(a => (a.valueSets?.length ?? 0) > 1).length, 0);
+  const withChildren = Object.values(facts).filter(e => e.childSets).length;
+  const multiModel = Object.values(facts).filter(e => (e.childSets?.length ?? 0) > 1).length;
 
   mkdirSync(dirname(OUTPUT_PATH), { recursive: true });
   writeFileSync(
@@ -336,6 +465,7 @@ const main = async (): Promise<void> => {
 
   console.log(`[spec] ${elements} elements, ${attributes} attributes, ${enumerated} enumerated`);
   console.log(`[spec] ${polymorphic} attribute(s) permit more than one value set by context`);
+  console.log(`[spec] ${withChildren} element(s) with a content model, ${multiModel} with more than one`);
   console.log(`[spec] wrote tests/spec-facts.json`);
 };
 

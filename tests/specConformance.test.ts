@@ -31,11 +31,19 @@ import { join } from 'node:path';
 
 const corpus = JSON.parse(
   readFileSync(join(__dirname, '..', 'public', 'rag-data.json'), 'utf8')
-) as { namespace: string; tag: string; attributes: { name: string; values?: string[]; required?: true }[] }[];
+) as {
+  namespace: string;
+  tag: string;
+  children?: string[];
+  attributes: { name: string; values?: string[]; required?: true }[];
+}[];
 
 const spec = JSON.parse(
   readFileSync(join(__dirname, 'spec-facts.json'), 'utf8')
-) as Record<string, Record<string, { valueSets?: string[][]; required?: true }>>;
+) as Record<string, {
+  attributes: Record<string, { valueSets?: string[][]; required?: true }>;
+  childSets?: string[][];
+}>;
 
 /** The corpus merges an element declared under several complex types; so must this. */
 const corpusByKey = new Map<string, Map<string, { values?: string[]; required?: true }>>();
@@ -48,6 +56,10 @@ for (const record of corpus) {
   }
   corpusByKey.set(key, attrs);
 }
+
+const corpusChildren = new Map<string, string[]>(
+  corpus.map(record => [`${record.namespace}:${record.tag}`, record.children ?? []])
+);
 
 const sorted = (values: readonly string[]): string[] => [...values].sort();
 
@@ -149,10 +161,10 @@ interface Divergence {
 
 const findDivergences = (): Divergence[] => {
   const out: Divergence[] = [];
-  for (const [element, attributes] of Object.entries(spec)) {
+  for (const [element, facts] of Object.entries(spec)) {
     const ours = corpusByKey.get(element);
     if (!ours) continue;
-    for (const [attribute, specAttr] of Object.entries(attributes)) {
+    for (const [attribute, specAttr] of Object.entries(facts.attributes)) {
       const mine = ours.get(attribute);
       if (!mine || !specAttr.valueSets?.length || !mine.values) continue;
 
@@ -182,10 +194,10 @@ describe('the corpus against ECMA-376', () => {
     // A conformance suite that silently matched nothing would pass every other test in
     // this file. This is the guard against that.
     let compared = 0;
-    for (const [element, attributes] of Object.entries(spec)) {
+    for (const [element, facts] of Object.entries(spec)) {
       const ours = corpusByKey.get(element);
       if (!ours) continue;
-      for (const attribute of Object.keys(attributes)) if (ours.has(attribute)) compared += 1;
+      for (const attribute of Object.keys(facts.attributes)) if (ours.has(attribute)) compared += 1;
     }
     expect(compared, 'attributes cross-checked against the specification').toBeGreaterThan(3000);
   });
@@ -213,5 +225,173 @@ describe('the corpus against ECMA-376', () => {
     const stale = Object.keys(KNOWN_DIVERGENCES).filter(key => !live.has(key));
 
     expect(stale, 'recorded divergences that no longer occur — delete them').toEqual([]);
+  });
+});
+
+
+/* ------------------------------------------------------------------------- *
+ * Content models
+ * ------------------------------------------------------------------------- */
+
+/**
+ * ON THE REPRESENTATION, SINCE IT IS THE OBVIOUS QUESTION.
+ *
+ * `children: string[]` is a flat, unordered set. The schema says considerably more:
+ * 836 of 913 content models are an `xsd:sequence`, 401 of them with more than one child,
+ * so **order is enforced**; 880 children are required and 303 are repeatable.
+ *
+ * Storing that faithfully is not a matter of adding fields. A content model belongs to a
+ * *type*, not to an element name, and 97 element names are declared with genuinely
+ * different models depending on context — `w:jc` is `CT_Jc` in a paragraph and
+ * `CT_JcTable` in a table. Carrying order would mean keying records by type and having
+ * elements reference them, which is a different corpus shape, not an extra column.
+ *
+ * That work is not done here, because nothing needs it yet. The failure it would catch —
+ * children in the wrong order — makes Word show a repair prompt, which is *visible*, and
+ * this engine exists for the faults that are not. When an analyzer genuinely needs
+ * ordering, this comment is the argument for changing the shape rather than bolting on a
+ * field that cannot hold the answer.
+ *
+ * So the check below compares SETS: may this element contain that one. It still catches
+ * a whole class of ingest defect, and it caught two while being written.
+ */
+
+/** Prefixes whose schemas the corpus ingests. Anything else is out of scope both ways. */
+const IN_SCOPE_PREFIXES = new Set([
+  'w', 'x', 'p', 'a', 'c', 'dgm', 'cdr', 'pic', 'lc', 'wp', 'xdr', 'v', 'm', 'b', 'ap', 'op', 'vt'
+]);
+
+/**
+ * Children that differ everywhere they appear, recorded once rather than per element.
+ *
+ * `w:contentPart` is an Office extension the standard has no equivalent for.
+ * `w:smartTag` is the reverse — the standard has it and Office withdrew the feature.
+ * `a:schemeClr` inside a theme colour slot would be a scheme colour defined in terms of
+ * itself, which the schema permits structurally and Office rejects.
+ */
+const ALWAYS_CORPUS_ONLY = new Set(['w:contentPart']);
+const ALWAYS_SPEC_ONLY = new Set(['w:smartTag', 'a:schemeClr', 'm:oMath', 'm:oMathPara', 'w:customXml']);
+
+/**
+ * Wherever the specification reaches equations through `m:oMath`, the SDK lists every
+ * Office Math element directly instead. Same set of documents, two ways of writing the
+ * model down — an indirection difference, not a disagreement about what may appear.
+ */
+const inlinesOfficeMath = (specChildren: readonly string[], ours: readonly string[]): boolean =>
+  specChildren.includes('m:oMath') || ours.includes('m:oMath');
+
+interface ChildDivergence {
+  key: string;
+  corpusOnly: string[];
+  specOnly: string[];
+}
+
+const findChildDivergences = (): ChildDivergence[] => {
+  const out: ChildDivergence[] = [];
+
+  for (const [element, facts] of Object.entries(spec)) {
+    const record = corpusChildren.get(element);
+    if (!facts.childSets?.length || !record) continue;
+
+    const ours = [...record].filter(c => IN_SCOPE_PREFIXES.has(c.split(':')[0])).sort();
+    if (facts.childSets.some(set => set.join('\u0000') === ours.join('\u0000'))) continue;
+
+    const closest = [...facts.childSets].sort(
+      (a, b) => difference(a, ours).length - difference(b, ours).length
+    )[0];
+
+    let corpusOnly = ours.filter(c => !closest.includes(c) && !ALWAYS_CORPUS_ONLY.has(c));
+    const specOnly = closest.filter(c => !ours.includes(c) && !ALWAYS_SPEC_ONLY.has(c));
+    if (inlinesOfficeMath(closest, ours)) corpusOnly = corpusOnly.filter(c => !c.startsWith('m:'));
+
+    if (corpusOnly.length || specOnly.length) out.push({ key: element, corpusOnly, specOnly });
+  }
+  return out.sort((a, b) => a.key.localeCompare(b.key));
+};
+
+/** Per-element content-model differences that the rules above do not explain. */
+const KNOWN_CHILD_DIVERGENCES: Record<string, { corpusOnly?: string[]; specOnly?: string[] }> = {
+  "a:path": { corpusOnly: ["a:fillToRect"] },
+  "a:tcPr": { specOnly: ["a:headers"] },
+  "b:Author": { corpusOnly: ["b:Corporate", "b:NameList"] },
+  "c:pivotFmt": { specOnly: ["c:txPr"] },
+  "c:ser": { corpusOnly: ["c:bubble3D", "c:bubbleSize", "c:explosion", "c:marker", "c:smooth", "c:xVal", "c:yVal"] },
+  "c:surface3DChart": { corpusOnly: ["c:varyColors"] },
+  "c:tx": { corpusOnly: ["c:strLit", "c:v"] },
+  "dgm:extLst": { corpusOnly: ["dgm:ext"] },
+  "dgm:styleLbl": { corpusOnly: ["dgm:scene3d", "dgm:sp3d", "dgm:style", "dgm:txPr"] },
+  "m:ctrlPr": { corpusOnly: ["w:moveFrom", "w:moveTo"] },
+  "m:oMathPara": { corpusOnly: ["w:bookmarkEnd", "w:bookmarkStart", "w:commentRangeEnd", "w:commentRangeStart", "w:customXmlDelRangeEnd", "w:customXmlDelRangeStart", "w:customXmlInsRangeEnd", "w:customXmlInsRangeStart", "w:customXmlMoveFromRangeEnd", "w:customXmlMoveFromRangeStart", "w:customXmlMoveToRangeEnd", "w:customXmlMoveToRangeStart", "w:del", "w:ins", "w:moveFrom", "w:moveFromRangeEnd", "w:moveFromRangeStart", "w:moveTo", "w:moveToRangeEnd", "w:moveToRangeStart", "w:permEnd", "w:permStart", "w:proofErr", "w:r"] },
+  "m:r": { specOnly: ["w:contentPart"] },
+  "op:property": { corpusOnly: ["vt:cf"] },
+  "p:bgPr": { specOnly: ["a:grpFill"] },
+  "p:presentation": { specOnly: ["p:smartTags"] },
+  "p:progress": { specOnly: ["p:boolVal", "p:clrVal", "p:intVal", "p:strVal"] },
+  "p:tnLst": { specOnly: ["p:anim", "p:animClr", "p:animEffect", "p:animMotion", "p:animRot", "p:animScale", "p:audio", "p:cmd", "p:excl", "p:seq", "p:set", "p:video"] },
+  "p:to": { corpusOnly: ["p:boolVal", "p:clrVal", "p:fltVal", "p:intVal", "p:strVal"] },
+  "v:group": { specOnly: ["v:fill", "v:formulas", "v:handles", "v:imagedata", "v:path", "v:shadow", "v:stroke", "v:textbox", "v:textpath"] },
+  "vt:variant": { corpusOnly: ["vt:cf"] },
+  "vt:vector": { corpusOnly: ["vt:cf"] },
+  "w:background": { corpusOnly: ["v:background"], specOnly: ["w:drawing"] },
+  "w:comment": { specOnly: ["w:customXmlDelRangeEnd", "w:customXmlDelRangeStart", "w:customXmlInsRangeEnd", "w:customXmlInsRangeStart", "w:customXmlMoveFromRangeEnd", "w:customXmlMoveFromRangeStart", "w:customXmlMoveToRangeEnd", "w:customXmlMoveToRangeStart", "w:del", "w:ins", "w:moveFrom", "w:moveFromRangeEnd", "w:moveFromRangeStart", "w:moveTo", "w:moveToRangeEnd", "w:moveToRangeStart"] },
+  "w:customXml": { corpusOnly: ["w:p", "w:tbl", "w:tc", "w:tr"], specOnly: ["w:customXmlPr"] },
+  "w:del": { corpusOnly: ["w:rPr"] },
+  "w:ffData": { specOnly: ["w:label", "w:tabIndex"] },
+  "w:frame": { specOnly: ["w:longDesc", "w:title"] },
+  "w:frameset": { specOnly: ["w:title"] },
+  "w:ins": { corpusOnly: ["w:rPr"] },
+  "w:moveFrom": { corpusOnly: ["w:rPr"] },
+  "w:moveTo": { corpusOnly: ["w:rPr"] },
+  "w:object": { corpusOnly: ["v:arc", "v:curve", "v:group", "v:image", "v:line", "v:oval", "v:polyline", "v:rect", "v:roundrect", "v:shape", "v:shapetype"], specOnly: ["w:movie"] },
+  "w:pict": { corpusOnly: ["v:arc", "v:curve", "v:group", "v:image", "v:line", "v:oval", "v:polyline", "v:rect", "v:roundrect", "v:shape", "v:shapetype"] },
+  "w:r": { specOnly: ["w:contentPart"] },
+  "w:rt": { corpusOnly: ["w:customXml", "w:fldSimple", "w:hyperlink", "w:sdt"] },
+  "w:rubyBase": { corpusOnly: ["w:customXml", "w:fldSimple", "w:hyperlink", "w:sdt"] },
+  "w:sdt": { corpusOnly: ["w:bookmarkEnd", "w:bookmarkStart", "w:commentRangeEnd", "w:commentRangeStart", "w:customXmlDelRangeEnd", "w:customXmlDelRangeStart", "w:customXmlInsRangeEnd", "w:customXmlInsRangeStart", "w:customXmlMoveFromRangeEnd", "w:customXmlMoveFromRangeStart", "w:customXmlMoveToRangeEnd", "w:customXmlMoveToRangeStart", "w:moveFromRangeEnd", "w:moveFromRangeStart", "w:moveToRangeEnd", "w:moveToRangeStart"], specOnly: ["w:sdtEndPr", "w:sdtPr"] },
+  "w:sdtContent": { corpusOnly: ["w:p", "w:tbl", "w:tc", "w:tr"] },
+  "w:sdtPr": { specOnly: ["w:label", "w:tabIndex"] },
+  "w:settings": { corpusOnly: ["w:uiCompat97To2003"], specOnly: ["w:doNotEmbedSmartTags", "w:smartTagType"] },
+  "w:tcPr": { specOnly: ["w:headers"] },
+  "w:webSettings": { specOnly: ["w:saveSmartTagsAsXml"] },
+  "x:anchor": { corpusOnly: ["x:from", "x:to"], specOnly: ["xdr:from", "xdr:to"] },
+  "x:bk": { corpusOnly: ["x:extLst"] },
+  "x:protectedRange": { specOnly: ["x:securityDescriptor"] },
+  "x:r": { corpusOnly: ["x:rPr", "x:t"] },
+  "x:row": { corpusOnly: ["x:cell"] },
+  "x:workbook": { specOnly: ["x:smartTagPr", "x:smartTagTypes"] },
+  "x:worksheet": { specOnly: ["x:smartTags"] }
+};
+
+describe('content models', () => {
+  it('compares a substantial number of them', () => {
+    let compared = 0;
+    for (const [element, facts] of Object.entries(spec)) {
+      if (facts.childSets?.length && corpusChildren.has(element)) compared += 1;
+    }
+    expect(compared, 'elements whose content model was checked').toBeGreaterThan(900);
+  });
+
+  it('permits only the children the specification permits, except where recorded', () => {
+    const unexpected = findChildDivergences().filter(d => {
+      const known = KNOWN_CHILD_DIVERGENCES[d.key];
+      if (!known) return true;
+      return (
+        JSON.stringify(known.corpusOnly ?? []) !== JSON.stringify(d.corpusOnly) ||
+        JSON.stringify(known.specOnly ?? []) !== JSON.stringify(d.specOnly)
+      );
+    });
+
+    expect(
+      unexpected.map(d => `${d.key} corpus-only=[${d.corpusOnly}] spec-only=[${d.specOnly}]`),
+      'new or changed content-model divergence — justify it and record it'
+    ).toEqual([]);
+  });
+
+  it('has no stale entries in the content-model record', () => {
+    const live = new Set(findChildDivergences().map(d => d.key));
+    expect(
+      Object.keys(KNOWN_CHILD_DIVERGENCES).filter(key => !live.has(key)),
+      'recorded content-model divergences that no longer occur — delete them'
+    ).toEqual([]);
   });
 });
