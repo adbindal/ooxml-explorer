@@ -53,6 +53,7 @@ import { computeExcelEvidenceForMarkup } from './excelFormattingAnalysis';
 import { computePowerpointEvidenceForMarkup, resolveSlideChain } from './powerpointFormattingAnalysis';
 import { powerpointInheritanceFindings } from './powerpointInheritance';
 import { computeChartEvidenceForMarkup, chartFindings, CHART_HOST_PART } from './chartSemantics';
+import { equationFindings, hasEquations, EQUATION_HOST_PART } from './equations';
 
 export type OoxmlFormat = 'docx' | 'xlsx' | 'pptx';
 
@@ -448,6 +449,26 @@ export const ANALYZERS: readonly Analyzer[] = [
       siblings: ['word/footnotes.xml', 'word/endnotes.xml'],
       compute: computeNoteEvidenceForMarkup
     }
+  },
+  {
+    id: 'equation',
+    title: 'Office Math equations',
+    formats: ['docx'],
+    determines: [
+      'whether an n-ary operator states which operator it is, or leaves it to the consumer',
+      'whether a delimiter customises one bracket and defaults the other',
+      'whether an equation or a math run is empty while still being valid markup'
+    ],
+    cannotDetermine: [
+      'whether the mathematics is correct — only whether the markup says what it appears to say',
+      'which character a consumer substitutes for an unstated operator, which the schema data does not carry',
+      'whether the fonts an equation needs are available, which is a rendering question'
+    ],
+    appliesTo: hasEquations,
+    analyze: parts =>
+      Object.keys(parts)
+        .filter(p => EQUATION_HOST_PART.test(p))
+        .flatMap(path => equationFindings(parts, path))
   },
   {
     id: 'animation',

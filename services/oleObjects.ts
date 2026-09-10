@@ -103,6 +103,7 @@ const OLE_RULES = {
   'data-part-missing':    { severity: 'error',   silent: true },
   'binding-mismatch':     { severity: 'warning', silent: true },
   'no-preview':           { severity: 'warning', silent: false },
+  'preview-part-missing': { severity: 'warning', silent: false },
   'unknown-binding':      { severity: 'warning', silent: true },
   'no-prog-id':           { severity: 'note',    silent: false }
 } as const satisfies Record<string, { severity: Severity; silent: boolean }>;
@@ -411,6 +412,19 @@ const finish = (partial: Omit<OleObject, 'problems'>, problems: Finding[]): OleO
       'no-preview', ownerPart,
       'The object has no preview image. Unlike a missing embedding this one is visible: consumers that cannot execute OLE have nothing to draw, so the object renders as blank space or an error box.',
       'Add the preview image the producing application would normally write alongside the object.'
+    ));
+  }
+
+  // A preview that exists and points at nothing. `partExists` was computed here from the
+  // start and never reported, so an object whose preview image had been dropped passed
+  // every check: `no-preview` sees an element and is satisfied, and the data checks look
+  // at the embedding rather than the picture.
+  if (partial.preview !== null && partial.preview.partExists === false) {
+    problems.push(oleFinding(
+      'preview-part-missing', ownerPart,
+      `The object's preview image is declared but its part is not in the package${partial.preview.target ? ` ("${partial.preview.target}")` : ' — the relationship itself is missing'}. ` +
+      'The markup says there is a picture and there is none, so consumers that cannot execute OLE draw blank space exactly as if no preview had been written.',
+      'Restore the preview image part, or repair the relationship the preview points through.'
     ));
   }
 
