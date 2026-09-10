@@ -252,8 +252,29 @@ describe('the corpus against ECMA-376', () => {
  * ordering, this comment is the argument for changing the shape rather than bolting on a
  * field that cannot hold the answer.
  *
+ * REQUIRED AND REPEATABLE WERE TRIED, MEASURED, AND DROPPED.
+ *
+ * Order is the expensive one, but `required` and `repeatable` looked cheap — only 7
+ * element names disagree about them across contexts, against 97 for the full model. So
+ * they were built from the SDK's `Particle` trees and measured. The result killed it:
+ *
+ *   repeatable   marked 6,738 of 6,762 child slots — 100%. Anything reachable through a
+ *                repeating group repeats, and almost everything is. A flag that is true
+ *                for every row carries no information and costs ~200 KB to say so.
+ *   required     marked 140 slots, 2%, where the same count taken from the ECMA XSDs is
+ *                433. `w:tr` inside `w:tbl` came out NOT required, though a table must
+ *                have a row. Sparse and provably incomplete.
+ *
+ * Restricting `repeatable` to an element's own bound would reproduce the XSD's 303, but
+ * that number describes how the schema was written rather than what a document may
+ * contain, which is not the question anyone asks.
+ *
+ * Neither flag survived contact with its own numbers, so neither is stored. The failure
+ * they would catch — a missing mandatory child — is a Word repair prompt, which is
+ * visible, and this engine is for the faults that are not.
+ *
  * So the check below compares SETS: may this element contain that one. It still catches
- * a whole class of ingest defect, and it caught two while being written.
+ * a whole class of ingest defect, and it caught three while being written.
  */
 
 /** Prefixes whose schemas the corpus ingests. Anything else is out of scope both ways. */

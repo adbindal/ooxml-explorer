@@ -106,6 +106,46 @@ describe('the preview that hides breakage', () => {
     expect(findSilentlyBrokenOleObjects(noPreview)).toEqual([]);
   });
 
+  it('reports a preview whose image part is gone', () => {
+    // The gap this closes: `no-preview` sees a <v:shape> and is satisfied, and the data
+    // checks look at the embedding rather than the picture. `partExists` was computed
+    // from the start and never reported, so this object passed every check with nothing
+    // to draw.
+    const parts = wordPackage();
+    delete parts['word/media/image1.emf'];
+    const problems = readOleObjects(parts, 'word/document.xml')[0].problems;
+
+    expect(problems.map(p => p.code)).toContain('ole/preview-part-missing');
+    expect(problems.map(p => p.code)).not.toContain('ole/no-preview');
+  });
+
+  it('reports a preview whose relationship is missing entirely', () => {
+    const parts = wordPackage({
+      'word/_rels/document.xml.rels': rels(rel('rId4', 'oleObject', 'embeddings/oleObject1.bin'))
+    });
+    const problems = readOleObjects(parts, 'word/document.xml')[0].problems;
+
+    expect(problems.map(p => p.code)).toContain('ole/preview-part-missing');
+  });
+
+  it('stays quiet when the preview image is present', () => {
+    const problems = readOleObjects(wordPackage(), 'word/document.xml')[0].problems;
+    expect(problems.map(p => p.code)).not.toContain('ole/preview-part-missing');
+  });
+
+  it('does not report a missing preview part for an external preview', () => {
+    // An external target is unknowable from the package alone, which is a gap and not a
+    // defect — the same discipline as oleDataIsPresent.
+    const parts = wordPackage({
+      'word/_rels/document.xml.rels': rels(
+        rel('rId4', 'oleObject', 'embeddings/oleObject1.bin') +
+        `<Relationship Id="rId5" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="http://example.com/i.emf" TargetMode="External"/>`
+      )
+    });
+    const problems = readOleObjects(parts, 'word/document.xml')[0].problems;
+    expect(problems.map(p => p.code)).not.toContain('ole/preview-part-missing');
+  });
+
   it('lists only the objects that render correctly and are broken anyway', () => {
     const parts = wordPackage();
     delete parts['word/embeddings/oleObject1.bin'];
