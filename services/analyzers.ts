@@ -198,11 +198,19 @@ export const ANALYZERS: readonly Analyzer[] = [
     ],
     appliesTo: parts => parts[COMMENT_PART_PATHS.comments] !== undefined || matching(parts, WORD_BODY).length > 0,
     analyze: parts => {
-      const body = matching(parts, WORD_BODY)[0];
-      const document = parse(body ? parts[body] : undefined);
+      // Every story, not the first one. A comment can be anchored in a header, a footer
+      // or a footnote, and taking `[0]` meant whichever part the archive happened to list
+      // first — `word/footnotes.xml` in a real document — so every comment anchored in
+      // the body was reported orphaned and every genuine fault there was missed. The same
+      // first-match mistake this registry already fixed once for ANALYSIS_TARGETS.
+      const bodies = matching(parts, WORD_BODY)
+        .map(path => parse(parts[path]))
+        .filter((doc): doc is Document => doc !== null);
+      const [document, ...additionalStories] = bodies;
       if (!document) return [];
       return readComments({
         document,
+        additionalStories,
         comments: parse(parts[COMMENT_PART_PATHS.comments]),
         commentsExtended: parse(parts[COMMENT_PART_PATHS.extended]),
         commentsIds: parse(parts['word/commentsIds.xml'])

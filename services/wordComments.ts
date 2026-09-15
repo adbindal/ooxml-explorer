@@ -239,8 +239,17 @@ export interface CommentThread {
 }
 
 export interface CommentParts {
-  /** Parsed `word/document.xml`, or any body part carrying the range markers. */
+  /**
+   * Parsed `word/document.xml`, or any body part carrying the range markers.
+   *
+   * ⚠️ A comment can be anchored in ANY story — a header, a footer, a footnote — and a
+   * document may anchor comments in several at once. Pass every body part via
+   * `additionalStories` when more than one exists; supplying only the main document makes
+   * a comment anchored in a header look orphaned, and hides a genuine anchor fault there.
+   */
   document: Document | Element;
+  /** Every other body part (headers, footers, footnotes, endnotes). */
+  additionalStories?: (Document | Element)[];
   /** Parsed `word/comments.xml`. Omit or pass null when the part is absent. */
   comments?: Document | Element | null;
   /** Parsed `word/commentsExtended.xml`. Absent means threading is unknowable. */
@@ -298,9 +307,9 @@ const textOf = (el: Element): string =>
  */
 export function readComments(parts: CommentParts): CommentIndex {
   const problems: Finding[] = [];
-  const docRoot = rootOf(parts.document);
+  const stories = [parts.document, ...(parts.additionalStories ?? [])].map(rootOf);
 
-  const { anchors, anchorsById } = readAnchors(docRoot, problems);
+  const { anchors, anchorsById } = readAnchors(stories, problems);
   const { comments, byId } = readBodies(parts.comments ?? null, problems);
 
   if (!parts.comments && anchors.length > 0) {
@@ -330,19 +339,25 @@ export function readComments(parts: CommentParts): CommentIndex {
   return { comments, byId, anchors, anchorsById, threadingKnown, problems };
 }
 
-/** Pair range markers by id and collect reference runs. */
-function readAnchors(docRoot: ParentNode, problems: Finding[]) {
-  const starts = collect(docRoot, W_NAMESPACE, ['commentRangeStart']);
-  const ends = collect(docRoot, W_NAMESPACE, ['commentRangeEnd']);
-  const references = collect(docRoot, W_NAMESPACE, ['commentReference']);
+/**
+ * Pair range markers by id and collect reference runs, across every story.
+ *
+ * Stories are walked in the order given and positions are numbered continuously, so a
+ * marker in a header sorts before one in the body. That is enough for the overlap and
+ * nesting comparisons, which only ever compare two markers of the SAME id — and a comment
+ * range cannot span two stories, so two markers sharing an id are always in one of them.
+ */
+function readAnchors(stories: readonly ParentNode[], problems: Finding[]) {
+  const across = (localNames: string[]): Element[] =>
+    stories.flatMap(story => collect(story, W_NAMESPACE, localNames));
+
+  const starts = across(['commentRangeStart']);
+  const ends = across(['commentRangeEnd']);
+  const references = across(['commentReference']);
 
   // Document-order position of every marker, for the overlap/nesting comparison below.
   const order = new Map<Element, number>();
-  for (const el of collect(docRoot, W_NAMESPACE, [
-    'commentRangeStart',
-    'commentRangeEnd',
-    'commentReference'
-  ])) {
+  for (const el of across(['commentRangeStart', 'commentRangeEnd', 'commentReference'])) {
     order.set(el, order.size);
   }
 
@@ -616,13 +631,13 @@ function resolveThreading(
   problems: Finding[]
 ): boolean {
   if (!extendedPart) {
-    if (comments.length === 0) return true;
-    problems.push(commentFinding({
-      kind: 'threading-unknown',
-      message: `word/commentsExtended.xml was not supplied, so for all ${comments.length} comment${comments.length === 1 ? '' : 's'} it cannot be determined which are replies or which threads are resolved. Both are stored only in that part.`,
-      remediation: 'Supply word/commentsExtended.xml. Until then, present reply and resolved state as unknown rather than as "no" — a resolved thread shown as open is the failure this reports.'
-    }));
-    return false;
+    // Returning false is the whole signal, and it is enough. This used to also push a
+    // `threading-unknown` finding, which said exactly what the analyzer's own
+    // `cannotDetermine` entry already says — so a document was told twice, once in the
+    // right channel and once as a defect marked `silent: true`, claiming it was broken in
+    // a way nobody could see. Word writes commentsExtended.xml only when a comment has
+    // replies or resolutions; a single top-level comment has no reason to carry one.
+    return comments.length === 0;
   }
 
   const byParaId = new Map<string, Comment>();

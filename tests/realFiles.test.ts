@@ -18,11 +18,26 @@ import { reportPackage, summariseReport } from '../services/report';
  * THE ASSERTION, AND WHY IT IS THE RIGHT WAY ROUND.
  *
  * A fixture is *known good* if Office opens it without a repair prompt and it renders as
- * intended. Against such a file the engine must report **nothing**. If it reports a
- * finding, the engine is wrong — not the document. That direction matters: it is easy to
- * write an analyzer that catches every real fault and also fires on half the corpus, and
- * such an analyzer is worse than none, because a report nobody trusts is a report nobody
- * reads.
+ * intended. Against such a file the engine must claim **no invisible breakage**: no
+ * error, and nothing marked `silent`. If it does, the engine is wrong — not the document.
+ * That direction matters: it is easy to write an analyzer that catches every real fault
+ * and also fires on half the corpus, and such an analyzer is worse than none, because a
+ * report nobody trusts is a report nobody reads.
+ *
+ * WHY `silent` IS THE LINE, RATHER THAN "NOTHING AT ALL".
+ *
+ * `silent: true` means "this renders correctly and is broken anyway" — a claim the reader
+ * cannot check by looking. Made about a healthy file, it is the most damaging thing this
+ * engine can say, and it is exactly what this suite exists to prevent.
+ *
+ * A `silent: false` finding is the opposite: it points at something already visible on the
+ * page. A template that displays "Choose an item." really is displaying placeholder text,
+ * and saying so is correct — whether it *matters* depends on whether the document was
+ * meant to be filled in, which the engine cannot know and does not pretend to. Failing on
+ * those would force the removal of true, useful, visible observations.
+ *
+ * Visible findings are still printed on every run, so a false positive among them is
+ * noticed rather than hidden by a passing test.
  *
  * Name a file `*.expect-findings.docx` to opt out — for a document deliberately broken to
  * confirm the engine does catch it.
@@ -100,21 +115,36 @@ describe.skipIf(fixtures.length === 0)('real Office files', () => {
           expect(findings.length).toBeGreaterThan(0);
         });
       } else {
-        it('reports NOTHING, because Office is happy with this file', async () => {
-          // The assertion the whole fixture corpus exists for. A finding here is a false
-          // positive: the engine contradicting Office about a file Office accepts.
+        it('claims no invisible breakage, because Office is happy with this file', async () => {
+          // The assertion the whole fixture corpus exists for. A silent finding here is
+          // the engine telling someone their healthy file is broken in a way they cannot
+          // check — the worst thing it can get wrong.
           const parts = await loadParts(name);
           const { findings } = analyzePackage(parts);
 
-          if (findings.length > 0) {
-            const detail = [...findings]
+          const invisible = findings.filter(f => f.silent || f.severity === 'error');
+          const visible = findings.filter(f => !f.silent && f.severity !== 'error');
+
+          if (invisible.length > 0) {
+            const detail = [...invisible]
               .sort(compareFindings)
               .map(f => `    [${f.code}] ${f.part} — ${f.message}`)
               .join('\n');
             console.error(`\n  FALSE POSITIVES in ${name}:\n${detail}\n`);
           }
+          if (visible.length > 0) {
+            // Printed, never asserted on. These point at something already on the page,
+            // but a wrong one still needs to be noticed rather than silently tolerated.
+            console.log(
+              `\n  ${name} — visible observations (not failures), check they are fair:\n` +
+              [...visible].sort(compareFindings).map(f => `    [${f.code}] ${f.part}`).join('\n') + '\n'
+            );
+          }
 
-          expect(findings, `false positive(s) in ${name}: ${summarise(findings)}`).toEqual([]);
+          expect(
+            invisible,
+            `${name} claims invisible breakage in a healthy file: ${summarise(invisible)}`
+          ).toEqual([]);
         });
       }
 

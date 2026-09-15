@@ -462,9 +462,9 @@ export const computeChartEvidenceForMarkup = (
  */
 const CHART_RULES = {
   'structural-problem': { severity: 'error', silent: true },
-  'translation-risk': { severity: 'note', silent: true },
   'external-data-missing': { severity: 'error', silent: true },
-  'cache-is-only-source': { severity: 'warning', silent: true }
+  'cache-is-only-source': { severity: 'warning', silent: true },
+  'reference-sheet-missing': { severity: 'error', silent: true }
 } as const satisfies Record<string, { severity: FindingSeverity; silent: boolean }>;
 
 export type ChartProblemKind = keyof typeof CHART_RULES;
@@ -522,6 +522,41 @@ export function readChartExternalData(parts: PackageParts, partPath: string): Ch
   return { relationshipId: relId, target, partExists: parts[target] !== undefined };
 }
 
+
+/**
+ * Sheet names a chart's series reference, taken from the `c:f` formulas.
+ *
+ * `'Chart Types'!$B$3:$B$13` -> `Chart Types`. Unquoted names appear bare, and a formula
+ * with no `!` names no sheet at all and is skipped rather than guessed at.
+ */
+const referencedSheets = (model: ChartModel): string[] => {
+  const formulas = model.plots.flatMap(plot =>
+    plot.series.flatMap(series => [series.values?.formula, series.categories?.formula])
+  );
+  const names = new Set<string>();
+  for (const formula of formulas) {
+    if (!formula) continue;
+    const bang = formula.lastIndexOf('!');
+    if (bang <= 0) continue;
+    // Excel doubles an apostrophe inside a quoted sheet name.
+    names.add(formula.slice(0, bang).replace(/^'|'$/g, '').replace(/''/g, "'"));
+  }
+  return [...names];
+};
+
+/** Sheet names declared by the host workbook, or null when there is no host workbook. */
+const hostWorkbookSheets = (parts: PackageParts): string[] | null => {
+  const workbook = parts['xl/workbook.xml'];
+  if (workbook === undefined) return null;
+
+  const doc = new DOMParser().parseFromString(workbook, 'application/xml');
+  if (doc.getElementsByTagName('parsererror').length > 0) return null;
+
+  return Array.from(doc.getElementsByTagName('sheet'))
+    .map(sheet => sheet.getAttribute('name'))
+    .filter((name): name is string => name !== null);
+};
+
 /** Every chart finding for one chart part. */
 export function chartFindings(parts: PackageParts, partPath: string): Finding[] {
   const xml = parts[partPath];
@@ -539,13 +574,22 @@ export function chartFindings(parts: PackageParts, partPath: string): Finding[] 
     ));
   }
 
-  for (const message of model.translationNotes) {
-    problems.push(chartFinding(
-      'translation-risk', partPath,
-      `${message.charAt(0).toUpperCase()}${message.slice(1)}.`,
-      'No action needed for rendering in Office. Decide how to handle this before converting the chart to another format.'
-    ));
-  }
+  // ⚠️ `translationNotes` are deliberately NOT emitted as findings.
+  //
+  // They used to be, as `chart/translation-risk`, and every real file showed why that
+  // was wrong: three ordinary Office documents produced 31 of them, because "this series
+  // references a workbook" and "this axis has sourceLinked=1" are true of almost every
+  // healthy chart ever written. They are advice for someone converting a chart, not
+  // defects in the document.
+  //
+  // Worse, they carried `silent: true`, whose stated meaning is "the defects no
+  // screenshot test and no human eye will ever catch". So a clean deck reported that 12
+  // things rendered correctly and were broken anyway, when nothing was broken at all —
+  // the report was lying in the one direction this project cannot afford.
+  //
+  // Nothing is lost: `chartEvidenceLines` already surfaces every one of them under
+  // "Decide these before converting", which is where a person asking about a chart sees
+  // them. Prose for a reader belongs in the explain path; findings are for faults.
 
   const external = readChartExternalData(parts, partPath);
   // `s.values?.formula` yields undefined when the series has no values element at all,
@@ -565,11 +609,33 @@ export function chartFindings(parts: PackageParts, partPath: string): Finding[] 
       { relationshipId: external.relationshipId }
     ));
   } else if (!external && usesReferences) {
-    problems.push(chartFinding(
-      'cache-is-only-source', partPath,
-      'The series reference spreadsheet ranges, but the chart carries no embedded workbook, so those formulas name cells that exist nowhere in this package. The cached values are the only data there is — which renders correctly and cannot be verified, refreshed, or traced back to a source.',
-      'Treat the cached values as the authority when converting this chart. Add an embedded workbook if the data needs to remain editable.'
-    ));
+    // A chart inside a WORKBOOK has no c:externalData and needs none: its formulas
+    // resolve against the sheets of the package it already lives in. Reporting those as
+    // "cells that exist nowhere in this package" was false on every chart in every real
+    // .xlsx — seven warnings on a file Excel is perfectly happy with.
+    //
+    // So the absence of an embedded workbook only means cache-only for a chart that is
+    // NOT in a workbook. Inside one, the useful question is a different and stronger one:
+    // do the sheets it names actually exist?
+    const hostSheets = partPath.startsWith('xl/') ? hostWorkbookSheets(parts) : null;
+
+    if (hostSheets === null) {
+      problems.push(chartFinding(
+        'cache-is-only-source', partPath,
+        'The series reference spreadsheet ranges, but the chart carries no embedded workbook, so those formulas name cells that exist nowhere in this package. The cached values are the only data there is — which renders correctly and cannot be verified, refreshed, or traced back to a source.',
+        'Treat the cached values as the authority when converting this chart. Add an embedded workbook if the data needs to remain editable.'
+      ));
+    } else {
+      for (const sheet of referencedSheets(model)) {
+        if (hostSheets.includes(sheet)) continue;
+        problems.push(chartFinding(
+          'reference-sheet-missing', partPath,
+          `A series references the sheet "${sheet}", which the host workbook does not declare. The chart still draws from its cached values and looks entirely normal, so nothing on the page reveals that its data source is gone.`,
+          `Restore the "${sheet}" sheet, or repoint the series at a sheet the workbook has.`,
+          { sheet }
+        ));
+      }
+    }
   }
 
   return problems;
