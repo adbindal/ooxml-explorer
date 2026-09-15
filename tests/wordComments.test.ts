@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { analyzePackage } from '../services/analyzers';
 import {
   readComments,
   commentRangeText,
@@ -419,20 +420,21 @@ describe('commentRangeText — what does comment N cover?', () => {
 });
 
 describe('threading — unknown is not the same as false', () => {
-  it('reports reply and resolved state as unknown when commentsExtended.xml is absent', () => {
-    // The whole point of the module. Defaulting to "not a reply, not resolved" tells a
-    // reader that a resolved thread is still open and that a reply is a new topic.
+  it('reports threading as unknown, without calling the document broken', () => {
+    // `threadingKnown` is the signal, and the analyzer's `cannotDetermine` states the
+    // limit. There used to be a `threading-unknown` finding saying the same thing a
+    // second time, marked `silent: true` — so an ordinary document with one comment was
+    // told it was broken in a way nobody could see. Word writes commentsExtended.xml only
+    // when a comment has replies or resolutions.
     const index = readComments({
-      document: doc(`<w:p>${anchored('1', 'x')}</w:p>`),
-      comments: commentsPart(body('1', 'note', 'AAAA0001'))
+      document: parse(`<w:document ${W}><w:body><w:p>
+        <w:commentRangeStart w:id="1"/><w:r><w:t>x</w:t></w:r><w:commentRangeEnd w:id="1"/>
+        <w:r><w:commentReference w:id="1"/></w:r></w:p></w:body></w:document>`),
+      comments: parse(`<w:comments ${W}><w:comment w:id="1" w:author="A"><w:p><w:r><w:t>hi</w:t></w:r></w:p></w:comment></w:comments>`)
     });
 
     expect(index.threadingKnown).toBe(false);
-    expect(index.comments[0].thread.known).toBe(false);
-    expect(index.comments[0].thread.isReply).toBeNull();
-    expect(index.comments[0].thread.resolved).toBeNull();
-    const problem = index.problems.find(p => p.code === 'comment/threading-unknown');
-    expect(problem?.message).toContain('commentsExtended.xml was not supplied');
+    expect(index.problems.map(p => p.code)).toEqual([]);
   });
 
   it('reports unknown for a comment the side-car has no entry for', () => {
@@ -632,5 +634,82 @@ describe('malformed input is tolerated', () => {
 
     expect(index.problems).toEqual([]);
     expect(index.comments[0].thread.known).toBe(true);
+  });
+});
+
+describe('comments anchored outside the main document', () => {
+  /**
+   * Found by running the engine over a real Word document, and invisible to every
+   * hand-written fixture in this file.
+   *
+   * The analyzer took `matching(parts, WORD_BODY)[0]` — the FIRST body part — and every
+   * fixture here has exactly one, so `[0]` was always right. A real document has
+   * footnotes, headers, footers and endnotes too, and the archive listed
+   * `word/footnotes.xml` first. So the analyzer read a part with no comment markers in
+   * it, reported every comment in comments.xml as orphaned, and would have missed any
+   * genuine anchor fault in the body entirely. Wrong in both directions at once.
+   */
+  const comments = (ids: string[]) =>
+    parse(`<w:comments ${W}>${ids.map(id =>
+      `<w:comment w:id="${id}" w:author="A"><w:p><w:r><w:t>c</w:t></w:r></w:p></w:comment>`
+    ).join('')}</w:comments>`);
+
+  const anchorIn = (id: string) =>
+    `<w:p><w:commentRangeStart w:id="${id}"/><w:r><w:t>x</w:t></w:r>` +
+    `<w:commentRangeEnd w:id="${id}"/><w:r><w:commentReference w:id="${id}"/></w:r></w:p>`;
+
+  const story = (body: string) => parse(`<?xml version="1.0"?><w:hdr ${W}>${body}</w:hdr>`);
+
+  it('finds an anchor in a header, not only in the body', () => {
+    const index = readComments({
+      document: story(''),                      // the part listed first, with no markers
+      additionalStories: [doc(anchorIn('1'))],  // the body, where the anchor really is
+      comments: comments(['1'])
+    });
+
+    expect(index.problems.map(p => p.code)).toEqual([]);
+    expect(index.anchors.map(a => a.id)).toEqual(['1']);
+  });
+
+  it('still reports a comment that is anchored in no story at all', () => {
+    // The check must not be weakened into never firing: a genuinely orphaned comment is
+    // a real fault, and this is what the wrong-part bug was masking.
+    const index = readComments({
+      document: story(''),
+      additionalStories: [doc('<w:p><w:r><w:t>no anchors here</w:t></w:r></w:p>')],
+      comments: comments(['7'])
+    });
+
+    expect(index.problems.map(p => p.code)).toEqual(['comment/orphan-comment']);
+  });
+
+  it('picks the right part through the registry, not whichever is listed first', () => {
+    // The test that would actually have caught this. The three above exercise
+    // readComments directly, so they pass whatever stories they are handed and say
+    // nothing about the analyzer's part SELECTION — which is where the bug was. Removing
+    // `additionalStories` from the registry entry leaves them all green.
+    //
+    // The key order here matters: `word/footnotes.xml` is listed before
+    // `word/document.xml`, exactly as the real archive listed it.
+    const run = analyzePackage({
+      '[Content_Types].xml': '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>',
+      'word/footnotes.xml': `<?xml version="1.0"?><w:footnotes ${W}><w:footnote><w:p/></w:footnote></w:footnotes>`,
+      'word/document.xml': `<?xml version="1.0"?><w:document ${W}><w:body>${anchorIn('1')}</w:body></w:document>`,
+      'word/comments.xml': `<w:comments ${W}><w:comment w:id="1" w:author="A"><w:p><w:r><w:t>c</w:t></w:r></w:p></w:comment></w:comments>`
+    });
+
+    expect(run.ran).toContain('comment');
+    expect(run.findings.filter(f => f.code.startsWith('comment/')).map(f => f.code)).toEqual([]);
+  });
+
+  it('collects anchors from several stories at once', () => {
+    const index = readComments({
+      document: story(anchorIn('1')),
+      additionalStories: [doc(anchorIn('2'))],
+      comments: comments(['1', '2'])
+    });
+
+    expect(index.problems.map(p => p.code)).toEqual([]);
+    expect(index.anchors.map(a => a.id).sort()).toEqual(['1', '2']);
   });
 });

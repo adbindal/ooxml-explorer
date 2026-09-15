@@ -70,6 +70,14 @@ const FIELD_RULES = {
 
 export type FieldProblemKind = keyof typeof FIELD_RULES;
 
+/**
+ * Field types whose value is stored in `w:ffData` rather than as a calculated result.
+ *
+ * FORMTEXT is included: Word writes a `separate` for it only once it holds text, so an
+ * empty one looks uncalculated and is simply empty.
+ */
+const FORM_FIELD_TYPES = new Set(['FORMCHECKBOX', 'FORMDROPDOWN', 'FORMTEXT']);
+
 const fieldFinding = (
   kind: FieldProblemKind,
   part: string,
@@ -294,7 +302,14 @@ export function readFields(doc: Document | Element, part = ''): FieldIndex {
       ));
       continue;
     }
-    if (field.cachedResult === null) {
+    // ⚠️ FORM FIELDS HAVE NO RESULT BY DESIGN, AND THAT IS NOT A DEFECT.
+    //
+    // A FORMCHECKBOX is written as a `begin` fldChar carrying `w:ffData/w:checkBox` and
+    // an `end`, with no `separate` and no result text at all — its state lives in the
+    // ffData, not in a cached result. Real Word output confirms it: begin=1, separate=0.
+    // Reporting "it displays nothing until fields are updated" is simply untrue of them,
+    // and every form in every template would carry the finding.
+    if (field.cachedResult === null && !FORM_FIELD_TYPES.has(field.parsed.type ?? '')) {
       problems.push(fieldFinding(
         'no-cached-result', part,
         `The ${label} field has never been calculated — it has no result marker, so it displays nothing until the document is opened and fields are updated.`,

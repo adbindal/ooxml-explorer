@@ -225,10 +225,14 @@ describe('placeholders and structure', () => {
     expect(problems.map(p => p.code)).toContain('contentControl/no-content-element');
   });
 
-  it('notes an unbound control without treating it as a fault', () => {
+  it('says nothing about an unbound control, because that is the ordinary case', () => {
+    // Most content controls in real documents are filled by hand and carry no binding.
+    // The finding that used to fire here had a remediation beginning "No action needed",
+    // which is the definition of something that does not belong in a defect list — and
+    // it was marked `silent: true`, claiming invisible breakage in an ordinary template.
     const { problems } = readContentControls(doc(`<w:p>${sdt('<w:tag w:val="manual"/>')}</w:p>`));
 
-    expect(problems.find(p => p.code === 'contentControl/unbound-control')?.severity).toBe('note');
+    expect(problems.map(p => p.code)).not.toContain('contentControl/unbound-control');
   });
 });
 

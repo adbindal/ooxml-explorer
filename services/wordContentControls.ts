@@ -235,12 +235,10 @@ export function readContentControls(
     }
 
     if (binding === null) {
-      problems.push(sdtFinding(
-        'unbound-control', part,
-        `Content control "${label}" has no data binding, so nothing populates it automatically — its text is whatever was typed or written into the file.`,
-        'No action needed if the control is meant to be filled by hand. Add a w:dataBinding if it should be driven from custom XML.',
-        { control: label }
-      ));
+      // An unbound control is the ordinary case, not a fault: most content controls in
+      // real documents are typed into by hand. This used to report one, with a
+      // remediation that began "No action needed" — which is the definition of something
+      // that does not belong in a defect list, and it carried `silent: true` besides.
       continue;
     }
 

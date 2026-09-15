@@ -323,7 +323,12 @@ describe('chart findings — charts finally contribute to validation', () => {
     expect(problem?.silent).toBe(true);
   });
 
-  it('reports translation risks as notes, not as defects', () => {
+  it('does NOT report translation risks as findings', () => {
+    // They were `chart/translation-risk` notes until three real Office documents produced
+    // 31 of them: "this series references a workbook" and "this axis has sourceLinked=1"
+    // are true of almost every healthy chart. They are advice for a converter, not faults,
+    // and they carried `silent: true` — so a clean deck claimed twelve things rendered
+    // correctly and were broken anyway.
     const logAxis = `<?xml version="1.0"?><c:chartSpace ${C}><c:chart><c:plotArea>
       <c:barChart><c:ser><c:idx val="0"/><c:order val="0"/>
         <c:val><c:numLit><c:ptCount val="1"/><c:pt idx="0"><c:v>5</c:v></c:pt></c:numLit></c:val>
@@ -332,9 +337,12 @@ describe('chart findings — charts finally contribute to validation', () => {
       <c:valAx><c:axId val="2"/><c:crossAx val="1"/><c:scaling><c:logBase val="10"/></c:scaling></c:valAx>
     </c:plotArea></c:chart></c:chartSpace>`;
 
-    const notes = chartFindings({ [path]: logAxis }, path).filter(p => p.code === 'chart/translation-risk');
-    expect(notes.length).toBeGreaterThan(0);
-    for (const n of notes) expect(n.severity).toBe('note');
+    expect(chartFindings({ [path]: logAxis }, path)).toEqual([]);
+
+    // And nothing is lost: the reader still gets them where they belong.
+    const model = readChart(logAxis);
+    expect(model!.translationNotes.join(' ')).toContain('logarithmic');
+    expect(explainChart(model!).join('\n')).toContain('Decide these before converting');
   });
 
   it('returns nothing for a part that is not in the package', () => {
@@ -343,5 +351,76 @@ describe('chart findings — charts finally contribute to validation', () => {
 
   it('returns nothing rather than throwing on malformed chart XML', () => {
     expect(chartFindings({ [path]: '<c:chartSpace><unclosed>' }, path)).toEqual([]);
+  });
+});
+
+describe('a chart that lives inside a workbook', () => {
+  /**
+   * Found by running the engine over a real .xlsx, and invisible to every fixture here.
+   *
+   * `cache-is-only-source` fired whenever a chart used formulas and had no
+   * `c:externalData`. That is correct in Word and PowerPoint, where chart data must come
+   * from an embedded workbook. Inside a SPREADSHEET there is no embedded workbook and
+   * none is needed: the formulas resolve against the sheets of the package the chart
+   * already sits in. Seven warnings on a healthy file, each asserting that cells "exist
+   * nowhere in this package" when they were one part away.
+   */
+  const C = 'xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"';
+  const chartPath = 'xl/charts/chart1.xml';
+
+  const chartReferencing = (sheet: string) =>
+    `<?xml version="1.0"?><c:chartSpace ${C}><c:chart><c:plotArea><c:barChart>
+      <c:ser><c:idx val="0"/><c:order val="0"/>
+        <c:val><c:numRef><c:f>'${sheet}'!$B$3:$B$13</c:f>
+          <c:numCache><c:ptCount val="1"/><c:pt idx="0"><c:v>1</c:v></c:pt></c:numCache>
+        </c:numRef></c:val>
+      </c:ser><c:axId val="1"/><c:axId val="2"/></c:barChart>
+      <c:catAx><c:axId val="1"/><c:crossAx val="2"/></c:catAx>
+      <c:valAx><c:axId val="2"/><c:crossAx val="1"/></c:valAx>
+    </c:plotArea></c:chart></c:chartSpace>`;
+
+  const workbook = (sheets: string[]) =>
+    `<?xml version="1.0"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheets>` +
+    sheets.map((name, i) => `<sheet name="${name}" sheetId="${i + 1}"/>`).join('') +
+    `</sheets></workbook>`;
+
+  it('does not call the host workbook a missing data source', () => {
+    const parts = {
+      [chartPath]: chartReferencing('Chart Types'),
+      'xl/workbook.xml': workbook(['Chart Types', 'Formulas'])
+    };
+
+    expect(chartFindings(parts, chartPath)).toEqual([]);
+  });
+
+  it('reports a series pointing at a sheet the workbook does not have', () => {
+    // The stronger question the old check could not ask, because it never looked.
+    const parts = {
+      [chartPath]: chartReferencing('Deleted Sheet'),
+      'xl/workbook.xml': workbook(['Chart Types'])
+    };
+    const found = chartFindings(parts, chartPath);
+
+    expect(found.map(f => f.code)).toEqual(['chart/reference-sheet-missing']);
+    expect(found[0].subject).toMatchObject({ sheet: 'Deleted Sheet' });
+    expect(found[0].silent).toBe(true);
+  });
+
+  it('still reports cache-only for a chart in a document, where there IS no host workbook', () => {
+    // The behaviour that was right all along must survive the fix.
+    const inWord = 'word/charts/chart1.xml';
+    const found = chartFindings({ [inWord]: chartReferencing('Sheet1') }, inWord);
+
+    expect(found.map(f => f.code)).toEqual(['chart/cache-is-only-source']);
+  });
+
+  it('says nothing when the host workbook cannot be read', () => {
+    // Not knowing which sheets exist is a gap, not a licence to call them missing.
+    const parts = {
+      [chartPath]: chartReferencing('Chart Types'),
+      'xl/workbook.xml': '<workbook'
+    };
+
+    expect(chartFindings(parts, chartPath).map(f => f.code)).toEqual(['chart/cache-is-only-source']);
   });
 });
