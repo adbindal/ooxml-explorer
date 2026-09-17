@@ -41,3 +41,24 @@ have deliberately broken to confirm the engine *does* catch it.
 ⚠️ This is unrelated to `../../docs/ooxml-expert-agent/LICENSING.md`. That research is
 about reproducing **[MS-OI29500]'s prose**, Microsoft's written specification text. A
 document file is not that text, and none of the four open questions there apply here.
+
+## Triaging what it reports
+
+Run `npm run test:real`, then follow the **`check-real-files`** skill
+(`.agents/skills/check-real-files/SKILL.md`). It exists because the first real run produced
+43 findings across three files and **not one was a real fault** — two were serious engine
+bugs, one was a report that lied, and the rest were observations dressed as defects.
+
+The three things that skill exists to stop you doing:
+
+1. **Trusting the engine.** Two bugs were found this way, both of a recognisable shape:
+   taking `[0]` of a list of parts, and applying a format-specific assumption to all three
+   formats.
+2. **Trusting your own diagnostic tooling.** It was wrong three separate times in that
+   session, each time with confident and entirely false results. Read the raw markup before
+   concluding the engine is wrong.
+3. **Gutting checks to get a green run.** A `silent: false` finding points at something
+   already visible on the page; a template really is displaying "Choose an item.". The
+   contract is *no invisible breakage*, not *no output*.
+
+See `docs/ooxml-expert-agent/RESEARCH-STATE.md` §8ag for the full record.

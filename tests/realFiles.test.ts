@@ -102,7 +102,16 @@ describe.skipIf(fixtures.length === 0)('real Office files', () => {
         const run = analyzePackage(parts);
         const ledger = capabilityLedger(run);
 
-        console.log(`  ${name}: ${ledger.ran.length} analyzer(s) ran, ${ledger.skipped.length} skipped`);
+        // Named, not just counted. A pass rate says nothing about coverage: after three
+        // real files, "18 of 22 ran; equation and conformance never fired" was the useful
+        // sentence, because it named the one fixture worth looking for next. Note that
+        // explain-only analyzers are listed as skipped ON PURPOSE — they apply to the
+        // package but contribute no faults, so counting them would overstate the check.
+        console.log(
+          `  ${name}: ${ledger.ran.length} ran, ${ledger.skipped.length} skipped\n` +
+          `    ran    : ${ledger.ran.map(a => a.id).join(', ') || '(none)'}\n` +
+          `    skipped: ${ledger.skipped.map(a => a.id).join(', ') || '(none)'}`
+        );
         expect(run.ran.length).toBeGreaterThan(0);
       });
 
