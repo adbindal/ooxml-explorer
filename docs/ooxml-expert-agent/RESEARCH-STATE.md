@@ -3,16 +3,16 @@
 > **READ THIS FIRST. Everything below is written so this work can resume cold, after a
 > session ends or a quota runs out. Nothing important lives only in a conversation.**
 
-## Where things stand (2026-09-06)
+## Where things stand (2026-09-18)
 
 | | |
 |---|---|
-| **Branch** | `feat/schema-derived-rag-corpus` — **all work is here; `main` is untouched** |
-| **Tests** | 1385 passing (+1 skipped: real-file checks, see §8af); typecheck, lint and production build clean |
+| **Branch** | Everything through the ECMA cross-check is **merged to `main`** (PRs #3 and #4). Real-file fixes on `analysis/real-office-files`. |
+| **Tests** | 1463 passing (+1 skipped: real-file checks, see §8af and §8ag) |
 | **Architecture** | **Complete.** Analyzer registry, one `Finding` type, question routing, capability ledger, gap log, versioned JSON report |
-| **Analyzers** | package integrity, conformance, bookmarks, comments, fields, **tables**, **media**, OLE, pivot tables, formulas, content controls, hyperlinks, **revisions**, charts, style references, **footnotes**, **animations**, **external links**, Word cascade, Excel formats, PowerPoint inheritance — **21** |
-| **In flight** | none. Everything is tested and registered. |
-| **Review** | PR #3 open against `main`, CI green. GitHub disables *Rebase and merge* because the branch carries four merge commits from parallel work — there is no conflict; squash or merge commit both apply cleanly. |
+| **Analyzers** | **22** — the 21 below plus **equations** (§8ag). Two of them (Word cascade, Excel formats) are explain-only and contribute no findings, which the ledger reports as "skipped" on purpose. |
+| **Dictionary** | 2,186 records. Attributes now carry permitted values, labels, required flags and bounds; elements carry children. Cross-checked against ECMA-376's own XSDs — see §8ag. |
+| **Proven against real files** | 18 of 22 analyzers. **`equation` and `conformance` have never met a real file** (§8ag). |
 
 ## How to resume in five minutes
 
@@ -1038,6 +1038,125 @@ share the blind spots of the code that reads them. They prove the *harness*. The
 still wants real documents, and the honest status is now **"no fixtures present"** rather
 than **"blocked"**: `npm run test:real` after dropping files in.
 
+---
+
+## 8ag. The dictionary got deeper, the spec became a second opinion, and three real files found two bugs (2026-09-06/18)
+
+Four things, in the order they happened. The last one is the most important.
+
+### The dictionary was shallower than its own source
+
+`scripts/ingestSchema.ts` downloaded five fields per attribute and read one. `Validators`,
+`Version`, `Type` and `PropertyComments` were declared in the interface and dropped. So the
+corpus knew `w:jc` had a `w:val` and not that `w:val` is one of twelve alignment keywords —
+the only fact anyone asking about `w:jc` wants. The script's own header named those
+constraints as the reason for choosing that source.
+
+Now extracted: **596** attributes carry permitted values, **4,048** a human label, 920 a
+required flag, 355 numeric bounds, and **935** records carry their children. All
+mechanically derived, so none of it can be fabricated.
+
+**Two traps, both of which read as correct.** Enum names are not unique across namespaces —
+`ColorSchemeIndexValues` is `dark1/light1` under Wordprocessing and `dk1/lt1` under
+Drawing, thirteen such collisions — so resolution is keyed on the .NET namespace, derived
+per file. And `RequiredValidator` can carry `IsRequired: "False"`; exactly one attribute
+does, so reading presence alone is right 182 times in 183.
+
+**Two silent breaks in the consumers.** `attributes` went from strings to objects and
+`.join()` still compiles: `bm25.ts` was indexing `"[object Object]"`, and `ragRouter.ts` was
+interpolating it into the prompt **under a Grounded badge**. Both now go through
+`services/schemaFacts.ts`, which caps value lists at 12 — the largest enumeration has 197
+values and the worst element would have cost ~986 tokens against a 6k–9k local window.
+
+**72% of attribute names carried a leading colon** (`:allowOverlap`), the SDK's empty prefix.
+Stripped at ingest.
+
+### ECMA-376 is now the second opinion, and a ratchet keeps it honest
+
+`scripts/extractSpecFacts.ts` (`pnpm run spec:facts`) downloads ECMA-376 Part 4, which ships
+the normative Transitional XSDs, and distils `tests/spec-facts.json`. **3,812 attributes and
+1,027 content models cross-checked: 97.5% and 91.7% agreement.**
+
+The divergences are **recorded, not erased** — ECMA says what a conformant file may contain,
+the SDK says what Office accepts, and the gap is the subject of [MS-OI29500]. The sharpest:
+`ST_CellType` in Transitional has no `d`, yet Excel writes `t="d"` for ISO dates, so a strict
+Transitional validator rejects a file Excel produced.
+
+`tests/specConformance.test.ts` fails on a **new** divergence *and* on a **resolved** one left
+recorded, so the list cannot go stale.
+
+⚠️ **The validator was wrong before the data was, three times**: XSD types resolved by bare
+name (39 false results, including that `p:blinds/@dir` accepts `norm|rev`); `xsd:group`
+references unexpanded (137 of them — agreement read 70.2% instead of 90.1%); and
+`xsd:element ref=` labelled with the referring file's prefix, turning `m:oMath` into
+`w:oMath`. Treat its numbers as good but not above suspicion.
+
+### Required and repeatable were built, measured, and thrown away
+
+Only 7 element names disagree about them across contexts, against 97 for full ordering, so
+they looked cheap. Built from the SDK's `Particle` trees:
+
+- `repeatable` marked **6,738 of 6,762** child slots — 100%. A flag true for every row
+  carries no information and cost ~200 KB to say so.
+- `required` marked 140 (2%) where the ECMA XSDs say 433. `w:tr` inside `w:tbl` came out
+  **not required**, though a table must have a row.
+
+Neither survived its own numbers. **Order is a separate and larger question**: a content
+model belongs to a *type*, not an element name, so carrying it means keying records by type
+and having elements reference them — a different corpus shape, not an extra column. Not done,
+because the fault it would catch (children out of order) makes Word show a repair prompt,
+which is *visible*, and this engine is for the faults that are not.
+
+### 🔴 Three real Office files produced 43 findings. None was a real fault.
+
+This is the section to read. A deck, a workbook and a document —
+`tests/fixtures/` (gitignored). Every other test in the repo uses XML written by the same
+person who wrote the code reading it, and both bugs below were invisible to all of them.
+
+**Bug 1 — the comment analyzer read the wrong part.** `matching(parts, WORD_BODY)[0]` took
+whichever body part the archive listed first. A real document has five, and `word/footnotes.xml`
+came first — so it scanned a part with no comment markers, reported every comment as
+orphaned, and **would have missed any genuine anchor fault in the body**. Wrong in both
+directions. Every fixture here has exactly one body part, so `[0]` was always right. Fixed by
+unioning anchors across all stories. This is the same first-match mistake the registry already
+fixed once for `ANALYSIS_TARGETS`, made again next door.
+
+**Bug 2 — every chart in every workbook was called data-less.** `cache-is-only-source` fired
+whenever a chart used formulas and had no `c:externalData`. Correct in Word and PowerPoint;
+inside a **spreadsheet** there is no embedded workbook and none is needed, because the formulas
+resolve against the host workbook's sheets. Seven warnings on a healthy file, each asserting
+cells "exist nowhere in this package" when they were one part away. Now it asks the stronger
+question instead — do the named sheets exist? — as `chart/reference-sheet-missing`.
+
+**A report that lied: `chart/translation-risk` is gone.** 31 of the 43. "This series
+references a workbook" is true of nearly every healthy chart; it is advice for a converter,
+not a defect. And it carried `silent: true`, so a clean deck reported that **12 things
+rendered correctly and were broken anyway** when nothing was broken. `explainChart` already
+surfaces them under "Decide these before converting", so nothing was lost.
+
+**Three observations that were not faults.** `no-cached-result` fired on FORMCHECKBOX, which
+has no result by design (`w:ffData`; real output shows begin=1, separate=0). `unbound-control`
+had a remediation beginning "No action needed". `threading-unknown` repeated what the
+analyzer's own `cannotDetermine` already said.
+
+**The real-file contract is now sharper, not weaker.** It demanded *nothing*; it now demands
+no error and nothing marked `silent`, because that is the claim a reader cannot check. Visible
+findings are printed every run but do not fail — a template really is displaying
+"Choose an item.", and whether that matters depends on intent the engine cannot know.
+
+⚠️ **The first regression test for Bug 1 survived reverting the fix**, because it called
+`readComments` directly and proved nothing about the analyzer's part *selection*, which is
+where the bug was. The test that catches it goes through `analyzePackage` with footnotes
+listed before `document.xml`. Both bugs are pinned by CI-runnable tests, since the fixtures
+cannot be committed.
+
+### What these files did NOT prove
+
+18 of 22 analyzers ran. **`equation` and `conformance` never fired**: none of the three files
+has an equation, and all three are Transitional. Those are the two least-proven analyzers in
+the engine, and the named gaps to fill next — a document with equations, and an ISO Strict
+file, are each worth more than three more ordinary documents.
+
 ## 9. Next actions
 
 Stages 0–2 are complete for all three formats and the Verified tier is live. Remaining work is per-subsystem, tracked as tasks #11–#28.
@@ -1057,14 +1176,28 @@ All four subsystems the user named are **DONE**: #26 bookmarks (§8m), #27 OLE (
 
 **Wired to the panel** in `c0c4b0c`, which also fixed a latent design bug: `buildComputedEvidence` used `ANALYSIS_TARGETS.find`, so only the **first** matching entry ran. That was fine while each part had exactly one analysis and wrong the moment it did not — a `word/document.xml` carries formatting *and* bookmarks *and* possibly OLE objects, which are independent questions. It now runs every match, unions the sibling requests so a part is fetched once, and merges the results; one analysis throwing no longer suppresses the rest. **Anything added to `ANALYSIS_TARGETS` from here on composes rather than shadows.**
 
-**Still open:** DrawingML beyond charts, and the embeddings-vs-lexical question, which
-the §8h counters exist to answer and which no amount of argument settles without usage
-data. Everything else listed in this section has shipped.
+**Still open, in priority order:**
+
+1. **A file with equations, and an ISO Strict file.** `equation` and `conformance` are the
+   only two analyzers no real file has exercised (§8ag). Two named gaps beat more ordinary
+   documents.
+2. **More real files generally.** Both bugs in §8ag were found in *sampling artifacts* — a
+   document with five body parts, a chart inside a workbook. More files, more artifacts.
+3. **Extract nothing further from the SDK without measuring it first.** Required and
+   repeatable were built and thrown away on their own numbers (§8ag); assume the next
+   plausible-sounding field goes the same way until shown otherwise.
+4. **DrawingML beyond charts** — still the largest untouched surface.
+5. **Embeddings vs lexical**, which the §8h counters exist to answer and which no argument
+   settles without usage data.
+
+Everything else listed in this section has shipped.
 
 ## 10. Known gaps at time of writing
 
 - ~~SpreadsheetML semantics~~ — **DONE**, see §4.
 - ~~PresentationML semantics~~ — **DONE**, see §8g; resolver shipped.
-- **DrawingML** — the largest remaining blind spot. Shared across all three formats; ~475 element declarations; **264 variations for Part 1 §21 plus 180 for §20.** Charts (§8k) cover one corner of it; shape geometry, effects and the theme style matrices are untouched.
+- **DrawingML** — the largest remaining blind spot. Shared across all three formats; ~475 element declarations; **264 variations for Part 1 §21 plus 180 for §20.** Charts (§8k) and PowerPoint inheritance cover corners of it; shape geometry, effects and the theme style matrices are untouched.
+- **Order and cardinality in the corpus** — deliberately absent, with the argument in §8ag. Revisit only with an analyzer that needs it.
+- **Content-model ORDER in the spec cross-check** — the ratchet compares which children are permitted, never in what sequence (§8ag).
 - ~~**Formulas**~~ — **DONE**, see §8y.
 - ~~**Fields**~~ — **DONE**, see §8w.
