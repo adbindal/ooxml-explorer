@@ -169,6 +169,41 @@ which single file to look for next.
 
 ---
 
+## What is automated, and what is irreducibly judgment
+
+Some of the above is now a test. Know which, so you neither repeat machine work by hand nor
+assume a green suite has done the thinking.
+
+**Automated — already runs in CI on every commit:**
+
+| Check | Where |
+|---|---|
+| Structural shapes real files have that fixtures lacked | `tests/syntheticPackages.test.ts` |
+| Which analyzers ran and which skipped, by name | `npm run test:real` output |
+| No enum/child divergence from ECMA-376 beyond the recorded list | `tests/specConformance.test.ts` |
+| Corpus shape, and that consumers tolerate absent fields | `tests/ragCorpusInvariants.test.ts` |
+
+`syntheticPackages.test.ts` is the important one. **Both bugs the first real run found are
+now caught by in-memory fixtures with no confidential data** — verified by reverting each
+fix and watching it fail. Neither bug needed a real document; both needed a fixture *shaped*
+like one: a Word package with five body parts where the comment is anchored in the last, and
+a workbook whose chart references its own sheet.
+
+**So when a real file exposes a structural bug, add the shape there too.** That is the step
+that turns one confidential file into a permanent CI check.
+
+**Deliberately NOT automated, with reasons:**
+
+- **Which bucket a finding belongs in.** Requires reading the markup and knowing what Office
+  does. No rule substitutes for it.
+- **"Its remediation says No action needed."** Tried as a mechanical rule; it would have
+  **falsely accused five legitimate findings** — stale formula caches and locked fields
+  rightly say "no action in Excel, but a converter should care". The phrase was never the
+  signal. *Firing on the normal case* was, and that is a judgment about frequency, not text.
+- **Whether a check should be removed, narrowed, or replaced by a stronger question.** The
+  best outcome of the first run was turning "no embedded workbook" into "do the sheets it
+  names exist?" — a rewrite no linter proposes.
+
 ## The one-line version
 
 Real files find bugs that hand-written fixtures structurally cannot — but **most of what
