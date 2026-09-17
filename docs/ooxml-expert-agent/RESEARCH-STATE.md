@@ -1162,6 +1162,22 @@ not a fault at all / wrong for one type only), the two bug shapes to grep for, t
 `npm run test:real` now names which analyzers ran and which were skipped, so §6 of that
 skill needs no separate script.
 
+**And the structural half is now a CI test, not a manual step.** Both bugs came from
+*shapes* rather than content, and shapes can be built in memory:
+`tests/syntheticPackages.test.ts` constructs a Word package with five body parts (comment
+anchored in the LAST one) and a workbook whose chart references its own sheet, then asserts
+no error and nothing `silent`. Verified by reverting each fix and watching it fail — so the
+two bugs that needed a confidential document are now caught by fixtures containing none.
+When a real file exposes a structural bug, **add the shape there**; that is what turns one
+private file into a permanent check.
+
+What deliberately stayed judgment, and why, is in the skill. One attempt at mechanising a
+tell failed instructively: a rule flagging remediations that say "No action needed" would
+have **falsely accused five legitimate findings** — stale formula caches and locked fields
+rightly say "no action in Excel, but a converter should care". The phrase was never the
+signal; *firing on the normal case* was, and that is a frequency judgment, not a string
+match.
+
 ### What these files did NOT prove
 
 18 of 22 analyzers ran. **`equation` and `conformance` never fired**: none of the three files
