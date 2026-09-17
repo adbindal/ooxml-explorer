@@ -1150,6 +1150,18 @@ where the bug was. The test that catches it goes through `analyzePackage` with f
 listed before `document.xml`. Both bugs are pinned by CI-runnable tests, since the fixtures
 cannot be committed.
 
+### The procedure is now a skill
+
+`.agents/skills/check-real-files/SKILL.md` encodes this whole triage, because the judgment
+is the part worth keeping and it is not obvious: most of what real files report is not a
+bug, and the skill is about telling that apart without either trusting the engine or
+gutting it to get a green run. It carries the four buckets (real fault / factually false /
+not a fault at all / wrong for one type only), the two bug shapes to grep for, the
+`silent` rule, and the warning to suspect your own probes first.
+
+`npm run test:real` now names which analyzers ran and which were skipped, so §6 of that
+skill needs no separate script.
+
 ### What these files did NOT prove
 
 18 of 22 analyzers ran. **`equation` and `conformance` never fired**: none of the three files
