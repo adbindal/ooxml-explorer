@@ -8,7 +8,7 @@
 | | |
 |---|---|
 | **Branch** | Everything through the ECMA cross-check is **merged to `main`** (PRs #3 and #4). Real-file fixes on `analysis/real-office-files`. |
-| **Tests** | 1463 passing (+1 skipped: real-file checks, see §8af and §8ag) |
+| **Tests** | 1457 passing (+1 skipped: real-file checks, see §8af and §8ag) |
 | **Architecture** | **Complete.** Analyzer registry, one `Finding` type, question routing, capability ledger, gap log, versioned JSON report |
 | **Analyzers** | **22** — the 21 below plus **equations** (§8ag). Two of them (Word cascade, Excel formats) are explain-only and contribute no findings, which the ledger reports as "skipped" on purpose. |
 | **Dictionary** | 2,186 records. Attributes now carry permitted values, labels, required flags and bounds; elements carry children. Cross-checked against ECMA-376's own XSDs — see §8ag. |
