@@ -192,3 +192,24 @@ The standing rules there are worth knowing before changing anything:
 ## 📄 License
 
 This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
+
+### Third-party data
+
+Two files in this repository are **generated** from external sources rather than written here,
+and are attributed rather than claimed:
+
+| File | Derived from | Terms |
+|---|---|---|
+| `public/rag-data.json` | [dotnet/Open-XML-SDK](https://github.com/dotnet/Open-XML-SDK) `data/schemas/*.json` | MIT |
+| `tests/spec-facts.json` | ECMA-376 Part 4's normative XSDs, published by ECMA as electronic inserts | see below |
+
+Both carry **schema content only** — element names, attribute names, enumerated values,
+permitted parents and children. Neither contains specification prose. That distinction is
+deliberate: ECMA-376's notice grants distribution of *"any schemas, IDLs, or code samples…
+with or without modification"* as a separate and broader permission than the one covering
+prose, and the generators were written to stay on the schema side of it.
+
+Regenerate either with `pnpm run ingest:schema` / `pnpm run spec:facts` rather than editing
+them. The licensing research behind this is in
+[`docs/ooxml-expert-agent/LICENSING.md`](docs/ooxml-expert-agent/LICENSING.md), including what
+it deliberately does **not** resolve.
