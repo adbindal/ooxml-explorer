@@ -266,3 +266,25 @@ Use these rather than improvising; each encodes defects already paid for.
   rules or grading its own output. The loop closes through a person.
 - **Mutation-test every module.**
 - **Say what was not verified.**
+
+---
+
+## 8. Agent skills
+
+Configuration for the installed `mattpocock-skills` engineering skills — where they look for
+issues, labels and domain docs. Distinct from §6, which lists this repo's own procedures.
+
+### Issue tracker
+
+GitHub Issues on `adbindal/ooxml-explorer`, driven by the `gh` CLI. See
+[`docs/agents/issue-tracker.md`](../docs/agents/issue-tracker.md).
+
+### Triage labels
+
+The five canonical roles, each label string equal to its name. See
+[`docs/agents/triage-labels.md`](../docs/agents/triage-labels.md).
+
+### Domain docs
+
+Single-context: root `CONTEXT.md` plus `docs/adr/`. See
+[`docs/agents/domain.md`](../docs/agents/domain.md).
